@@ -1,0 +1,28 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('fishponds', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('farmer_id')->constrained('farmers')->cascadeOnDelete();
+            $table->enum('species', ['Tilapia', 'Hito']);
+            $table->decimal('area_hectares', 8, 2);
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
+
+            $table->index('farmer_id');
+            $table->index('species');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('fishponds');
+    }
+};
