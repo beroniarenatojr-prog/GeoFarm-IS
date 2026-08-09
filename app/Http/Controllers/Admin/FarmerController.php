@@ -134,4 +134,32 @@ class FarmerController extends Controller
         $farmer->delete();
         return redirect()->route('admin.farmers.index')->with('success', 'Farmer deleted.');
     }
+
+    // Farmer Dashboard (for logged-in farmers with Farmer role)
+    public function dashboard()
+    {
+        $user = auth()->user();
+        $farmer = Farmer::where('user_id', $user->id)->with([
+            'parcels.farmType',
+            'livestock',
+            'distributions.program',
+            'treeCrops',
+            'fishponds',
+            'largeRuminants',
+            'smallRuminants',
+            'nativePigs',
+            'swineHybrid',
+            'poultry'
+        ])->firstOrFail();
+
+        return Inertia::render('Farmer/Dashboard', [
+            'farmer' => $farmer,
+            'stats' => [
+                'parcels' => $farmer->parcels->count(),
+                'livestock' => $farmer->livestock->count(),
+                'assistance' => $farmer->distributions->count(),
+                'total_area' => $farmer->parcels->sum('total_area'),
+            ]
+        ]);
+    }
 }

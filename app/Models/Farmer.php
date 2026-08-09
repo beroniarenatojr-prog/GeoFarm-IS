@@ -12,9 +12,14 @@ class Farmer extends Model
         'sex','civil_status','mobile_no','email','religion','pwd','is_4ps',
         'mother_maiden_name','highest_education','photo_path','qr_code_path',
         'barangay','city_municipality','province','risk_status','risk_updated_at',
+        'user_id',
     ];
 
-    protected $casts = ['pwd' => 'boolean', 'is_4ps' => 'boolean', 'birthdate' => 'date'];
+    protected $casts = [
+        'pwd' => 'boolean',
+        'is_4ps' => 'boolean',
+        'birthdate' => 'date:Y-m-d',
+    ];
 
     public function parcels(): HasMany        { return $this->hasMany(FarmParcel::class); }
     public function livestock(): HasMany      { return $this->hasMany(Livestock::class); }

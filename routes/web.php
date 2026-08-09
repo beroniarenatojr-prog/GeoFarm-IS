@@ -20,12 +20,18 @@ use App\Http\Controllers\Admin\SwineHybridController;
 use App\Http\Controllers\Admin\TreeCropController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\RegisterController;
+use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
 
 // Auth
 Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'store']);
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+// Farmer Registration
+Route::get('/register', [RegisterController::class, 'show'])->name('register');
+Route::post('/register', [RegisterController::class, 'store']);
 
 // Admin routes
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
@@ -142,4 +148,10 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::delete('gis/parcels/{id}/geometry', [GISController::class, 'deleteGeometry'])->middleware('permission:delete parcels')->name('gis.delete-geometry');
 });
 
-Route::get('/', fn() => redirect()->route('login'));
+// Farmer Dashboard (for registered farmers)
+Route::middleware(['auth', 'role:Farmer'])->prefix('farmer')->name('farmer.')->group(function () {
+    Route::get('/dashboard', [FarmerController::class, 'dashboard'])->name('dashboard');
+});
+
+// Landing Page
+Route::get('/', [LandingController::class, 'index'])->name('landing');
