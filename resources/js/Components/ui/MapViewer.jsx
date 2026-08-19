@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
+import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   TUMAUINI_BOUNDS,
@@ -8,10 +9,20 @@ import {
   getBasemapStyle,
 } from '@/config/tumauiniMap';
 
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
 export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12, height = '400px' }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const popupRef = useRef(null);
+  const [mapUnavailable, setMapUnavailable] = useState(false);
 
   const featureCollection = useMemo(() => {
     if (!geojson) {
@@ -25,6 +36,11 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
+    if (!supportsWebGL()) {
+      setMapUnavailable(true);
+      return;
+    }
 
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -40,6 +56,19 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+    });
+    resizeObserver.observe(containerRef.current);
+    requestAnimationFrame(() => map.resize());
+
+    map.on('error', (event) => {
+      console.error('MapLibre error:', event?.error || event);
+      if (String(event?.error?.message || '').toLowerCase().includes('webgl')) {
+        setMapUnavailable(true);
+      }
+    });
 
     map.on('load', () => {
       map.addSource('tumauini-boundary', {
@@ -132,6 +161,7 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
     mapRef.current = map;
 
     return () => {
+      resizeObserver.disconnect();
       popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
@@ -162,7 +192,11 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
 
   return (
     <div className="relative w-full overflow-hidden rounded-lg border border-slate-200" style={{ height }}>
-      <div ref={containerRef} className="absolute inset-0" />
+      {mapUnavailable ? (
+        <TumauiniMapFallback className="absolute inset-0" />
+      ) : (
+        <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      )}
     </div>
   );
 }

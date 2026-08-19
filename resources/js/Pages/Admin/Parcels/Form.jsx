@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm } from '@inertiajs/react';
+import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import bbox from '@turf/bbox';
@@ -13,6 +14,15 @@ import {
   TUMAUINI_CENTER,
   getBasemapStyle,
 } from '@/config/tumauiniMap';
+
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
 
 function patchDrawClasses() {
   if (!MapboxDraw?.constants?.classes) return;
@@ -40,6 +50,7 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
   const mapContainerRef = useRef(null);
   const drawRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
+  const [mapUnavailable, setMapUnavailable] = useState(false);
 
   const { data, setData, post, put, processing, errors } = useForm({
     farmer_id: parcel?.farmer_id ?? '',
@@ -60,6 +71,11 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    if (!supportsWebGL()) {
+      setMapUnavailable(true);
+      return;
+    }
+
     patchDrawClasses();
 
     const map = new maplibregl.Map({
@@ -76,6 +92,19 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+    });
+    resizeObserver.observe(mapContainerRef.current);
+    requestAnimationFrame(() => map.resize());
+
+    map.on('error', (event) => {
+      console.error('MapLibre error:', event?.error || event);
+      if (String(event?.error?.message || '').toLowerCase().includes('webgl')) {
+        setMapUnavailable(true);
+      }
+    });
 
     const draw = new MapboxDraw({
       displayControlsDefault: false,
@@ -147,6 +176,7 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
     mapRef.current = map;
 
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       drawRef.current = null;
@@ -154,15 +184,18 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
   }, []);
 
   const beginDrawing = () => {
+    if (mapUnavailable) return;
     drawRef.current?.changeMode('draw_polygon');
   };
 
   const clearGeometry = () => {
+    if (mapUnavailable) return;
     drawRef.current?.deleteAll();
     setData('geojson', '');
   };
 
   const focusTumauini = () => {
+    if (mapUnavailable) return;
     mapRef.current?.fitBounds(TUMAUINI_BOUNDS, { padding: 48, maxZoom: 13, duration: 700 });
   };
 
@@ -291,7 +324,11 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
           </div>
 
           <div className="relative h-96 overflow-hidden rounded-lg border border-slate-200">
-            <div ref={mapContainerRef} className="absolute inset-0" />
+            {mapUnavailable ? (
+              <TumauiniMapFallback className="absolute inset-0" />
+            ) : (
+              <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0 }} />
+            )}
           </div>
 
           <div className="mt-3 flex items-center gap-2 text-sm">

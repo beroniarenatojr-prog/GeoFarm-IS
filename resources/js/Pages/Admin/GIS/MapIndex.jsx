@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { router } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
+import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import toast from 'react-hot-toast';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -19,6 +20,15 @@ import {
 } from '@/config/tumauiniMap';
 
 const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
+
+function supportsWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
 
 function patchDrawClasses() {
   if (!MapboxDraw?.constants?.classes) return;
@@ -59,6 +69,7 @@ export default function MapIndex({ parcels }) {
   const [geoJsonData, setGeoJsonData] = useState(EMPTY_FEATURE_COLLECTION);
   const [selectedFeature, setSelectedFeature] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [mapUnavailable, setMapUnavailable] = useState(false);
   const [showBoundary, setShowBoundary] = useState(true);
   const [showParcels, setShowParcels] = useState(true);
 
@@ -124,6 +135,11 @@ export default function MapIndex({ parcels }) {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    if (!supportsWebGL()) {
+      setMapUnavailable(true);
+      return;
+    }
+
     patchDrawClasses();
 
     const map = new maplibregl.Map({
@@ -137,6 +153,19 @@ export default function MapIndex({ parcels }) {
       minZoom: 11,
       maxZoom: 19,
       attributionControl: false,
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.resize();
+    });
+    resizeObserver.observe(mapContainerRef.current);
+    requestAnimationFrame(() => map.resize());
+
+    map.on('error', (event) => {
+      console.error('MapLibre error:', event?.error || event);
+      if (String(event?.error?.message || '').toLowerCase().includes('webgl')) {
+        setMapUnavailable(true);
+      }
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
@@ -306,6 +335,7 @@ export default function MapIndex({ parcels }) {
     mapRef.current = map;
 
     return () => {
+      resizeObserver.disconnect();
       popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
@@ -352,6 +382,11 @@ export default function MapIndex({ parcels }) {
   };
 
   const beginDrawing = () => {
+    if (mapUnavailable) {
+      toast.error('Full GIS editing needs a WebGL-capable browser');
+      return;
+    }
+
     if (!canEdit) return;
     if (!selectedParcel) {
       toast.error('Select a parcel first');
@@ -396,7 +431,11 @@ export default function MapIndex({ parcels }) {
         <section className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-h-[680px] overflow-hidden rounded-lg border border-slate-200 relative">
-              <div ref={mapContainerRef} className="absolute inset-0" />
+              {mapUnavailable ? (
+                <TumauiniMapFallback className="absolute inset-0" />
+              ) : (
+                <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0 }} />
+              )}
               {loading && (
                 <div className="absolute left-4 top-4 rounded-md bg-white/95 px-3 py-2 text-sm font-medium text-emerald-800 shadow">
                   Saving boundary...
