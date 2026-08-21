@@ -1,0 +1,261 @@
+================================================================================
+                        GeoFarm-IS STARTUP FLOWCHART
+================================================================================
+
+                         📂 Opening GeoFarm-IS
+                                  |
+                                  |
+                   ┌──────────────┴──────────────┐
+                   |                             |
+         ❓ When did you last work?              |
+                   |                             |
+        ┌──────────┴──────────┐                 |
+        |                     |                 |
+    2+ DAYS AGO          TODAY/YESTERDAY        |
+        |                     |                 |
+        ▼                     ▼                 |
+   ┌─────────┐          ┌─────────┐           |
+   │ REBUILD │          │ NORMAL  │           |
+   │ NEEDED  │          │  START  │           |
+   └────┬────┘          └────┬────┘           |
+        |                    |                 |
+        |                    |                 |
+        ▼                    ▼                 |
+   ╔═══════════╗        ╔═══════════╗         |
+   ║ startup.bat║       ║ npm run dev║        |
+   ╚═════╤═════╝        ╚═════╤═════╝         |
+         │                    │                |
+         │ OR                 │                |
+         │                    │                |
+   ╔═══════════╗              │                |
+   ║npm run fresh║            │                |
+   ╚═════╤═════╝              │                |
+         │                    │                |
+         └──────────┬─────────┘                |
+                    │                          |
+                    ▼                          |
+         ┌──────────────────┐                 |
+         │ Servers Starting │                 |
+         └────────┬─────────┘                 |
+                  │                            |
+                  ▼                            |
+         ╔════════════════╗                   |
+         ║ Visit Browser  ║                   |
+         ║  127.0.0.1:8000║                   |
+         ╚═══════╤════════╝                   |
+                 │                             |
+         ┌───────┴────────┐                   |
+         |                |                   |
+    ✅ WORKS          ❌ ERROR                |
+         |                |                   |
+         ▼                ▼                   |
+    ┌─────────┐    ┌──────────────┐          |
+    │  DONE!  │    │ See Flowchart│          |
+    └─────────┘    │    Below     │          |
+                   └──────────────┘          |
+                                              |
+================================================================================
+
+                         ERROR RESOLUTION FLOWCHART
+================================================================================
+
+                          ❌ Application Not Working
+                                     |
+                          ┌──────────┴──────────┐
+                          │                     │
+                  Blank Page/              Errors
+                 JS Errors               Visible
+                          │                     │
+                          ▼                     ▼
+                   ┌─────────────┐      ┌────────────┐
+                   │ Hard Refresh│      │Check Error │
+                   │ Ctrl+Shift+R│      │ Type       │
+                   └──────┬──────┘      └─────┬──────┘
+                          │                   │
+                   ┌──────┴──────┐           │
+                   │             │           │
+               ❌ FIXED       ✅ NOT          │
+                   │             │           │
+                   ▼             ▼           ▼
+              ┌────────┐   ┌──────────────────┐
+              │ DONE!  │   │  Rebuild Assets  │
+              └────────┘   │  npm run build   │
+                           └────────┬─────────┘
+                                    │
+                           ┌────────┴────────┐
+                           │                 │
+                       ❌ FIXED           ✅ NOT
+                           │                 │
+                           ▼                 ▼
+                      ┌────────┐      ┌──────────────┐
+                      │ DONE!  │      │ Nuclear Reset│
+                      └────────┘      │  See Below   │
+                                      └──────────────┘
+
+================================================================================
+
+                         NUCLEAR RESET (Last Resort)
+================================================================================
+
+                          🚨 Nothing Works At All
+                                     |
+                                     ▼
+                          ┌──────────────────┐
+                          │ 1. Stop Servers  │
+                          │   Ctrl+C         │
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │ 2. Clear Caches  │
+                          │ php artisan      │
+                          │ optimize:clear   │
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │ 3. Delete        │
+                          │ node_modules     │
+                          │ package-lock.json│
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │ 4. Reinstall     │
+                          │ npm install      │
+                          │ composer         │
+                          │ dump-autoload    │
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │ 5. Rebuild       │
+                          │ npm run build    │
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │ 6. Start Fresh   │
+                          │ npm run dev      │
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                          ┌──────────────────┐
+                          │ 7. Hard Refresh  │
+                          │ Ctrl+Shift+R     │
+                          └────────┬─────────┘
+                                   │
+                                   ▼
+                               ✅ FIXED!
+
+================================================================================
+
+                         QUICK DECISION TREE
+================================================================================
+
+  Q: Haven't worked for days?
+  └─> YES → startup.bat
+      NO  → Continue below
+
+  Q: Worked today/yesterday?
+  └─> YES → npm run dev
+      NO  → startup.bat
+
+  Q: Changes not showing?
+  └─> Solution: Ctrl + Shift + R
+
+  Q: JavaScript errors in console?
+  └─> Solution: npm run build
+
+  Q: Vite manifest not found?
+  └─> Solution: npm run build
+
+  Q: Nothing works?
+  └─> Solution: Nuclear reset (see above)
+
+================================================================================
+
+                         PREVENTION CHECKLIST
+================================================================================
+
+  Before Starting Work:
+  ☐ XAMPP running (Apache + MySQL)
+  ☐ Database exists (geofarm_is)
+  ☐ Check last work date:
+      • 2+ days ago? → Use startup.bat
+      • Recent?      → Use npm run dev
+
+  After Each Work Session:
+  ☐ Stop servers (Ctrl+C)
+  ☐ Commit changes (optional)
+  ☐ Close terminals
+
+  Weekly Maintenance:
+  ☐ Run: npm install (update dependencies)
+  ☐ Run: php artisan optimize:clear
+  ☐ Check: storage/logs/laravel.log for issues
+
+================================================================================
+
+                         COMMAND REFERENCE
+================================================================================
+
+  Startup Commands:
+  ┌─────────────────────────────────────────────────┐
+  │ startup.bat          │ Full rebuild + start     │
+  │ npm run fresh        │ Same as startup.bat      │
+  │ npm run dev          │ Normal start             │
+  │ npm run build        │ Rebuild assets only      │
+  └─────────────────────────────────────────────────┘
+
+  Troubleshooting Commands:
+  ┌─────────────────────────────────────────────────┐
+  │ php artisan optimize:clear │ Clear all caches   │
+  │ npm run build              │ Rebuild assets     │
+  │ composer dump-autoload     │ Refresh classes    │
+  │ Ctrl + Shift + R           │ Hard refresh       │
+  └─────────────────────────────────────────────────┘
+
+================================================================================
+
+                         SUCCESS INDICATORS
+================================================================================
+
+  ✅ Terminal shows:
+     • "Laravel server started"
+     • "Vite dev server running"
+     • No error messages
+
+  ✅ Browser shows:
+     • Landing page loads
+     • No console errors (F12)
+     • Styles applied correctly
+
+  ✅ After login:
+     • Dashboard displays
+     • Navigation works
+     • Data loads properly
+
+================================================================================
+
+                         REMEMBER
+================================================================================
+
+  🎯 Golden Rule:
+     After days off = ALWAYS rebuild first!
+
+  🚀 Two Main Commands:
+     • startup.bat  (after days off)
+     • npm run dev  (daily development)
+
+  🔄 If Stuck:
+     1. Hard refresh (Ctrl+Shift+R)
+     2. Rebuild (npm run build)
+     3. Nuclear reset (see flowchart)
+
+  📚 Documentation:
+     • HOW_TO_START.txt      (start here!)
+     • TROUBLESHOOTING.md    (for issues)
+     • QUICK_START_GUIDE.md  (for reference)
+
+================================================================================

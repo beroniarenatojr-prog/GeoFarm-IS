@@ -95,6 +95,16 @@ class RolePermissionSeeder extends Seeder
             'view predictive',
         ]);
 
+        // Farmer Role - Can view their own data
+        $farmer = Role::firstOrCreate(['name' => 'Farmer']);
+        $farmer->syncPermissions([
+            'view inventory',
+            'view parcels',
+            'view seasonal',
+            'view assistance',
+            'view reports',
+        ]);
+
         // Assign Super Admin role to first user
         $firstUser = User::first();
         if ($firstUser) {

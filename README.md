@@ -1,59 +1,196 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# GeoFarm-IS 🌾
+**Geographic Information System for Farm Management - Tumauini, Isabela**
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A comprehensive farm management system integrating GIS mapping, crop monitoring, livestock tracking, and agricultural assistance distribution.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🚀 Quick Start
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### First Time Setup
+```cmd
+composer install
+npm install
+php artisan key:generate
+php artisan migrate
+php artisan db:seed
+```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Opening Project After Days
+```cmd
+startup.bat
+```
+This handles cache clearing, asset rebuilding, and server startup automatically.
 
-## Learning Laravel
+### Daily Development
+```cmd
+npm run dev
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Then visit: **http://127.0.0.1:8000**
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-## Laravel Sponsors
+## 📖 Documentation
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+| Document | Purpose |
+|----------|---------|
+| **[QUICK_START_GUIDE.md](QUICK_START_GUIDE.md)** | Essential commands and quick fixes |
+| **[START_APPLICATION.md](START_APPLICATION.md)** | Detailed startup instructions |
+| **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Complete troubleshooting guide |
+| **[AGRICULTURAL_ASSETS_SETUP.md](AGRICULTURAL_ASSETS_SETUP.md)** | Feature documentation |
+| **[DATABASE_SCHEMA_DOCUMENTATION.md](DATABASE_SCHEMA_DOCUMENTATION.md)** | Database structure |
 
-### Premium Partners
+---
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## ✨ Key Features
 
-## Contributing
+### For Administrators
+- 📊 **Dashboard** - Real-time agricultural statistics
+- 🗺️ **GIS Mapping** - Interactive farm parcel mapping with Leaflet
+- 👨‍🌾 **Farmer Management** - Complete farmer profiles and records
+- 🌾 **Crop Monitoring** - Seasonal crop tracking and estimations
+- 🐄 **Livestock Tracking** - Monitor ruminants, swine, poultry
+- 🎣 **Fishpond Management** - Aquaculture production tracking
+- 🌳 **Tree Crops** - Permanent crop monitoring (coconut, fruit trees)
+- 📦 **Assistance Distribution** - Track agricultural aid and inputs
+- 📈 **Reports** - Generate PDF reports by barangay and category
+- 🔍 **Audit Logs** - Complete activity tracking
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### For Farmers
+- 🔐 **Self-Registration** - Secure registration with RSBSA verification
+- 👤 **Personal Dashboard** - View own profile and agricultural data
+- 📱 **Assistance History** - Track received agricultural support
 
-## Code of Conduct
+---
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## 🛠️ Tech Stack
 
-## Security Vulnerabilities
+- **Backend:** Laravel 11, PHP 8.2
+- **Frontend:** React 18, Inertia.js, TailwindCSS
+- **Database:** MySQL
+- **GIS:** Leaflet, Turf.js
+- **Charts:** Recharts
+- **Build:** Vite
+- **Icons:** Lucide React
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+---
 
-## License
+## 🔐 Security Features
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- Role-based access control (Admin, Encoder, Viewer, Farmer)
+- Permission-based authorization
+- RSBSA verification for farmer registration
+- Multi-field identity verification (Last name, Birthdate, Location)
+- Complete audit logging
+- CSRF protection
+- Session management
+
+---
+
+## 📊 System Capabilities
+
+- **Farmers:** Unlimited profiles with complete agricultural data
+- **Farm Parcels:** GIS-mapped land parcels with coordinates
+- **Crops:** Track multiple crops per season across parcels
+- **Livestock:** Monitor multiple livestock types per farmer
+- **Assistance:** Record and track distribution by barangay
+- **Reports:** Generate comprehensive PDF reports
+- **Export:** Excel export for data analysis
+
+---
+
+## 🌍 Location Context
+
+- **Municipality:** Tumauini, Isabela, Philippines
+- **Barangays:** 46 barangays covered
+- **Target Users:** Municipal Agricultural Office staff and farmers
+
+---
+
+## 🤝 User Roles
+
+| Role | Capabilities |
+|------|--------------|
+| **Admin** | Full system access, user management, all CRUD operations |
+| **Encoder** | Create and edit farmers, parcels, livestock, assistance |
+| **Viewer** | Read-only access to all data and reports |
+| **Farmer** | View own profile, track assistance received |
+
+---
+
+## 📝 Common Issues
+
+### JavaScript Errors After Days
+```cmd
+npm run build
+```
+Then hard refresh: `Ctrl + Shift + R`
+
+### Vite Manifest Not Found
+```cmd
+npm run build
+npm run dev
+```
+
+### Changes Not Showing
+Hard refresh browser: `Ctrl + Shift + R`
+
+**See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for complete guide**
+
+---
+
+## 📦 Project Structure
+
+```
+geofarm_is/
+├── app/
+│   ├── Http/Controllers/Admin/    # Admin controllers
+│   ├── Models/                    # Eloquent models
+│   ├── Services/                  # Business logic
+│   └── Policies/                  # Authorization policies
+├── database/
+│   ├── migrations/                # Database schema
+│   └── seeders/                   # Sample data
+├── resources/
+│   ├── js/
+│   │   ├── Pages/                 # React pages
+│   │   ├── Components/            # Reusable components
+│   │   └── Layouts/               # Page layouts
+│   └── views/                     # Blade templates
+├── routes/
+│   └── web.php                    # Application routes
+├── public/                        # Public assets
+└── storage/                       # File uploads & logs
+```
+
+---
+
+## 🔄 Development Workflow
+
+1. **Start work:** `npm run dev` (or `startup.bat` after days)
+2. **Make changes:** Edit files, auto-reloads in browser
+3. **Check logs:** Browser console (F12) and Laravel logs
+4. **Hard refresh:** `Ctrl + Shift + R` if changes not showing
+5. **Stop servers:** `Ctrl + C` in terminal
+
+---
+
+## 📞 Support
+
+For issues and questions:
+1. Check browser console (F12) for errors
+2. Check `storage/logs/laravel.log` for backend errors
+3. Refer to documentation files listed above
+4. Ensure XAMPP (Apache & MySQL) is running
+
+---
+
+## 📅 Last Updated
+**Date:** August 6, 2026  
+**Version:** 1.0
+
+---
+
+**Developed for:** Municipal Agriculture Office, Tumauini, Isabela  
+**Purpose:** Agricultural resource management and monitoring system
