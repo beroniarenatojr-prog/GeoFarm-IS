@@ -66,46 +66,57 @@ export default function Landing({ canLogin }) {
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-[#FAF8F3] to-white">
-            {/* Header/Navigation */}
-            <nav className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-[#006400] p-2 rounded-lg">
-                                <Leaf className="h-6 w-6 text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold text-[#006400]">GeoFarm-IS</h1>
-                                <p className="text-xs text-gray-600">Geographic Farm Information System</p>
-                            </div>
-                        </div>
-                        {canLogin && (
-                            <Link
-                                href="/login"
-                                className="inline-flex items-center px-6 py-2.5 bg-[#006400] text-white rounded-lg hover:bg-[#005200] transition-colors duration-200 font-medium shadow-md hover:shadow-lg"
-                            >
-                                Login
-                                <ChevronRight className="ml-2 h-4 w-4" />
-                            </Link>
-                        )}
-                    </div>
+            {/* Hero Section with Municipal Hall Background - Header included */}
+            <section className="relative overflow-hidden min-h-[700px]">
+                {/* Background Image with Overlay */}
+                <div className="absolute inset-0">
+                    <img 
+                        src="/images/Tumauni LGU.jpg" 
+                        alt="Tumauini Municipal Hall" 
+                        className="w-full h-full object-cover"
+                    />
+                    {/* Dark overlay for text readability */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70"></div>
                 </div>
-            </nav>
 
-            {/* Hero Section */}
-            <section className="relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('/images/topographic.svg')] opacity-5"></div>
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative">
-                    <div className="text-center">
-                        <div className="inline-flex items-center space-x-2 bg-[#8B9D83]/10 px-4 py-2 rounded-full mb-6">
-                            <MapPin className="h-4 w-4 text-[#006400]" />
-                            <span className="text-sm font-medium text-[#006400]">LGU Agriculture Office, Tumauini, Isabela</span>
+                {/* Header/Navigation - positioned over the background */}
+                <nav className="relative z-50 border-b border-white/10">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div className="flex justify-between items-center h-16">
+                            <div className="flex items-center space-x-3">
+                                <div className="bg-white p-2 rounded-lg">
+                                    <Leaf className="h-6 w-6 text-[#006400]" />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold text-white drop-shadow-md">GeoFarm-IS</h1>
+                                    <p className="text-xs text-white/90">Geographic Farm Information System</p>
+                                </div>
+                            </div>
+                            {canLogin && (
+                                <Link
+                                    href="/login"
+                                    className="inline-flex items-center px-6 py-2.5 bg-white text-[#006400] rounded-lg hover:bg-gray-100 transition-colors duration-200 font-medium shadow-lg hover:shadow-xl"
+                                >
+                                    Login
+                                    <ChevronRight className="ml-2 h-4 w-4" />
+                                </Link>
+                            )}
                         </div>
-                        <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-                            Modern Agriculture
-                            <span className="block text-[#006400]">Information Management</span>
+                    </div>
+                </nav>
+                
+                {/* Content */}
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
+                    <div className="text-center">
+                        <div className="inline-flex items-center space-x-2 bg-white/20 backdrop-blur-md px-4 py-2 rounded-full mb-6 border border-white/30">
+                            <MapPin className="h-4 w-4 text-white" />
+                            <span className="text-sm font-medium text-white">LGU Agriculture Office, Tumauini, Isabela</span>
+                        </div>
+                        <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 drop-shadow-lg">
+                            Empowering Farmers
+                            <span className="block text-[#90EE90]">Through Digital Innovation</span>
                         </h1>
-                        <p className="text-xl text-gray-600 max-w-3xl mx-auto mb-10">
+                        <p className="text-xl text-white/95 max-w-3xl mx-auto mb-10 drop-shadow-md">
                             Comprehensive digital solution for managing farmer data, farm parcels, 
                             agricultural inventory, and assistance programs with powerful GIS mapping and analytics.
                         </p>
@@ -114,14 +125,14 @@ export default function Landing({ canLogin }) {
                                 <>
                                     <Link
                                         href="/login"
-                                        className="inline-flex items-center px-8 py-4 bg-[#006400] text-white rounded-lg hover:bg-[#005200] transition-colors duration-200 font-semibold text-lg shadow-lg hover:shadow-xl"
+                                        className="inline-flex items-center px-8 py-4 bg-white text-[#006400] rounded-lg hover:bg-gray-100 transition-colors duration-200 font-semibold text-lg shadow-xl hover:shadow-2xl"
                                     >
                                         Get Started
                                         <ChevronRight className="ml-2 h-5 w-5" />
                                     </Link>
                                     <a
                                         href="#features"
-                                        className="inline-flex items-center px-8 py-4 bg-white text-[#006400] border-2 border-[#006400] rounded-lg hover:bg-[#006400] hover:text-white transition-colors duration-200 font-semibold text-lg"
+                                        className="inline-flex items-center px-8 py-4 bg-[#006400]/90 backdrop-blur-sm text-white border-2 border-white/50 rounded-lg hover:bg-[#006400] transition-colors duration-200 font-semibold text-lg shadow-xl"
                                     >
                                         Learn More
                                     </a>
@@ -133,9 +144,9 @@ export default function Landing({ canLogin }) {
                     {/* Stats */}
                     <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8">
                         {stats.map((stat, index) => (
-                            <div key={index} className="text-center">
-                                <div className="text-4xl font-bold text-[#006400] mb-2">{stat.value}</div>
-                                <div className="text-sm text-gray-600">{stat.label}</div>
+                            <div key={index} className="text-center bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                                <div className="text-4xl font-bold text-white mb-2 drop-shadow-lg">{stat.value}</div>
+                                <div className="text-sm text-white/90">{stat.label}</div>
                             </div>
                         ))}
                     </div>

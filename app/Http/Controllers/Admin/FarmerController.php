@@ -152,6 +152,12 @@ class FarmerController extends Controller
             'poultry'
         ])->firstOrFail();
 
+        // Debug: Log the distributions data
+        \Log::info('Farmer Distributions:', [
+            'farmer_id' => $farmer->id,
+            'distributions' => $farmer->distributions->toArray()
+        ]);
+
         return Inertia::render('Farmer/Dashboard', [
             'farmer' => $farmer,
             'stats' => [

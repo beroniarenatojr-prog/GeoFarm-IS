@@ -29,6 +29,12 @@ class LoginController extends Controller
         $user->update(['last_login' => now()]);
 
         $request->session()->regenerate();
+        
+        // Redirect based on user role
+        if ($user->hasRole('Farmer')) {
+            return redirect()->route('farmer.dashboard');
+        }
+        
         return redirect()->route('admin.dashboard');
     }
 

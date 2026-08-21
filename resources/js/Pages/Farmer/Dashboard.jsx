@@ -198,11 +198,13 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                                     <div>
                                         <p className="font-semibold text-gray-900">{dist.program?.name || 'N/A'}</p>
                                         <p className="text-sm text-gray-600">
-                                            {dist.program?.type} • Received: {new Date(dist.distribution_date).toLocaleDateString()}
+                                            {dist.program?.type || 'Program'} • Received: {new Date(dist.distribution_date).toLocaleDateString()}
                                         </p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-lg font-bold text-[#006400]">₱{parseFloat(dist.amount).toLocaleString()}</p>
+                                        <p className="text-lg font-bold text-[#006400]">
+                                            ₱{dist.amount_given ? parseFloat(dist.amount_given).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                                        </p>
                                     </div>
                                 </div>
                             ))}
