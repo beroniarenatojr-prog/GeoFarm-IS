@@ -16,6 +16,18 @@ class LoginController extends Controller
 
     public function store(Request $request)
     {
+        $email = strtolower(trim((string) $request->input('email')));
+
+        // Keep the sample administrator login compatible with older project builds.
+        $email = match ($email) {
+            'admin@geofarm',
+            'admin@geofarm.local',
+            'admin@geofarm.test' => 'admin@geofarm.com',
+            default => $email,
+        };
+
+        $request->merge(['email' => $email]);
+
         $credentials = $request->validate([
             'email'    => 'required|email',
             'password' => 'required',

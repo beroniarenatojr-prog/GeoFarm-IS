@@ -6,6 +6,12 @@ use Symfony\Component\Console\Input\ArgvInput;
 
 define('LARAVEL_START', microtime(true));
 
+// Laravel's serve command matches this Windows variable case-sensitively.
+// Normalize it so the child PHP server retains the environment it needs.
+if (PHP_OS_FAMILY === 'Windows' && ! isset($_ENV['SYSTEMROOT'])) {
+    $_ENV['SYSTEMROOT'] = $_ENV['SystemRoot'] ?? $_SERVER['SystemRoot'] ?? getenv('SystemRoot');
+}
+
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';
 
