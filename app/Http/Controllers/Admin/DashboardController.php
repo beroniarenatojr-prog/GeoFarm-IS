@@ -16,14 +16,17 @@ class DashboardController extends Controller
     {
         return Inertia::render('Admin/Dashboard', [
             'metrics' => Inertia::defer(fn () => [
-                'total_farmers'        => Farmer::count(),
+                // Verified only - pending online registrations are not farmers yet.
+                'total_farmers'        => Farmer::verified()->count(),
+                'pending_verification' => Farmer::pending()->count(),
                 'total_parcels'        => FarmParcel::count(),
                 'total_livestock'      => Livestock::sum('count'),
                 'recent_distributions' => AssistanceDistribution::with(['farmer', 'program'])
                     ->latest('distribution_date')->take(5)->get(),
             ]),
             'charts' => Inertia::defer(fn () => [
-                'farmers_per_month' => Farmer::selectRaw("DATE_FORMAT(created_at, '%m') as month, COUNT(*) as count")
+                'farmers_per_month' => Farmer::verified()
+                    ->selectRaw("DATE_FORMAT(created_at, '%m') as month, COUNT(*) as count")
                     ->whereYear('created_at', now()->year)
                     ->groupBy('month')->orderBy('month')->get(),
                 'crop_production' => CropSeason::selectRaw('cropping_year, SUM(yield_kg) as total_yield')

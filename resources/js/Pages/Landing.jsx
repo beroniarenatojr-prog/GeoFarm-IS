@@ -84,22 +84,32 @@ export default function Landing({ canLogin }) {
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between items-center h-16">
                             <div className="flex items-center space-x-3">
-                                <div className="bg-white p-2 rounded-lg">
-                                    <Leaf className="h-6 w-6 text-[#006400]" />
-                                </div>
+                                <img 
+                                    src="/images/VTB.jpg" 
+                                    alt="VTB Logo" 
+                                    className="h-10 w-10 object-cover rounded-lg"
+                                />
                                 <div>
                                     <h1 className="text-xl font-bold text-white drop-shadow-md">GeoFarm-IS</h1>
                                     <p className="text-xs text-white/90">Geographic Farm Information System</p>
                                 </div>
                             </div>
                             {canLogin && (
-                                <Link
-                                    href="/login"
-                                    className="inline-flex items-center px-6 py-2.5 bg-white text-[#006400] rounded-lg hover:bg-gray-100 transition-colors duration-200 font-medium shadow-lg hover:shadow-xl"
-                                >
-                                    Login
-                                    <ChevronRight className="ml-2 h-4 w-4" />
-                                </Link>
+                                <div className="flex items-center gap-3">
+                                    <Link
+                                        href="/farmer-registration"
+                                        className="inline-flex items-center px-6 py-2.5 border-2 border-white text-white rounded-lg hover:bg-white/15 transition-colors duration-200 font-medium shadow-lg"
+                                    >
+                                        Register
+                                    </Link>
+                                    <Link
+                                        href="/login"
+                                        className="inline-flex items-center px-6 py-2.5 bg-white text-[#006400] rounded-lg hover:bg-gray-100 transition-colors duration-200 font-medium shadow-lg hover:shadow-xl"
+                                    >
+                                        Login
+                                        <ChevronRight className="ml-2 h-4 w-4" />
+                                    </Link>
+                                </div>
                             )}
                         </div>
                     </div>

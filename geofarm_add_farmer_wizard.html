@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GeoFarm-IS — Add New Farmer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --forest: #1B4332;
+    --forest-deep: #10281D;
+    --gold: #E3A93B;
+    --gold-soft: #F0C878;
+    --gold-tint: #FCF2DD;
+    --cream: #FAF6EE;
+    --paper: #FFFFFF;
+    --soil: #5C4A36;
+    --ink: #22291F;
+    --muted: #8A9184;
+    --line: #E7E1D3;
+    --danger: #C1552C;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Inter', sans-serif; background:var(--cream); color:var(--ink);}
+  .app{display:flex; min-height:100vh;}
+
+  /* ================= SIDEBAR ================= */
+  .sidebar{
+    width:224px; flex-shrink:0;
+    background: linear-gradient(180deg, var(--forest-deep) 0%, var(--forest) 100%);
+    color:#fff; display:flex; flex-direction:column; padding:24px 16px;
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+  }
+  .side-brand{display:flex; align-items:center; gap:12px; padding:0 8px 24px; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.12);}
+  .side-brand-mark{width:38px;height:38px; border-radius:10px; background:var(--gold); display:flex;align-items:center;justify-content:center; flex-shrink:0;}
+  .side-brand-mark svg{width:20px;height:20px;}
+  .side-brand-name{font-family:'Fraunces', serif; font-weight:600; font-size:15.5px; line-height:1.2;}
+  .side-brand-sub{font-size:10.5px; color:#B9CBBB;}
+  .nav-group-label{font-family:'JetBrains Mono', monospace; font-size:10px; letter-spacing:1.2px; color:#7FA187; text-transform:uppercase; padding:14px 12px 6px;}
+  .nav-item{display:flex; align-items:center; gap:12px; padding:9px 12px; border-radius:9px; color:#D9E6DA; text-decoration:none; font-size:13.5px; font-weight:500; margin-bottom:2px;}
+  .nav-item svg{width:16px;height:16px; flex-shrink:0; opacity:0.85;}
+  .nav-item.active{background:rgba(227,169,59,0.16); color:#fff;}
+  .nav-item.active svg{opacity:1; color:var(--gold-soft);}
+  .nav-item:hover{background:rgba(255,255,255,0.06);}
+  .sidebar-bottom{margin-top:auto; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12);}
+  .user-block{display:flex; align-items:center; gap:11px; padding:6px 12px 14px;}
+  .user-avatar{width:34px;height:34px; border-radius:9px; background:rgba(227,169,59,0.18); color:var(--gold-soft); font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .user-name{font-size:13.5px; font-weight:600; color:#fff;}
+  .user-role{font-size:11.5px; color:#9FB6A2;}
+  .exit-link{display:flex; align-items:center; gap:10px; padding:10px 12px; color:#E0785A; font-size:13.5px; font-weight:600; text-decoration:none;}
+  .exit-link svg{width:16px;height:16px;}
+
+  /* ================= MAIN ================= */
+  .main{flex:1; min-width:0; padding:36px 44px 40px; max-width:900px;}
+  .breadcrumb{font-size:13px; color:var(--muted); margin-bottom:14px;}
+  .breadcrumb span{color:var(--forest); font-weight:600;}
+  .page-head h1{font-family:'Fraunces', serif; font-weight:600; font-size:28px; margin:0 0 6px; color:var(--forest-deep);}
+  .page-head p{margin:0 0 8px; font-size:14px; color:var(--muted); max-width:560px;}
+  .lang-note{
+    display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--soil);
+    background:var(--gold-tint); border:1px solid var(--line); border-radius:9px; padding:8px 13px; margin-bottom:22px;
+  }
+  .lang-note svg{width:15px;height:15px; color:var(--forest); flex-shrink:0;}
+
+  /* ===== STEPPER ===== */
+  .stepper{display:flex; align-items:flex-start; margin-bottom:30px; overflow-x:auto; padding-bottom:4px;}
+  .step{display:flex; flex-direction:column; align-items:center; flex:1; min-width:78px; cursor:pointer; position:relative;}
+  .step-connector{position:absolute; top:16px; left:-50%; width:100%; height:2px; background:var(--line); z-index:0;}
+  .step:first-child .step-connector{display:none;}
+  .step.done .step-connector, .step.active .step-connector{background:var(--gold);}
+  .step-circle{
+    width:32px;height:32px; border-radius:50%; border:2px solid var(--line); background:var(--paper);
+    display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono', monospace;
+    font-size:12px; font-weight:700; color:var(--muted); z-index:1; transition:all 0.15s ease;
+  }
+  .step.active .step-circle{border-color:var(--forest); background:var(--forest-deep); color:#fff;}
+  .step.done .step-circle{border-color:var(--gold); background:var(--gold); color:var(--forest-deep);}
+  .step-label{font-size:10.5px; font-weight:600; color:var(--muted); margin-top:7px; text-align:center; line-height:1.3;}
+  .step.active .step-label{color:var(--forest-deep);}
+  .step.done .step-label{color:var(--soil);}
+
+  /* ---- form panel ---- */
+  .panel{background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:30px 32px; min-height:340px;}
+  .panel-head{display:flex; align-items:center; gap:12px; margin-bottom:24px;}
+  .panel-icon{width:38px;height:38px; border-radius:10px; background:var(--gold-tint); color:var(--forest); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .panel-icon svg{width:20px;height:20px;}
+  .panel-head h2{font-family:'Fraunces', serif; font-weight:600; font-size:18px; margin:0; color:var(--forest-deep);}
+  .panel-head .fil{font-size:13px; font-weight:500; color:var(--gold); display:block; margin-top:1px; font-style:italic;}
+  .panel-head span.desc{display:block; font-size:12.5px; color:var(--muted); margin-top:3px;}
+
+  .subhead{font-family:'JetBrains Mono', monospace; font-size:10.5px; letter-spacing:0.6px; text-transform:uppercase; color:var(--gold); margin:24px 0 14px; display:flex; align-items:center; gap:10px;}
+  .subhead:first-of-type{margin-top:0;}
+  .subhead::after{content:''; flex:1; height:1px; background:var(--line);}
+  .subhead .fil{font-family:'Inter', sans-serif; text-transform:none; font-style:italic; font-weight:500; letter-spacing:0; color:var(--muted);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:20px 24px;}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px 24px;}
+  .grid4{display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:20px 24px;}
+  .field label{display:block; font-size:12.8px; font-weight:600; color:var(--soil); margin-bottom:7px; line-height:1.4;}
+  .field label .fil{font-weight:500; font-style:italic; color:var(--muted); font-size:11.5px;}
+  .field label .req{color:var(--danger); margin-left:2px;}
+  .field label .opt{font-weight:400; color:var(--muted); font-size:11px; margin-left:4px;}
+  .input-shell{display:flex; align-items:center; gap:9px; border:1.5px solid var(--line); border-radius:10px; padding:11px 13px; background:var(--paper); transition:border-color 0.15s ease;}
+  .input-shell:focus-within{border-color:var(--forest);}
+  .input-shell svg{width:16px;height:16px; color:var(--muted); flex-shrink:0;}
+  .input-shell input, .input-shell select{border:none; outline:none; font-family:'Inter', sans-serif; font-size:14px; color:var(--ink); width:100%; background:transparent; appearance:none;}
+  .input-shell input::placeholder{color:#B7B2A2;}
+  select{cursor:pointer;}
+  .select-shell{position:relative;}
+  .select-shell::after{content:''; position:absolute; right:13px; top:50%; width:8px; height:8px; border-right:1.5px solid var(--muted); border-bottom:1.5px solid var(--muted); transform:translateY(-65%) rotate(45deg); pointer-events:none;}
+
+  .chip-row{display:flex; gap:12px; flex-wrap:wrap;}
+  .chip{display:flex; align-items:center; gap:9px; border:1.5px solid var(--line); border-radius:11px; padding:10px 16px; cursor:pointer; font-size:13.5px; font-weight:500; color:var(--soil); transition:border-color 0.15s ease, background 0.15s ease;}
+  .chip:hover{border-color:var(--gold);}
+  .chip input{accent-color:var(--forest); width:16px; height:16px;}
+  .chip .fil{font-size:11px; font-weight:400; font-style:italic; color:var(--muted); margin-left:2px;}
+  .chip.compact{padding:9px 13px; font-size:12.5px;}
+  .edu-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;}
+
+  .yn-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .yn-group{display:flex; align-items:center; gap:9px;}
+  .yn-group label{font-size:13px; font-weight:600; color:var(--soil); margin:0; line-height:1.4;}
+  .yn-group label .fil{font-weight:500; font-style:italic; color:var(--muted); font-size:11.5px;}
+  .yn-pills{display:flex; border:1.5px solid var(--line); border-radius:9px; overflow:hidden; flex-shrink:0;}
+  .yn-pills label{padding:8px 16px; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; margin:0;}
+  .yn-pills label:first-child{border-right:1.5px solid var(--line);}
+  .yn-pills input{display:none;}
+
+  .livelihood-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:14px;}
+  .livelihood-card{border:1.5px solid var(--line); border-radius:13px; padding:20px 16px; cursor:pointer; text-align:center;}
+  .livelihood-card:hover{border-color:var(--gold);}
+  .livelihood-card.selected{border-color:var(--forest); background:var(--gold-tint);}
+  .livelihood-icon{width:40px;height:40px; margin:0 auto 10px; border-radius:10px; background:var(--forest-deep); color:var(--gold-soft); display:flex; align-items:center; justify-content:center;}
+  .livelihood-icon svg{width:20px;height:20px;}
+  .livelihood-card b{display:block; font-size:13.5px; color:var(--ink);}
+  .livelihood-card .fil{display:block; font-size:11px; font-style:italic; color:var(--muted); margin-top:1px; font-weight:400;}
+  .field-note{font-size:12px; color:var(--muted); margin-top:16px; background:var(--gold-tint); padding:10px 14px; border-radius:9px; line-height:1.5;}
+
+  .parcel-card{border:1.5px solid var(--line); border-radius:14px; padding:22px; margin-bottom:16px;}
+  .parcel-card-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+  .parcel-badge{display:flex; align-items:center; gap:10px; font-family:'Fraunces', serif; font-weight:600; font-size:15px; color:var(--forest-deep);}
+  .parcel-num{width:26px;height:26px; border-radius:50%; background:var(--forest-deep); color:#fff; font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+  .parcel-remove{font-size:12px; font-weight:600; color:var(--danger); background:none; border:none; cursor:pointer; display:flex; align-items:center; gap:5px;}
+  .parcel-remove svg{width:13px;height:13px;}
+  .add-parcel-btn{width:100%; border:1.5px dashed var(--line); border-radius:14px; padding:15px; background:var(--gold-tint); color:var(--forest); font-size:13.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .add-parcel-btn svg{width:16px;height:16px;}
+
+  .dropzone{border:1.5px dashed var(--line); border-radius:14px; padding:26px; display:flex; align-items:center; gap:18px; background:var(--gold-tint); margin-bottom:14px;}
+  .dropzone-icon{width:52px;height:52px; border-radius:50%; background:var(--paper); color:var(--forest); display:flex; align-items:center; justify-content:center; flex-shrink:0; border:1.5px solid var(--line);}
+  .dropzone-icon svg{width:22px;height:22px;}
+  .dropzone-text b{display:block; font-size:14px; color:var(--ink);}
+  .dropzone-text .fil{font-size:11.5px; font-style:italic; color:var(--soil); display:block; margin-top:1px;}
+  .dropzone-text span.help{font-size:12px; color:var(--muted); display:block; margin-top:3px;}
+  .browse-btn{margin-left:auto; background:var(--forest-deep); color:#fff; border:none; border-radius:9px; padding:10px 18px; font-size:13px; font-weight:600; cursor:pointer; flex-shrink:0;}
+
+  .consent-box{background:var(--gold-tint); border:1.5px solid var(--line); border-radius:12px; padding:18px 20px; display:flex; gap:14px; align-items:flex-start; margin-bottom:14px;}
+  .consent-box input{margin-top:3px; accent-color:var(--forest); width:16px; height:16px; flex-shrink:0;}
+  .consent-box p{margin:0; font-size:12.8px; line-height:1.6; color:var(--soil);}
+  .consent-box p.fil{font-style:italic; color:var(--muted); font-size:12px; margin-top:8px;}
+
+  .review-list{border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .review-row{display:flex; justify-content:space-between; padding:11px 16px; font-size:13px; border-bottom:1px solid var(--line);}
+  .review-row:last-child{border-bottom:none;}
+  .review-row span:first-child{color:var(--muted);}
+  .review-row span:last-child{font-weight:600; color:var(--ink);}
+
+  /* ---- nav footer ---- */
+  .step-footer{display:flex; align-items:center; justify-content:space-between; margin-top:22px;}
+  .footer-note{font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:7px;}
+  .footer-note svg{width:14px;height:14px; color:var(--gold);}
+  .footer-buttons{display:flex; gap:12px;}
+  .btn-secondary{background:var(--paper); border:1.5px solid var(--line); color:var(--soil); border-radius:10px; padding:12px 22px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px;}
+  .btn-secondary svg{width:15px;height:15px;}
+  .btn-secondary:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-primary{background:var(--forest-deep); border:none; color:#fff; border-radius:10px; padding:12px 24px; font-size:14px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px;}
+  .btn-primary:hover{background:var(--forest);}
+  .btn-primary svg{width:16px;height:16px;}
+
+  .step-panel{display:none; animation:fadein 0.2s ease;}
+  .step-panel.visible{display:block;}
+  @keyframes fadein{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+  @media (max-width:980px){
+    .sidebar{display:none;}
+    .grid2, .grid3, .grid4, .edu-grid, .livelihood-grid{grid-template-columns:1fr 1fr;}
+    .main{padding:24px;}
+    .step-label{display:none;}
+  }
+  @media (max-width:560px){
+    .grid2, .grid3, .grid4, .edu-grid, .livelihood-grid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="side-brand">
+      <div class="side-brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#10281D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M12 12C12 12 20 12 20 4C11 4 12 12 12 12Z"/><path d="M12 12C12 12 4 12 4 4C13 4 12 12 12 12Z" opacity="0.5"/></svg>
+      </div>
+      <div><div class="side-brand-name">GeoFarm-IS</div><div class="side-brand-sub">Admin Panel</div></div>
+    </div>
+    <div class="nav-group-label">Overview</div>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+    <div class="nav-group-label">Records</div>
+    <a class="nav-item active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Farmers</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></svg>Parcels</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/></svg>GIS Map</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M8 15l2.5 2.5L16 12"/></svg>Seasonal Tracking</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-8"/></svg>Crop Estimator</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v3"/><path d="M3 8h18v11a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/><path d="M8 12h8"/></svg>Farm Inventory</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Assistance</a>
+    <div class="nav-group-label">System</div>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17v-6M13 17V9M17 17v-3"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Reports</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>Lookups</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="1.5"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Users</a>
+    <a class="nav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg>Audit Logs</a>
+    <div class="sidebar-bottom">
+      <div class="user-block"><div class="user-avatar">SA</div><div><div class="user-name">Super Admin</div><div class="user-role">Super Admin</div></div></div>
+      <a class="exit-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>Logout</a>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="breadcrumb">Farmers &nbsp;/&nbsp; <span>Add New Farmer</span></div>
+    <div class="page-head">
+      <h1>Register a new farmer</h1>
+      <p>Each part of the RSBSA form is its own step. Fill one part, then continue to the next.</p>
+    </div>
+    <div class="lang-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
+      Every field is labeled in English with its Filipino translation <i>(sa Filipino)</i> so farmers can fill this out themselves, in person or online.
+    </div>
+
+    <!-- STEPPER -->
+    <div class="stepper" id="stepper">
+      <div class="step active" data-step="1"><div class="step-connector"></div><div class="step-circle">1</div><div class="step-label">Personal<br>Info</div></div>
+      <div class="step" data-step="2"><div class="step-connector"></div><div class="step-circle">2</div><div class="step-label">Address</div></div>
+      <div class="step" data-step="3"><div class="step-connector"></div><div class="step-circle">3</div><div class="step-label">Classi&#8209;<br>fication</div></div>
+      <div class="step" data-step="4"><div class="step-connector"></div><div class="step-circle">4</div><div class="step-label">Livelihood</div></div>
+      <div class="step" data-step="5"><div class="step-connector"></div><div class="step-circle">5</div><div class="step-label">Farm<br>Parcels</div></div>
+      <div class="step" data-step="6"><div class="step-connector"></div><div class="step-circle">6</div><div class="step-label">Photo<br>&amp; ID</div></div>
+      <div class="step" data-step="7"><div class="step-connector"></div><div class="step-circle">7</div><div class="step-label">Review<br>&amp; Submit</div></div>
+    </div>
+
+    <!-- ===== STEP 1: PERSONAL ===== -->
+    <div class="step-panel visible" data-panel="1">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+          <div>
+            <h2>Part 1 — Personal Information <span class="fil">(Impormasyong Personal)</span></h2>
+            <span class="desc">Basic identity details as they appear on official records</span>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field"><label>RSBSA No. <span class="opt">if already registered</span></label><div class="input-shell"><input type="text" placeholder="__ - __ - __ - __"></div></div>
+          <div class="field select-shell"><label>Sex <span class="fil">(Kasarian)</span> <span class="req">*</span></label><div class="input-shell"><select><option>Select / Pumili</option><option>Male (Lalaki)</option><option>Female (Babae)</option></select></div></div>
+          <div class="field"><label>First Name <span class="fil">(Pangalan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="Juan"></div></div>
+          <div class="field"><label>Last Name <span class="fil">(Apelyido)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="Dela Cruz"></div></div>
+          <div class="field"><label>Middle Name <span class="fil">(Gitnang Pangalan)</span> <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="Santos"></div></div>
+          <div class="field"><label>Extension Name <span class="fil">(Ekstensyon ng Pangalan)</span> <span class="opt">Jr., Sr., III</span></label><div class="input-shell"><input type="text" placeholder="Jr."></div></div>
+        </div>
+
+        <div class="subhead">Birth &amp; Family Details <span class="fil">(Kapanganakan at Pamilya)</span></div>
+        <div class="grid3">
+          <div class="field"><label>Date of Birth <span class="fil">(Petsa ng Kapanganakan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="mm/dd/yyyy"></div></div>
+          <div class="field"><label>Place of Birth — City/Municipality <span class="fil">(Lugar ng Kapanganakan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="e.g. Tumauini"></div></div>
+          <div class="field"><label>Province <span class="fil">(Lalawigan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="e.g. Isabela"></div></div>
+        </div>
+        <div class="grid3" style="margin-top:20px;">
+          <div class="field"><label>Mother's Maiden Name — First <span class="fil">(Pangalan ng Ina)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="First"></div></div>
+          <div class="field"><label>Middle <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="Middle"></div></div>
+          <div class="field"><label>Surname <span class="fil">(Apelyido ng Ina)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="Surname"></div></div>
+        </div>
+
+        <div class="subhead">Civil Status &amp; Religion <span class="fil">(Katayuang Sibil at Relihiyon)</span></div>
+        <label style="display:block; font-size:12.8px; font-weight:600; color:var(--soil); margin-bottom:10px;">Civil Status <span class="fil" style="font-style:italic; font-weight:500; color:var(--muted);">(Katayuang Sibil)</span> <span class="req">*</span></label>
+        <div class="chip-row" style="margin-bottom:20px;">
+          <label class="chip"><input type="radio" name="civil"> Single <span class="fil">(Walang Asawa)</span></label>
+          <label class="chip"><input type="radio" name="civil"> Married <span class="fil">(Kasal)</span></label>
+          <label class="chip"><input type="radio" name="civil"> Widow/er <span class="fil">(Balo)</span></label>
+          <label class="chip"><input type="radio" name="civil"> Legally Separated <span class="fil">(Hiwalay)</span></label>
+        </div>
+        <label style="display:block; font-size:12.8px; font-weight:600; color:var(--soil); margin-bottom:10px;">Religion <span class="fil" style="font-style:italic; font-weight:500; color:var(--muted);">(Relihiyon)</span> <span class="req">*</span></label>
+        <div class="chip-row">
+          <label class="chip"><input type="radio" name="religion"> Christianity</label>
+          <label class="chip"><input type="radio" name="religion"> Islam</label>
+          <label class="chip"><input type="radio" name="religion"> Others <span class="fil">(Iba pa)</span></label>
+          <label class="chip"><input type="radio" name="religion"> None <span class="fil">(Wala)</span></label>
+        </div>
+
+        <div class="subhead">Highest Formal Education <span class="fil">(Pinakamataas na Antas ng Pinag-aralan)</span></div>
+        <div class="edu-grid">
+          <label class="chip compact"><input type="radio" name="edu"> Pre-school</label>
+          <label class="chip compact"><input type="radio" name="edu"> Elementary</label>
+          <label class="chip compact"><input type="radio" name="edu"> Junior High (K-12)</label>
+          <label class="chip compact"><input type="radio" name="edu"> Senior High (K-12)</label>
+          <label class="chip compact"><input type="radio" name="edu"> High School (non K-12)</label>
+          <label class="chip compact"><input type="radio" name="edu"> Vocational</label>
+          <label class="chip compact"><input type="radio" name="edu"> College</label>
+          <label class="chip compact"><input type="radio" name="edu"> Post-graduate</label>
+          <label class="chip compact"><input type="radio" name="edu"> None <span class="fil">(Wala)</span></label>
+        </div>
+
+        <div class="subhead">Contact &amp; Identification <span class="fil">(Pakikipag-ugnayan at Pagkakakilanlan)</span></div>
+        <div class="grid2">
+          <div class="field"><label>Mobile No. <span class="fil">(Numero ng Cellphone)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="09XX XXX XXXX"></div></div>
+          <div class="field"><label>Email <span class="opt">optional</span></label><div class="input-shell"><input type="email" placeholder="name@example.com"></div></div>
+          <div class="field select-shell"><label>Valid ID Type <span class="fil">(Uri ng Valid ID)</span> <span class="req">*</span></label><div class="input-shell"><select><option>Select ID type</option><option>PhilID / National ID</option><option>Driver's License</option><option>Passport</option><option>Voter's ID</option><option>4Ps ID</option><option>Other</option></select></div></div>
+          <div class="field"><label>ID / Document Number <span class="fil">(Numero ng ID)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="ID number"></div></div>
+        </div>
+      </div>
+
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 1 of 7 — Personal Information</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary" onclick="goTo(2)">Continue to Address<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STEP 2: ADDRESS ===== -->
+    <div class="step-panel" data-panel="2">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+          <div>
+            <h2>Permanent Address <span class="fil">(Permanenteng Tirahan)</span></h2>
+            <span class="desc">Where this farmer's household is officially located</span>
+          </div>
+        </div>
+        <div class="grid3" style="margin-bottom:20px;">
+          <div class="field"><label>House/Lot/Bldg No. / Purok <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="e.g. Purok 3"></div></div>
+          <div class="field"><label>Street / Sitio / Subdivision <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="e.g. Sitio Malaya"></div></div>
+          <div class="field"><label>Barangay <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="e.g. San Pablo"></div></div>
+        </div>
+        <div class="grid3">
+          <div class="field"><label>City / Municipality <span class="fil">(Lungsod/Bayan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" value="Tumauini"></div></div>
+          <div class="field"><label>Province <span class="fil">(Lalawigan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" value="Isabela"></div></div>
+          <div class="field select-shell"><label>Region <span class="fil">(Rehiyon)</span> <span class="req">*</span></label><div class="input-shell"><select><option>Select region</option><option selected>Region II — Cagayan Valley</option><option>Region I — Ilocos Region</option><option>NCR</option><option>Other</option></select></div></div>
+        </div>
+      </div>
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 2 of 7 — Address</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" onclick="goTo(1)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary" onclick="goTo(3)">Continue to Classification<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STEP 3: CLASSIFICATION ===== -->
+    <div class="step-panel" data-panel="3">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+          <div>
+            <h2>Background &amp; Classification <span class="fil">(Karagdagang Impormasyon)</span></h2>
+            <span class="desc">Helps route the right assistance programs to this farmer</span>
+          </div>
+        </div>
+        <div class="yn-row" style="margin-bottom:16px;">
+          <div class="yn-group"><label>Indigenous Cultural Community / IP? <span class="fil">(Katutubo?)</span></label><div class="yn-pills"><label><input type="radio" name="icc">Yes / Oo</label><label><input type="radio" name="icc">No / Hindi</label></div></div>
+          <div style="flex:1; min-width:220px;"><div class="input-shell"><input type="text" placeholder="If Yes — name of ICC/IP (Kung Oo — pangalan)"></div></div>
+        </div>
+        <div class="yn-row" style="margin-bottom:16px;">
+          <div class="yn-group"><label>Person with Disability? <span class="fil">(May Kapansanan?)</span></label><div class="yn-pills"><label><input type="radio" name="pwd">Yes / Oo</label><label><input type="radio" name="pwd">No / Hindi</label></div></div>
+        </div>
+        <div class="yn-row" style="margin-bottom:24px;">
+          <div class="yn-group"><label>4Ps Beneficiary? <span class="fil">(Benepisyaryo ng 4Ps?)</span></label><div class="yn-pills"><label><input type="radio" name="fourps">Yes / Oo</label><label><input type="radio" name="fourps">No / Hindi</label></div></div>
+        </div>
+        <div class="subhead">Membership <span class="fil">(Pagiging Kasapi) — Association, Cooperative, or Organization</span></div>
+        <div class="grid3">
+          <div class="field"><label>1 <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="Organization name"></div></div>
+          <div class="field"><label>2 <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="Organization name"></div></div>
+          <div class="field"><label>3 <span class="opt">optional</span></label><div class="input-shell"><input type="text" placeholder="Organization name"></div></div>
+        </div>
+      </div>
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 3 of 7 — Classification</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" onclick="goTo(2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary" onclick="goTo(4)">Continue to Livelihood<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STEP 4: LIVELIHOOD ===== -->
+    <div class="step-panel" data-panel="4">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+          <div>
+            <h2>Part 2 — Livelihood Profile <span class="fil">(Hanapbuhay)</span></h2>
+            <span class="desc">Determines which additional form parts apply</span>
+          </div>
+        </div>
+        <div class="livelihood-grid">
+          <div class="livelihood-card selected">
+            <div class="livelihood-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+            <b>Farmer</b><span class="fil">Magsasaka</span>
+          </div>
+          <div class="livelihood-card">
+            <div class="livelihood-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div>
+            <b>Farm Worker</b><span class="fil">Manggagawa sa Sakahan</span>
+          </div>
+          <div class="livelihood-card">
+            <div class="livelihood-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 12.5c3-3 8-3 11 0M4 16c5-5 11-5 16 0"/><circle cx="9" cy="9" r="1"/></svg></div>
+            <b>Fisher</b><span class="fil">Mangingisda</span>
+          </div>
+          <div class="livelihood-card">
+            <div class="livelihood-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg></div>
+            <b>Agri-Youth</b><span class="fil">Kabataang Agrikultura</span>
+          </div>
+        </div>
+        <p class="field-note">Farmer (Magsasaka) → continue to Farm Parcel Information. Farm Worker/Fisher require a Certification from the City/Municipal Agriculture Office. Agri-Youth skips ahead to a separate youth profile.</p>
+      </div>
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 4 of 7 — Livelihood</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" onclick="goTo(3)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary" onclick="goTo(5)">Continue to Farm Parcels<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STEP 5: FARM PARCELS ===== -->
+    <div class="step-panel" data-panel="5">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0116 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+          <div>
+            <h2>Part 3 — Farm Parcel Information <span class="fil">(Impormasyon ng Sakahan)</span></h2>
+            <span class="desc">A farmer may declare multiple parcels</span>
+          </div>
+        </div>
+
+        <div class="parcel-card">
+          <div class="parcel-card-head">
+            <div class="parcel-badge"><div class="parcel-num">1</div> Farm Parcel <span class="fil" style="font-size:12px;">(Sakahan)</span></div>
+            <button class="parcel-remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>Remove</button>
+          </div>
+          <div class="grid3" style="margin-bottom:20px;">
+            <div class="field"><label>Farm Location — Barangay <span class="fil">(Lokasyon ng Sakahan)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="e.g. San Pablo"></div></div>
+            <div class="field"><label>City / Municipality <span class="req">*</span></label><div class="input-shell"><input type="text" value="Tumauini"></div></div>
+            <div class="field"><label>Province <span class="req">*</span></label><div class="input-shell"><input type="text" value="Isabela"></div></div>
+          </div>
+          <div class="grid4" style="margin-bottom:20px;">
+            <div class="field"><label>Total Area (Ha) <span class="fil">(Sukat)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="0.00"></div></div>
+            <div class="field"><label>Cropping Schedule <span class="fil">(Iskedyul ng Tanim)</span></label><div class="input-shell"><input type="text" placeholder="Jan–Mar"></div></div>
+            <div class="field"><label>Commodity <span class="fil">(Produkto)</span> <span class="req">*</span></label><div class="input-shell"><input type="text" placeholder="e.g. Rice"></div></div>
+            <div class="field"><label>No. of Heads/Trees <span class="opt">if applicable</span></label><div class="input-shell"><input type="text" placeholder="—"></div></div>
+          </div>
+          <div class="grid2" style="margin-bottom:20px;">
+            <div class="field select-shell"><label>Farm Type <span class="fil">(Uri ng Sakahan)</span> <span class="req">*</span></label><div class="input-shell"><select><option>Select</option><option>1 — Irrigated</option><option>2 — Rainfed Upland</option><option>3 — Rainfed Lowland</option><option>4 — Urban/Peri-Urban</option><option>N/A</option></select></div></div>
+            <div class="yn-group"><label>Organic Agriculture? <span class="fil">(Organiko?)</span></label><div class="yn-pills"><label><input type="radio" name="organic1">Yes / Oo</label><label><input type="radio" name="organic1">No / Hindi</label></div></div>
+          </div>
+          <div class="yn-row" style="margin-bottom:16px;">
+            <div class="yn-group"><label>Within Ancestral Domain? <span class="fil">(Ancestral Domain?)</span></label><div class="yn-pills"><label><input type="radio" name="ad1">Yes</label><label><input type="radio" name="ad1">No</label></div></div>
+            <div class="yn-group"><label>Agrarian Reform Beneficiary? <span class="fil">(ARB?)</span></label><div class="yn-pills"><label><input type="radio" name="arb1">Yes</label><label><input type="radio" name="arb1">No</label></div></div>
+          </div>
+          <div class="subhead">Ownership / Tenure <span class="fil">(Pagmamay-ari)</span></div>
+          <div class="chip-row" style="margin-bottom:18px;">
+            <label class="chip"><input type="radio" name="tenure1"> Registered Owner <span class="fil">(May-ari)</span></label>
+            <label class="chip"><input type="radio" name="tenure1"> Tenant <span class="fil">(Kasama)</span></label>
+            <label class="chip"><input type="radio" name="tenure1"> Lessee <span class="fil">(Umuupa)</span></label>
+            <label class="chip"><input type="radio" name="tenure1"> Others <span class="fil">(Iba pa)</span></label>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Land Owner's Name <span class="fil">(Pangalan ng May-ari)</span> <span class="opt">if not registered owner</span></label><div class="input-shell"><input type="text" placeholder="Full name"></div></div>
+            <div class="field select-shell"><label>Proof of Land Ownership <span class="fil">(Patunay ng Pagmamay-ari)</span> <span class="req">*</span></label><div class="input-shell"><select><option>Select document</option><option>Tax Declaration</option><option>Certificate of Title</option><option>CLOA</option><option>Homestead / Free Patent</option><option>Tenancy / Lease Agreement</option><option>Others</option></select></div></div>
+          </div>
+        </div>
+
+        <button class="add-parcel-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Add Another Parcel <span style="font-weight:400; font-style:italic; font-size:12px; margin-left:6px;">(Magdagdag ng Sakahan)</span></button>
+      </div>
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 5 of 7 — Farm Parcels</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" onclick="goTo(4)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary" onclick="goTo(6)">Continue to Photo &amp; ID<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STEP 6: PHOTO ===== -->
+    <div class="step-panel" data-panel="6">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>
+          <div>
+            <h2>Photo &amp; Supporting Documents <span class="fil">(Larawan at Dokumento)</span></h2>
+            <span class="desc">2x2 ID photo (taken within 6 months) and proof of identity</span>
+          </div>
+        </div>
+        <div class="dropzone">
+          <div class="dropzone-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg></div>
+          <div class="dropzone-text">
+            <b>2x2 ID Photo</b><span class="fil">(Larawang 2x2)</span>
+            <span class="help">JPG or PNG, up to 5MB — taken within 6 months</span>
+          </div>
+          <button class="browse-btn">Browse File</button>
+        </div>
+        <div class="dropzone" style="margin-bottom:0;">
+          <div class="dropzone-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg></div>
+          <div class="dropzone-text">
+            <b>Proof of ID / Land Ownership</b><span class="fil">(Patunay ng Pagkakakilanlan o Lupa)</span>
+            <span class="help">PDF, JPG or PNG — scanned copy for verification</span>
+          </div>
+          <button class="browse-btn">Browse File</button>
+        </div>
+      </div>
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 6 of 7 — Photo &amp; ID</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" onclick="goTo(5)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary" onclick="goTo(7)">Continue to Review<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== STEP 7: REVIEW ===== -->
+    <div class="step-panel" data-panel="7">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/></svg></div>
+          <div>
+            <h2>Part 4 — Review &amp; Consent <span class="fil">(Pagsusuri at Pahintulot)</span></h2>
+            <span class="desc">Confirm the details below before saving this farmer's record</span>
+          </div>
+        </div>
+
+        <div class="review-list" style="margin-bottom:24px;">
+          <div class="review-row"><span>Full Name <i class="fil" style="font-style:italic;">(Buong Pangalan)</i></span><span>Not yet filled in</span></div>
+          <div class="review-row"><span>Sex / Civil Status</span><span>Not yet filled in</span></div>
+          <div class="review-row"><span>Barangay</span><span>Not yet filled in</span></div>
+          <div class="review-row"><span>Livelihood <i class="fil" style="font-style:italic;">(Hanapbuhay)</i></span><span>Farmer</span></div>
+          <div class="review-row"><span>Farm Parcels Declared</span><span>1 parcel</span></div>
+          <div class="review-row"><span>2x2 Photo</span><span>Not uploaded</span></div>
+        </div>
+
+        <div class="consent-box">
+          <input type="checkbox" id="consent">
+          <div>
+            <p>I hereby declare that all information indicated in this form is true, correct, and complete, and that it may be used by the Department of Agriculture and LGU Tumauini for RSBSA registration and related legitimate purposes. I give consent for validation activities on my declared farm parcel(s), consistent with the Data Privacy Act of 2012.</p>
+            <p class="fil">Isinasaad ko na totoo, tama, at kumpleto ang lahat ng impormasyong nakasaad sa form na ito, at maaaring gamitin ito ng DA at LGU Tumauini para sa rehistrasyon sa RSBSA at may kaugnay na layunin.</p>
+          </div>
+        </div>
+      </div>
+      <div class="step-footer">
+        <div class="footer-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>Step 7 of 7 — Review &amp; Submit</div>
+        <div class="footer-buttons">
+          <button class="btn-secondary" onclick="goTo(6)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</button>
+          <button class="btn-primary">Save Farmer<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let currentStep = 1;
+  const totalSteps = 7;
+
+  function goTo(step){
+    document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('visible'));
+    document.querySelector('.step-panel[data-panel="'+step+'"]').classList.add('visible');
+
+    document.querySelectorAll('.step').forEach(s => {
+      const n = parseInt(s.getAttribute('data-step'));
+      s.classList.remove('active','done');
+      if(n < step) s.classList.add('done');
+      if(n === step) s.classList.add('active');
+    });
+
+    currentStep = step;
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  document.querySelectorAll('.step').forEach(s => {
+    s.addEventListener('click', () => goTo(parseInt(s.getAttribute('data-step'))));
+  });
+</script>
+
+</body>
+</html>

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::table('farm_parcels', function (Blueprint $table) {
+        Schema::table('farm_parcels', function (Blueprint $table) {   
             $table->text('geojson_data')->nullable()->after('arb');
         });
     }

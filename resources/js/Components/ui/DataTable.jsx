@@ -10,7 +10,14 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp, Search, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function DataTable({ columns, data, enableExport = true, filename = 'data' }) {
+export default function DataTable({
+  columns,
+  data,
+  enableExport = true,
+  filename = 'data',
+  stickyScroll = false,
+  maxHeight = 'calc(100vh - 22rem)',
+}) {
   const [globalFilter, setGlobalFilter] = useState('')
   const [sorting, setSorting] = useState([])
 
@@ -62,15 +69,22 @@ export default function DataTable({ columns, data, enableExport = true, filename
       </div>
       
       {/* Table */}
-      <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
-        <table className="w-full">
-          <thead className="bg-muted/50">
+      <div
+        className={
+          stickyScroll
+            ? 'rounded-xl border bg-card shadow-sm overflow-auto sticky-scrollbar'
+            : 'rounded-xl border bg-card overflow-hidden shadow-sm'
+        }
+        style={stickyScroll ? { maxHeight } : undefined}
+      >
+        <table className={stickyScroll ? 'min-w-max w-full' : 'w-full'}>
+          <thead className={stickyScroll ? 'sticky top-0 z-10 bg-gray-50 dark:bg-gray-800' : 'bg-muted/50'}>
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
                   <th 
                     key={header.id}
-                    className="h-12 px-4 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    className="h-12 px-4 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground whitespace-nowrap"
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     <div className="flex items-center gap-1">
@@ -89,7 +103,7 @@ export default function DataTable({ columns, data, enableExport = true, filename
             {table.getRowModel().rows.map(row => (
               <tr key={row.id} className="hover:bg-accent hover:cursor-pointer transition-colors">
                 {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} className="px-4 py-3 text-sm align-top">
+                  <td key={cell.id} className="px-4 py-3 text-sm align-top whitespace-nowrap">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

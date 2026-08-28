@@ -1,21 +1,54 @@
 import { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { 
+    LayoutDashboard, 
+    Users, 
+    MapPin, 
+    Globe, 
+    Calendar, 
+    TrendingUp, 
+    Package, 
+    Layers, 
+    FileText, 
+    Search, 
+    UserCog, 
+    FileCheck,
+    ClipboardCheck,
+    LineChart
+} from 'lucide-react';
 
 
 const nav = [
-    { label: 'Dashboard',         href: '/admin', permission: null },
-    { label: 'Farmers',           href: '/admin/farmers', permission: 'view farmers' },
-    { label: 'Parcels',           href: '/admin/parcels', permission: 'view parcels' },
-    { label: 'GIS Map',           href: '/admin/gis/map', permission: 'view maps' },
-    { label: 'Seasonal Tracking', href: '/admin/seasonal', permission: 'view seasonal' },
-    { label: 'Crop Estimator',    href: '/admin/crop-estimator', permission: 'view predictive' },
-    { label: 'Farm Inventory',    href: '/admin/farm-inventory', permission: 'view inventory' },
-    { label: 'Assistance',        href: '/admin/assistance', permission: 'view assistance' },
-    { label: 'Reports',           href: '/admin/reports', permission: 'view reports' },
-    { label: 'Lookups',           href: '/admin/lookups', permission: 'manage lookups' },
-    { label: 'Users',             href: '/admin/users', permission: 'view users' },
-    { label: 'Audit Logs',        href: '/admin/audit-logs', permission: 'view audit logs' },
+    { 
+        section: 'OVERVIEW',
+        items: [
+            { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: null },
+        ]
+    },
+    {
+        section: 'RECORDS',
+        items: [
+            { label: 'Farmers', href: '/admin/farmers', icon: Users, permission: 'view farmers' },
+            { label: 'Verification', href: '/admin/farmer-verification', icon: ClipboardCheck, permission: 'view farmers' },
+            { label: 'Parcels', href: '/admin/parcels', icon: MapPin, permission: 'view parcels' },
+            { label: 'GIS Map', href: '/admin/gis/map', icon: Globe, permission: 'view maps' },
+            { label: 'Seasonal Tracking', href: '/admin/seasonal', icon: Calendar, permission: 'view seasonal' },
+            { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
+            { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
+            { label: 'Farm Inventory', href: '/admin/farm-inventory', icon: Package, permission: 'view inventory' },
+            { label: 'Assistance', href: '/admin/assistance', icon: Layers, permission: 'view assistance' },
+        ]
+    },
+    {
+        section: 'SYSTEM',
+        items: [
+            { label: 'Reports', href: '/admin/reports', icon: FileText, permission: 'view reports' },
+            { label: 'Lookups', href: '/admin/lookups', icon: Search, permission: 'manage lookups' },
+            { label: 'Users', href: '/admin/users', icon: UserCog, permission: 'view users' },
+            { label: 'Audit Logs', href: '/admin/audit-logs', icon: FileCheck, permission: 'view audit logs' },
+        ]
+    }
 ];
 
 export default function AdminLayout({ children, title, showBack = true }) {
@@ -28,7 +61,10 @@ export default function AdminLayout({ children, title, showBack = true }) {
     };
 
     // Filter navigation items based on permissions
-    const visibleNav = nav.filter(item => !item.permission || can(item.permission));
+    const visibleNav = nav.map(section => ({
+        ...section,
+        items: section.items.filter(item => !item.permission || can(item.permission))
+    })).filter(section => section.items.length > 0);
 
     return (
         <div className="min-h-screen flex">
@@ -36,7 +72,7 @@ export default function AdminLayout({ children, title, showBack = true }) {
             <aside
                 onMouseEnter={() => setExpanded(true)}
                 onMouseLeave={() => setExpanded(false)}
-                className={`relative flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} overflow-hidden`}
+                className={`fixed left-0 top-0 bottom-0 flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} overflow-y-auto z-50 sidebar-scroll`}
                 style={{ 
                     background: '#006400',
                     boxShadow: '2px 0 10px rgba(0,0,0,0.1)'
@@ -44,7 +80,11 @@ export default function AdminLayout({ children, title, showBack = true }) {
             >
                 {/* Logo */}
                 <div className="flex items-center gap-3 h-16 border-b border-white/10 px-3 overflow-hidden relative z-10">
-                    <span className="text-2xl flex-shrink-0">🌾</span>
+                    <img 
+                        src="/images/VTB.jpg" 
+                        alt="VTB Logo" 
+                        className="w-10 h-10 flex-shrink-0 rounded-lg object-cover"
+                    />
                     {expanded && (
                         <span className="text-base font-bold whitespace-nowrap transition-opacity duration-200 text-white">
                             GeoFarm-IS
@@ -53,21 +93,38 @@ export default function AdminLayout({ children, title, showBack = true }) {
                 </div>
 
                 {/* Nav items */}
-                <nav className="flex-1 py-3 space-y-0.5 overflow-hidden relative z-10">
-                    {visibleNav.map(item => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            title={!expanded ? item.label : undefined}
-                            className="flex items-center py-2.5 text-sm rounded mx-2 px-4 transition-colors hover:bg-white/15 text-white/95 hover:text-white"
-                        >
+                <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden relative z-10">
+                    {visibleNav.map((section, sectionIndex) => (
+                        <div key={sectionIndex} className="mb-6">
+                            {/* Section Header */}
                             {expanded && (
-                                <span className="whitespace-nowrap">{item.label}</span>
+                                <div className="px-4 mb-2">
+                                    <h3 className="text-xs font-semibold text-white/50 tracking-wider">
+                                        {section.section}
+                                    </h3>
+                                </div>
                             )}
-                            {!expanded && (
-                                <span className="text-xs font-semibold">{item.label.substring(0, 2).toUpperCase()}</span>
-                            )}
-                        </Link>
+                            
+                            {/* Section Items */}
+                            <div className="space-y-0.5">
+                                {section.items.map(item => {
+                                    const Icon = item.icon;
+                                    return (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            title={!expanded ? item.label : undefined}
+                                            className="flex items-center gap-3 py-2.5 text-sm rounded mx-2 px-3 transition-colors hover:bg-white/15 text-white/95 hover:text-white"
+                                        >
+                                            <Icon className="h-5 w-5 flex-shrink-0" />
+                                            {expanded && (
+                                                <span className="whitespace-nowrap">{item.label}</span>
+                                            )}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     ))}
                 </nav>
 
@@ -87,7 +144,8 @@ export default function AdminLayout({ children, title, showBack = true }) {
             </aside>
 
             {/* LAYER 2 & 3: Main Content - Digital Parchment + Topographic Maps */}
-            <div className="flex-1 flex flex-col min-w-0 relative overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 relative overflow-hidden ml-16">
+                {/* Spacer for sidebar */}
                 {/* Layer 2: Digital Parchment Background */}
                 <div 
                     className="absolute inset-0 pointer-events-none" 

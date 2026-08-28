@@ -18,7 +18,10 @@ use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\SmallRuminantController;
 use App\Http\Controllers\Admin\SwineHybridController;
 use App\Http\Controllers\Admin\TreeCropController;
+use App\Http\Controllers\Admin\FarmerVerificationController;
+use App\Http\Controllers\Admin\PredictiveAnalyticsController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Auth\FarmerRegistrationController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\LandingController;
@@ -29,17 +32,35 @@ Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'store']);
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
-// Farmer Registration
+// Account claiming for farmers already encoded at the office
 Route::get('/register', [RegisterController::class, 'show'])->name('register');
 Route::post('/register', [RegisterController::class, 'store']);
 
+// Self-service farmer registration (RSBSA wizard, reviewed by staff afterwards)
+Route::get('/farmer-registration', [FarmerRegistrationController::class, 'show'])
+    ->name('farmer-registration');
+Route::post('/farmer-registration', [FarmerRegistrationController::class, 'store'])
+    ->middleware('throttle:6,60');
+Route::get('/farmer-registration/submitted', [FarmerRegistrationController::class, 'submitted'])
+    ->name('farmer-registration.submitted');
+
 // Admin routes (excluding farmers)
-Route::middleware(['auth', 'role:Admin|Super Admin|Encoder|Viewer'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admin')->name('admin.')->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
     // Farmers
     Route::get('farmers', [FarmerController::class, 'index'])->middleware('permission:view farmers')->name('farmers.index');
+
+    // Verification queue for online registrations
+    Route::get('farmer-verification', [FarmerVerificationController::class, 'index'])
+        ->middleware('permission:view farmers')->name('farmer-verification.index');
+    Route::post('farmer-verification/{farmer}/approve', [FarmerVerificationController::class, 'approve'])
+        ->middleware('permission:edit farmers')->name('farmer-verification.approve');
+    Route::post('farmer-verification/{farmer}/reject', [FarmerVerificationController::class, 'reject'])
+        ->middleware('permission:edit farmers')->name('farmer-verification.reject');
+    Route::get('farmers/export', [FarmerController::class, 'export'])->middleware('permission:export reports')->name('farmers.export');
+    Route::post('farmers/import', [FarmerController::class, 'import'])->middleware('permission:create farmers')->name('farmers.import');
     Route::get('farmers/create', [FarmerController::class, 'create'])->middleware('permission:create farmers')->name('farmers.create');
     Route::post('farmers', [FarmerController::class, 'store'])->middleware('permission:create farmers')->name('farmers.store');
     Route::get('farmers/{farmer}', [FarmerController::class, 'show'])->middleware('permission:view farmers')->name('farmers.show');
@@ -132,6 +153,10 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Encoder|Viewer'])->prefix('ad
     Route::post('poultry', [PoultryController::class, 'store'])->middleware('permission:create inventory')->name('poultry.store');
     Route::put('poultry/{poultry}', [PoultryController::class, 'update'])->middleware('permission:edit inventory')->name('poultry.update');
     Route::delete('poultry/{poultry}', [PoultryController::class, 'destroy'])->middleware('permission:delete inventory')->name('poultry.destroy');
+
+    // Municipality-wide predictive analytics
+    Route::get('analytics/predictive', [PredictiveAnalyticsController::class, 'index'])
+        ->middleware('permission:view predictive')->name('analytics.predictive');
 
     // Crop Yield Estimator (Predictive Analytics)
     Route::get('crop-estimator', [CropEstimatorController::class, 'index'])->middleware('permission:view predictive')->name('crop-estimator.index');

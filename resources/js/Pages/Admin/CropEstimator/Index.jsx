@@ -1,13 +1,15 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { useState } from 'react';
-import { Calculator, TrendingUp, Sprout, Package } from 'lucide-react';
+import { Calculator, TrendingUp, Sprout, Package, Info } from 'lucide-react';
 import Card from '@/Components/ui/Card';
+import ConfidenceBadge from '@/Components/ui/ConfidenceBadge';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-export default function CropEstimatorIndex({ farmers, crops }) {
+export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
   const [formData, setFormData] = useState({
     farmer_id: '',
+    barangay: '',
     crop_id: '',
     area_hectares: '',
     planting_date: '',
@@ -47,8 +49,10 @@ export default function CropEstimatorIndex({ farmers, crops }) {
           <form onSubmit={handleEstimate} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Farmer</label>
+                <label htmlFor="farmer_id" className="block text-sm font-medium mb-2">Farmer</label>
                 <select
+                  id="farmer_id"
+                  name="farmer_id"
                   value={formData.farmer_id}
                   onChange={e => setFormData({...formData, farmer_id: e.target.value})}
                   className="w-full px-3 py-2 border rounded-lg"
@@ -58,6 +62,28 @@ export default function CropEstimatorIndex({ farmers, crops }) {
                     <option key={f.id} value={f.id}>{f.name}</option>
                   ))}
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Uses the farmer's own history when they have 3+ recorded harvests.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="barangay" className="block text-sm font-medium mb-2">Barangay</label>
+                <select
+                  id="barangay"
+                  name="barangay"
+                  value={formData.barangay}
+                  onChange={e => setFormData({...formData, barangay: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
+                  <option value="">Whole municipality</option>
+                  {barangays.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Narrows the history to one barangay — similar soil and climate.
+                </p>
               </div>
 
               <div>
@@ -137,6 +163,26 @@ export default function CropEstimatorIndex({ farmers, crops }) {
 
         {results && (
           <>
+            {/* How much history this forecast rests on. Shown before the numbers
+                so a thin estimate is never mistaken for a confident one. */}
+            <div className={`rounded-xl border-2 p-4 ${
+              results.confidence === 'none' ? 'bg-gray-50 border-gray-300' :
+              results.confidence === 'low' ? 'bg-amber-50 border-amber-300' :
+              results.confidence === 'moderate' ? 'bg-blue-50 border-blue-300' :
+              'bg-green-50 border-green-300'
+            }`}>
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-1">
+                    <p className="font-bold text-gray-900">Forecast reliability</p>
+                    <ConfidenceBadge level={results.confidence} dataPoints={results.data_points} />
+                  </div>
+                  <p className="text-sm text-gray-700">{results.explanation}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <div className="flex items-center gap-3">
@@ -144,8 +190,10 @@ export default function CropEstimatorIndex({ farmers, crops }) {
                   <TrendingUp className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Avg Yield/Ha</p>
-                  <p className="text-2xl font-bold">{results.avg_yield_per_ha} kg</p>
+                  <p className="text-sm text-gray-600">Yield/Ha (median)</p>
+                  <p className="text-2xl font-bold">
+                    {results.yield_per_ha === null ? 'No data' : `${results.yield_per_ha} kg`}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -157,7 +205,14 @@ export default function CropEstimatorIndex({ farmers, crops }) {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Est. Total Yield</p>
-                  <p className="text-2xl font-bold">{results.estimated_total_yield_kg} kg</p>
+                  <p className="text-2xl font-bold">
+                    {results.total_yield_kg === null ? 'No data' : `${results.total_yield_kg} kg`}
+                  </p>
+                  {results.range_kg && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      likely {results.range_kg.low}–{results.range_kg.high} kg
+                    </p>
+                  )}
                 </div>
               </div>
             </Card>
@@ -266,7 +321,10 @@ export default function CropEstimatorIndex({ farmers, crops }) {
         {results && results.seasonal_data && results.seasonal_data.length > 0 && (
           <Card title="Historical Data">
             <p className="text-sm text-gray-600 mb-4">
-              Based on {results.data_points} historical records
+              Based on {results.data_points} historical record{results.data_points === 1 ? '' : 's'}
+              {results.trend?.direction && results.trend.direction !== 'unknown' && (
+                <span> · yield trend is <strong>{results.trend.direction}</strong></span>
+              )}
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

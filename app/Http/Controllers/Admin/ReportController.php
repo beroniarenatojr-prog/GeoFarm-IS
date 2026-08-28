@@ -20,7 +20,9 @@ class ReportController extends Controller
 
     public function farmerDemographics(Request $request)
     {
+        // Reports go to the DA, so they must count verified farmers only.
         $data = Farmer::query()
+            ->verified()
             ->when($request->barangay, fn($q, $v) => $q->where('barangay', $v))
             ->selectRaw('barangay, sex, COUNT(*) as count')
             ->groupBy('barangay', 'sex')

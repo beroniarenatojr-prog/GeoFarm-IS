@@ -18,14 +18,6 @@ class LoginController extends Controller
     {
         $email = strtolower(trim((string) $request->input('email')));
 
-        // Keep the sample administrator login compatible with older project builds.
-        $email = match ($email) {
-            'admin@geofarm',
-            'admin@geofarm.local',
-            'admin@geofarm.test' => 'admin@geofarm.com',
-            default => $email,
-        };
-
         $request->merge(['email' => $email]);
 
         $credentials = $request->validate([
@@ -38,6 +30,19 @@ class LoginController extends Controller
         }
 
         $user = Auth::user();
+
+        // Farmers who registered online stay deactivated until staff verifies
+        // their documents at the Agriculture Office.
+        if (!$user->is_active) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                'email' => 'Your account is not yet active. Please visit the Agriculture Office with your documents so staff can verify your registration.',
+            ]);
+        }
+
         $user->update(['last_login' => now()]);
 
         $request->session()->regenerate();

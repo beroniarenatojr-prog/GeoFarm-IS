@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router } from '@inertiajs/react';
-import { useState } from 'react';
-import { Plus, Filter, Download, Trash2, Eye, Edit3, Users } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Filter, Download, Trash2, Eye, Edit3, Users, Upload, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '@/Components/ui/DataTable';
 import Card from '@/Components/ui/Card';
@@ -14,6 +14,7 @@ export default function FarmersIndex({ farmers, filters, barangays }) {
   const [search, setSearch] = useState(filters.search ?? '');
   const [barangay, setBarangay] = useState(filters.barangay ?? '');
   const [selectedRows, setSelectedRows] = useState([]);
+  const fileInputRef = useRef(null);
 
   const flattenFarmers = farmers.data.map(farmer => ({
     id: farmer.id,
@@ -130,6 +131,29 @@ export default function FarmersIndex({ farmers, filters, barangays }) {
     toast.success('Exporting selected farmers...');
   };
 
+  const exportAllCSV = () => {
+    window.location.href = '/admin/farmers/export';
+  };
+
+  const handleImport = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    router.post('/admin/farmers/import', formData, {
+      onSuccess: () => {
+        toast.success('Farmers imported successfully!');
+        fileInputRef.current.value = '';
+      },
+      onError: (errors) => {
+        toast.error(errors.file || 'Import failed');
+        fileInputRef.current.value = '';
+      },
+    });
+  };
+
   return (
     <AdminLayout title="👨‍🌾 Farmer Registry">
       <Card title="">
@@ -184,6 +208,33 @@ export default function FarmersIndex({ farmers, filters, barangays }) {
                 )}
               </>
             )}
+            {can('export reports') && (
+              <button 
+                onClick={exportAllCSV}
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:bg-blue-700 transition-all text-sm font-medium"
+              >
+                <FileDown className="h-4 w-4" />
+                Export CSV
+              </button>
+            )}
+            {can('create farmers') && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleImport}
+                  className="hidden"
+                />
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl hover:bg-purple-700 transition-all text-sm font-medium"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import CSV
+                </button>
+              </>
+            )}
             {can('create farmers') && (
               <Link 
                 href="/admin/farmers/create"
@@ -196,17 +247,14 @@ export default function FarmersIndex({ farmers, filters, barangays }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto -mx-6 px-6">
-          <div className="min-w-max">
-            <DataTable 
-              columns={columns} 
-              data={flattenFarmers}
-              filename="farmers-registry"
-              enableRowSelection
-              onRowSelectionChange={setSelectedRows}
-            />
-          </div>
-        </div>
+        <DataTable 
+          columns={columns} 
+          data={flattenFarmers}
+          filename="farmers-registry"
+          stickyScroll
+          enableRowSelection
+          onRowSelectionChange={setSelectedRows}
+        />
       </Card>
 
       {farmers.data.length === 0 && (

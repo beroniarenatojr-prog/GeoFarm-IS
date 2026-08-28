@@ -30,9 +30,11 @@ export default function Login() {
                     {/* Logo and Branding */}
                     <div className="relative z-10">
                         <div className="flex items-center space-x-3 mb-8">
-                            <div className="bg-[#f4d58d] p-3 rounded-xl">
-                                <Leaf className="h-8 w-8 text-[#1a3a2e]" />
-                            </div>
+                            <img 
+                                src="/images/VTB.jpg" 
+                                alt="VTB Logo" 
+                                className="h-14 w-14 object-cover rounded-xl"
+                            />
                             <div>
                                 <h1 className="text-2xl font-bold text-white">GeoFarm-IS</h1>
                                 <p className="text-[#f4d58d] text-sm">Geographic Farm Information System</p>
