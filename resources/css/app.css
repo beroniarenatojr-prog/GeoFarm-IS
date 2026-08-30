@@ -65,3 +65,107 @@
 .sticky-scrollbar::-webkit-scrollbar-corner {
     background: #e5e7eb;
 }
+
+/* ---------------------------------------------------------------- landing */
+
+/* Slow drift across the hero photograph so the header is not a static plate. */
+@keyframes gf-ken-burns {
+    0%   { transform: scale(1) translate3d(0, 0, 0); }
+    100% { transform: scale(1.12) translate3d(-1.5%, -1.5%, 0); }
+}
+
+@keyframes gf-fade-up {
+    from { opacity: 0; transform: translate3d(0, 24px, 0); }
+    to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Two copies of the barangay strip sit side by side; shifting by half the
+   track width loops seamlessly. */
+@keyframes gf-marquee {
+    from { transform: translate3d(0, 0, 0); }
+    to   { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes gf-float {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+    50%      { transform: translate3d(0, -18px, 0) rotate(8deg); }
+}
+
+@keyframes gf-bob {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    50%      { transform: translate3d(0, 8px, 0); }
+}
+
+/* Notification bell: a decaying swing, then a rest before it rings again.
+   The pause matters — a bell that never stops moving reads as broken UI and
+   staff learn to ignore it. Pivots from the top, like a real bell. */
+@keyframes gf-ring {
+    0%      { transform: rotate(0); }
+    2%      { transform: rotate(18deg); }
+    5%      { transform: rotate(-16deg); }
+    8%      { transform: rotate(13deg); }
+    11%     { transform: rotate(-10deg); }
+    14%     { transform: rotate(7deg); }
+    17%     { transform: rotate(-4deg); }
+    20%     { transform: rotate(2deg); }
+    23%     { transform: rotate(0); }
+    100%    { transform: rotate(0); }
+}
+
+/* The badge throbs in time with the first swing. */
+@keyframes gf-ring-badge {
+    0%, 23%, 100% { transform: scale(1); }
+    4%            { transform: scale(1.28); }
+    12%           { transform: scale(1.12); }
+}
+
+.gf-ring {
+    animation: gf-ring 3.6s ease-in-out infinite;
+    transform-origin: 50% 12%;
+}
+
+.gf-ring-badge {
+    animation: gf-ring-badge 3.6s ease-in-out infinite;
+}
+
+/* Hovering means they have noticed it; stop competing for attention. */
+.gf-ring-stop:hover .gf-ring,
+.gf-ring-stop:hover .gf-ring-badge {
+    animation-play-state: paused;
+}
+
+.gf-ken-burns { animation: gf-ken-burns 28s ease-out alternate infinite; }
+.gf-marquee   { animation: gf-marquee 45s linear infinite; }
+.gf-float     { animation: gf-float 7s ease-in-out infinite; }
+.gf-bob       { animation: gf-bob 2.2s ease-in-out infinite; }
+
+/* Scroll reveal: hidden until the observer adds .gf-in-view. */
+.gf-reveal {
+    opacity: 0;
+}
+
+.gf-reveal.gf-in-view {
+    animation: gf-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.gf-marquee-track:hover .gf-marquee {
+    animation-play-state: paused;
+}
+
+/* Motion is decorative here, so drop all of it when the visitor asks for less. */
+@media (prefers-reduced-motion: reduce) {
+    .gf-ken-burns,
+    .gf-marquee,
+    .gf-float,
+    .gf-bob,
+    .gf-ring,
+    .gf-ring-badge {
+        animation: none !important;
+    }
+
+    .gf-reveal,
+    .gf-reveal.gf-in-view {
+        opacity: 1;
+        animation: none !important;
+    }
+}

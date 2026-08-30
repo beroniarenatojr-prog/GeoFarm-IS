@@ -5,8 +5,12 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Farmer;
 use App\Services\AuditService;
+use App\Services\RsbsaFieldMapper;
+use App\Services\RsbsaFormFiller;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -14,24 +18,45 @@ class FarmerController extends Controller
 {
     public function index(Request $request)
     {
+        // Searching and sorting happen in SQL, not in the browser. The registry
+        // is expected to hold 8,000+ farmers, so a client-side filter would only
+        // ever see the current page — a farmer on page 200 would look missing.
+        $sortable = ['last_name', 'first_name', 'rsbsa_no', 'barangay', 'birthdate', 'created_at'];
+        $sort = in_array($request->sort, $sortable, true) ? $request->sort : 'last_name';
+        $direction = $request->direction === 'desc' ? 'desc' : 'asc';
+        $perPage = in_array((int) $request->per_page, [25, 50, 100], true) ? (int) $request->per_page : 25;
+
         // The registry shows verified farmers only. Online submissions awaiting
         // staff verification live in the verification queue instead.
         $farmers = Farmer::query()
             ->verified()
-            ->when($request->search, fn($q, $s) => $q->where(function ($query) use ($s) {
+            // Only the columns the table renders: hydrating all ~50 RSBSA
+            // fields for every row is wasted work at this size.
+            ->select([
+                'id', 'rsbsa_no', 'first_name', 'middle_name', 'last_name', 'suffix',
+                'barangay', 'city_municipality', 'province', 'birthdate', 'sex',
+                'mobile_no', 'is_4ps', 'is_indigenous', 'pwd', 'organization_name',
+            ])
+            ->when($request->search, fn ($q, $s) => $q->where(function ($query) use ($s) {
                 $query->where('first_name', 'like', "%$s%")
                     ->orWhere('last_name', 'like', "%$s%")
-                    ->orWhere('rsbsa_no', 'like', "%$s%");
+                    ->orWhere('middle_name', 'like', "%$s%")
+                    ->orWhere('rsbsa_no', 'like', "%$s%")
+                    ->orWhere('mobile_no', 'like', "%$s%");
             }))
-            ->when($request->barangay, fn($q, $b) => $q->where('barangay', $b))
-            ->orderBy('last_name')
-            ->paginate(20)
+            ->when($request->barangay, fn ($q, $b) => $q->where('barangay', $b))
+            ->orderBy($sort, $direction)
+            // Ties on a common surname would otherwise shuffle between pages.
+            ->orderBy('id')
+            ->paginate($perPage)
             ->withQueryString();
 
         return Inertia::render('Admin/Farmers/Index', [
-            'farmers'    => $farmers,
-            'filters'    => $request->only(['search', 'barangay']),
-            'barangays'  => Farmer::verified()->distinct()->pluck('barangay')->filter()->sort()->values(),
+            'farmers'      => $farmers,
+            'filters'      => $request->only(['search', 'barangay', 'sort', 'direction', 'per_page']),
+            'sort'         => ['column' => $sort, 'direction' => $direction],
+            'perPage'      => $perPage,
+            'barangays'    => Farmer::verified()->distinct()->orderBy('barangay')->pluck('barangay')->filter()->values(),
             'pendingCount' => Farmer::pending()->count(),
         ]);
     }
@@ -148,7 +173,51 @@ class FarmerController extends Controller
                 'nativePigs',
                 'swineHybrid',
                 'poultry',
+                // Staff who cleared the record, shown on the verification panel.
+                'verifier:id,name',
             ]),
+        ]);
+    }
+
+    /**
+     * The farmer's record stamped onto the official RSBSA Enrollment Form
+     * (DA revised 01-2024).
+     *
+     * The DA's own PDF is imported and only the farmer's values are drawn on
+     * top, so what prints is the prescribed government document rather than a
+     * reconstruction of it. Streamed so it opens straight in print preview.
+     *
+     * ?review=html renders the internal HTML rebuild instead — useful for
+     * checking data on screen, but it is NOT the official form and must not be
+     * submitted as one.
+     */
+    public function print(Request $request, Farmer $farmer, RsbsaFieldMapper $mapper)
+    {
+        $farmer->load('parcels.farmType');
+        $slug = Str::slug($farmer->full_name) ?: "farmer-{$farmer->id}";
+
+        if ($request->query('review') === 'html') {
+            return Pdf::loadView('pdf.rsbsa-enrollment-form', ['farmer' => $farmer])
+                ->setPaper(
+                    config('rsbsa-form.paper.size'),
+                    config('rsbsa-form.paper.orientation')
+                )
+                ->stream("rsbsa-review-{$slug}.pdf");
+        }
+
+        $filler = new RsbsaFormFiller();
+
+        // Missing library or template is a setup problem, not a broken page —
+        // send staff back with the reason rather than a 500.
+        if ($reason = $filler->unavailableReason()) {
+            return back()->with('error', "Cannot print the RSBSA form. {$reason}");
+        }
+
+        $bytes = $filler->setData($mapper->map($farmer))->output();
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="rsbsa-enrollment-' . $slug . '.pdf"',
         ]);
     }
 
@@ -313,7 +382,7 @@ class FarmerController extends Controller
         $user = auth()->user();
         $farmer = Farmer::where('user_id', $user->id)->with([
             'parcels.farmType',
-            'livestock',
+            'livestock.livestockType',
             'distributions.program',
             'treeCrops',
             'fishponds',
@@ -324,19 +393,36 @@ class FarmerController extends Controller
             'poultry'
         ])->firstOrFail();
 
-        // Debug: Log the distributions data
-        \Log::info('Farmer Distributions:', [
-            'farmer_id' => $farmer->id,
-            'distributions' => $farmer->distributions->toArray()
-        ]);
+        // Animals are spread across the legacy livestock table and the RSBSA
+        // asset tables, so counting only the former reports zero for a farmer
+        // who has poultry or ruminants recorded.
+        $herds = [
+            $farmer->largeRuminants,
+            $farmer->smallRuminants,
+            $farmer->nativePigs,
+            $farmer->swineHybrid,
+            $farmer->poultry,
+        ];
+
+        $animalHeads = $farmer->livestock->sum('count');
+        $animalRecords = $farmer->livestock->count();
+
+        foreach ($herds as $herd) {
+            $animalHeads += $herd->sum('total_heads');
+            $animalRecords += $herd->count();
+        }
 
         return Inertia::render('Farmer/Dashboard', [
             'farmer' => $farmer,
             'stats' => [
-                'parcels' => $farmer->parcels->count(),
-                'livestock' => $farmer->livestock->count(),
-                'assistance' => $farmer->distributions->count(),
-                'total_area' => $farmer->parcels->sum('total_area'),
+                'parcels'          => $farmer->parcels->count(),
+                'total_area'       => (float) $farmer->parcels->sum('total_area_ha'),
+                'animal_heads'     => $animalHeads,
+                'animal_records'   => $animalRecords,
+                'tree_crops'       => $farmer->treeCrops->count(),
+                'fishponds'        => $farmer->fishponds->count(),
+                'assistance'       => $farmer->distributions->count(),
+                'assistance_total' => (float) $farmer->distributions->sum('amount_given'),
             ]
         ]);
     }

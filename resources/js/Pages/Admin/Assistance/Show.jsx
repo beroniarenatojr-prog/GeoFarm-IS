@@ -2,6 +2,8 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm, Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Lock } from 'lucide-react';
+import { formatDate } from '@/utils/dateFormatter';
 
 export default function AssistanceShow({ program, distributions, summary, flash }) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -83,14 +85,14 @@ export default function AssistanceShow({ program, distributions, summary, flash 
                     </div>
                     <div>
                         <p className="text-gray-500">Period</p>
-                        <p className="font-medium">{program.start_date} to {program.end_date}</p>
+                        <p className="font-medium">{formatDate(program.start_date, 'date-only')} to {formatDate(program.end_date, 'date-only')}</p>
                     </div>
                     <div>
                         <p className="text-gray-500">Status</p>
                         <span className={`text-xs px-2 py-1 rounded-full
                             ${program.status === 'active' ? 'bg-green-100 text-green-700' :
                               program.status === 'draft' ? 'bg-gray-100 text-gray-700' :
-                              program.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                              program.status === 'completed' ? 'bg-green-100 text-green-700' :
                               'bg-red-100 text-red-600'}`}>
                             {program.status}
                         </span>
@@ -125,7 +127,22 @@ export default function AssistanceShow({ program, distributions, summary, flash 
                 ))}
             </div>
 
-            {/* Add distribution */}
+            {/* Add distribution — hidden entirely while the program is locked,
+                so nobody fills in a form the server will refuse. */}
+            {program.is_locked ? (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-5">
+                    <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                    <div>
+                        <p className="text-sm font-semibold text-amber-900">This program is locked</p>
+                        <p className="mt-0.5 text-sm text-amber-800">
+                            Its details and distributions are read-only
+                            {program.locker?.name ? ` — locked by ${program.locker.name}` : ''}
+                            {program.locked_at ? ` on ${formatDate(program.locked_at, 'date-only')}` : ''}.
+                            An administrator must unlock it before anything can be recorded.
+                        </p>
+                    </div>
+                </div>
+            ) : (
             <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
                 <h3 className="font-semibold text-gray-700 mb-3">{label.record}</h3>
                 {Object.keys(errors).length > 0 && (
@@ -177,6 +194,7 @@ export default function AssistanceShow({ program, distributions, summary, flash 
                     </button>
                 </form>
             </div>
+            )}
 
             {/* Distributions table */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -216,7 +234,7 @@ export default function AssistanceShow({ program, distributions, summary, flash 
                             filteredDistributions.map(d => (
                                 <tr key={d.id} className="border-t hover:bg-gray-50">
                                     <td className="px-4 py-3">{d.farmer?.first_name} {d.farmer?.last_name}</td>
-                                    <td className="px-4 py-3">{d.distribution_date}</td>
+                                    <td className="px-4 py-3">{formatDate(d.distribution_date, 'date-only')}</td>
                                     <td className="px-4 py-3">₱{Number(d.amount_given ?? 0).toLocaleString()}</td>
                                     <td className="px-4 py-3">{d.quantity_given ?? '—'}</td>
                                     <td className="px-4 py-3">

@@ -1,25 +1,20 @@
 import axios from 'axios';
-window.axios = axios;
 
+window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
-// Get CSRF token from meta tag and set it for all axios requests
-const token = document.head.querySelector('meta[name="csrf-token"]');
-if (token) {
-    window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token.content;
-} else {
-    console.error('CSRF token not found: https://laravel.com/docs/csrf#csrf-x-csrf-token');
-}
-
-// Configure Inertia to use CSRF token
-import { router } from '@inertiajs/react';
-
-router.on('before', (event) => {
-    const csrfToken = document.head.querySelector('meta[name="csrf-token"]');
-    if (csrfToken) {
-        event.detail.visit.headers = {
-            ...event.detail.visit.headers,
-            'X-CSRF-TOKEN': csrfToken.content,
-        };
-    }
-});
+/*
+ * CSRF is deliberately NOT configured by hand here.
+ *
+ * axios already reads the XSRF-TOKEN cookie on every request and sends it as
+ * X-XSRF-TOKEN, and Laravel reissues that cookie on every response — so the
+ * value is always current, including straight after login or logout, when the
+ * session token is regenerated.
+ *
+ * Pinning X-CSRF-TOKEN from the <meta> tag (as this file used to) breaks that.
+ * The document is never reloaded in a single-page app, so the pinned value
+ * goes stale as soon as the session regenerates, and Laravel checks
+ * X-CSRF-TOKEN *before* the cookie — meaning the stale header wins and every
+ * POST fails with 419 "Page Expired". Logging out and back in reproduced it
+ * every time.
+ */

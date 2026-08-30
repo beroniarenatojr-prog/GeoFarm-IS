@@ -44,6 +44,9 @@ class Farmer extends Model
         'verified_at' => 'datetime',
     ];
 
+    /** Accessors are not serialized unless appended, and the UI reads full_name. */
+    protected $appends = ['full_name'];
+
     /** Only verified farmers belong in the registry, reports and GIS layers. */
     public function scopeVerified($query)
     {

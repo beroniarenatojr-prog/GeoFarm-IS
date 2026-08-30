@@ -549,8 +549,8 @@ export default function FarmerForm({ farmer }) {
                                                 <div className="col-span-2">
                                                     <p className="text-xs font-semibold text-gray-500 mb-1">CLASSIFICATIONS</p>
                                                     <div className="flex gap-2">
-                                                        {data.pwd && <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">PWD</span>}
-                                                        {data.is_4ps && <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">4Ps</span>}
+                                                        {data.pwd && <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">PWD</span>}
+                                                        {data.is_4ps && <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">4Ps</span>}
                                                         {data.is_indigenous && <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Indigenous</span>}
                                                     </div>
                                                 </div>

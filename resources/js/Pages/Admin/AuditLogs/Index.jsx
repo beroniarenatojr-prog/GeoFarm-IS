@@ -1,6 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
+import { formatDateTime } from '@/utils/dateFormatter';
 
 export default function AuditLogsIndex({ logs, users, filters }) {
     const [f, setF] = useState(filters);
@@ -44,12 +45,12 @@ export default function AuditLogsIndex({ logs, users, filters }) {
                     <tbody>
                         {logs.data.map(log => (
                             <tr key={log.id} className="border-t hover:bg-gray-50">
-                                <td className="px-4 py-3 text-gray-400 text-xs">{log.created_at}</td>
+                                <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{formatDateTime(log.created_at)}</td>
                                 <td className="px-4 py-3">{log.user?.name ?? 'System'}</td>
                                 <td className="px-4 py-3">
                                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium
                                         ${log.action === 'create' ? 'bg-green-100 text-green-700' :
-                                          log.action === 'update' ? 'bg-blue-100 text-blue-700' :
+                                          log.action === 'update' ? 'bg-green-100 text-green-700' :
                                           'bg-red-100 text-red-700'}`}>
                                         {log.action}
                                     </span>
@@ -58,7 +59,7 @@ export default function AuditLogsIndex({ logs, users, filters }) {
                                 <td className="px-4 py-3">{log.record_id}</td>
                                 <td className="px-4 py-3">
                                     <details className="text-xs">
-                                        <summary className="cursor-pointer text-blue-500">View</summary>
+                                        <summary className="cursor-pointer text-green-500">View</summary>
                                         <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-auto max-w-xs">
                                             {JSON.stringify({ old: log.old_data, new: log.new_data }, null, 2)}
                                         </pre>

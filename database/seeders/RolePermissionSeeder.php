@@ -21,6 +21,9 @@ class RolePermissionSeeder extends Seeder
             // Farm Parcels
             'view parcels', 'create parcels', 'edit parcels', 'delete parcels',
             
+            // Supply inventory held by the office (seeds, fertiliser, etc.)
+            'view supplies', 'create supplies', 'edit supplies', 'delete supplies', 'distribute supplies',
+
             // Farm Inventory (crops, tree crops, fishponds, livestock)
             'view inventory', 'create inventory', 'edit inventory', 'delete inventory',
             
@@ -28,7 +31,10 @@ class RolePermissionSeeder extends Seeder
             'view seasonal', 'create seasonal', 'edit seasonal', 'delete seasonal',
             
             // Financial Assistance
+            // 'lock assistance' is deliberately absent from the Staff list below:
+            // a lock Staff can lift protects nothing.
             'view assistance', 'create assistance', 'edit assistance', 'delete assistance',
+            'lock assistance',
             
             // Reports
             'view reports', 'export reports',
@@ -75,6 +81,7 @@ class RolePermissionSeeder extends Seeder
             'view farmers', 'create farmers', 'edit farmers',
             'view parcels', 'create parcels', 'edit parcels',
             'view inventory', 'create inventory', 'edit inventory',
+            'view supplies', 'create supplies', 'edit supplies', 'distribute supplies',
             'view seasonal', 'create seasonal', 'edit seasonal',
             'view assistance', 'create assistance', 'edit assistance',
             'view reports', 'export reports',
@@ -88,6 +95,7 @@ class RolePermissionSeeder extends Seeder
             'view farmers',
             'view parcels',
             'view inventory',
+            'view supplies',
             'view seasonal',
             'view assistance',
             'view reports', 'export reports',

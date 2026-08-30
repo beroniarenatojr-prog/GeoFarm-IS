@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { router, useForm } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
+import ModalShell from '@/Components/ui/ModalShell';
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
@@ -27,21 +28,15 @@ const emptyForm = (parcel_id = '') => ({
 function Badge({ value }) {
     const cls = value === 'dry'
         ? 'bg-yellow-100 text-yellow-700'
-        : 'bg-blue-100 text-blue-700';
+        : 'bg-green-100 text-green-700';
     return <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${cls}`}>{value}</span>;
 }
 
 function Modal({ title, onClose, children }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between px-6 py-4 border-b">
-                    <h2 className="font-semibold text-gray-800">{title}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-                </div>
-                <div className="px-6 py-4">{children}</div>
-            </div>
-        </div>
+        <ModalShell title={title} onClose={onClose} size="lg" tone="plain" bodyClass="px-6 py-4">
+            {children}
+        </ModalShell>
     );
 }
 
@@ -165,7 +160,7 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
 }
 
 // ── Main Page ────────────────────────────────────────────────────────────────
-export default function SeasonalIndex({ parcels, seasons, crops, filters }) {
+export default function SeasonalIndex({ parcels, seasons, crops, filters, summary }) {
     const { can } = usePermissions();
     const [showAdd, setShowAdd]   = useState(false);
     const [editing, setEditing]   = useState(null);
@@ -261,8 +256,25 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
 
     return (
         <AdminLayout title="Seasonal Tracking">
+            {/* Totals for the current filter, so the headline always describes
+                what is actually listed below. */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {[
+                    { label: 'Cropping seasons', value: (summary?.seasons ?? 0).toLocaleString('en-PH'), tone: '#006400' },
+                    { label: 'Hectares planted', value: (summary?.hectares ?? 0).toLocaleString('en-PH'), tone: '#228B22' },
+                    { label: 'Total yield (kg)', value: (summary?.yield_kg ?? 0).toLocaleString('en-PH'), tone: '#4CAF50' },
+                    { label: 'Harvested', value: `${summary?.harvested ?? 0} of ${summary?.seasons ?? 0}`, tone: '#81C784' },
+                ].map(s => (
+                    <div key={s.label} className="bg-white rounded-2xl border border-green-100 shadow-sm p-4">
+                        <div className="h-1 w-10 rounded-full mb-3" style={{ backgroundColor: s.tone }} />
+                        <p className="text-2xl font-bold text-gray-900 leading-tight">{s.value}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+                    </div>
+                ))}
+            </div>
+
             {/* Filter bar and Add button */}
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-green-100 p-4 mb-6">
                 <div className="flex flex-wrap items-center gap-3 mb-3">
                     {/* Search */}
                     <div className="relative flex-1 min-w-[250px]">
@@ -328,7 +340,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
 
                     {can('create seasonal') && (
                         <button onClick={() => { addForm.setData(emptyForm('')); setShowAdd(true); }}
-                            className="ml-auto bg-green-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-800 whitespace-nowrap">
+                            className="ml-auto bg-[#006400] text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-[#228B22] shadow-sm transition-colors whitespace-nowrap">
                             + Add Season
                         </button>
                     )}
@@ -344,16 +356,16 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                 <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-gray-500 text-left">
                         <tr>
-                            <th className="px-4 py-3">Farmer</th>
-                            <th className="px-4 py-3">Parcel</th>
-                            <th className="px-4 py-3">Season</th>
-                            <th className="px-4 py-3">Year</th>
-                            <th className="px-4 py-3">Crop</th>
-                            <th className="px-4 py-3">Area (ha)</th>
-                            <th className="px-4 py-3">Planting</th>
-                            <th className="px-4 py-3">Harvest</th>
-                            <th className="px-4 py-3">Yield (kg)</th>
-                            <th className="px-4 py-3">Actions</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Farmer</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Parcel</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Season</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Year</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Crop</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Area (ha)</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Planting</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Harvest</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Yield (kg)</th>
+                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -363,7 +375,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                             </td></tr>
                         )}
                         {seasons.data?.map(s => (
-                            <tr key={s.id} className="border-t hover:bg-gray-50">
+                            <tr key={s.id} className="border-t border-green-50 hover:bg-green-50/60 transition-colors">
                                 <td className="px-4 py-3">{s.parcel?.farmer?.first_name} {s.parcel?.farmer?.last_name}</td>
                                 <td className="px-4 py-3">#{s.parcel?.parcel_number}</td>
                                 <td className="px-4 py-3"><Badge value={s.season} /></td>
@@ -402,7 +414,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     disabled={!link.url}
                                     className={`px-3 py-1 text-xs rounded ${
                                         link.active 
-                                            ? 'bg-green-700 text-white' 
+                                            ? 'bg-[#006400] text-white' 
                                             : link.url 
                                                 ? 'bg-gray-100 hover:bg-gray-200 text-gray-700' 
                                                 : 'bg-gray-50 text-gray-400 cursor-not-allowed'

@@ -13,12 +13,26 @@ class FarmInventoryController extends Controller
 {
     public function index(Request $request)
     {
-        $farmers = Farmer::select('id', 'first_name', 'last_name', 'rsbsa_no')
+        // A plain <select> of every farmer would be an 8,000-option list once
+        // the registry is loaded, so the picker searches instead and only the
+        // matches are sent down. The currently selected farmer is always
+        // included, otherwise the picker would forget its own value.
+        $search = trim((string) $request->farmer_search);
+
+        $farmers = Farmer::query()
+            ->verified()
+            ->select('id', 'first_name', 'last_name', 'rsbsa_no')
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
+                ->where('first_name', 'like', "%$search%")
+                ->orWhere('last_name', 'like', "%$search%")
+                ->orWhere('rsbsa_no', 'like', "%$search%")))
             ->orderBy('last_name')
+            ->limit(50)
             ->get()
-            ->map(fn($f) => [
-                'id' => $f->id,
-                'label' => "{$f->first_name} {$f->last_name} ({$f->rsbsa_no})"
+            ->map(fn ($f) => [
+                'id'    => $f->id,
+                'label' => trim("{$f->last_name}, {$f->first_name}"),
+                'meta'  => $f->rsbsa_no ? "RSBSA {$f->rsbsa_no}" : 'No RSBSA number',
             ]);
 
         $inventory = null;
@@ -34,10 +48,20 @@ class FarmInventoryController extends Controller
         }
 
         return Inertia::render('Admin/FarmInventory/Index', [
-            'farmers' => $farmers,
-            'selectedFarmer' => $selectedFarmer,
-            'inventory' => $inventory,
+            'farmers'          => $farmers,
+            'farmerSearch'     => $search,
+            'farmerCount'      => Farmer::verified()->count(),
+            'selectedFarmer'   => $selectedFarmer,
+            'inventory'        => $inventory,
             'selectedFarmerId' => $farmerId ?? 'all',
+            // Headline totals for whatever is currently in scope.
+            'summary'          => [
+                'crop_area'   => round((float) collect($inventory['crops'] ?? [])->sum('total_area'), 2),
+                'crop_types'  => collect($inventory['crops'] ?? [])->pluck('crop_id')->filter()->unique()->count(),
+                'trees'       => (int) collect($inventory['tree_crops'] ?? [])->sum('total_quantity'),
+                'pond_area'   => round((float) collect($inventory['fishponds'] ?? [])->sum('total_area'), 2),
+                'animals'     => (int) collect($inventory['livestock'] ?? [])->sum('total'),
+            ],
         ]);
     }
 

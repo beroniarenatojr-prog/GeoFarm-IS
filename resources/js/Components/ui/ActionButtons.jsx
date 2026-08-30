@@ -12,7 +12,7 @@ export function ViewButton({ href, permission = 'view', title = "View" }) {
     return (
         <Link 
             href={href}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors"
             title={title}
         >
             <Eye className="h-4 w-4" />
@@ -20,31 +20,65 @@ export function ViewButton({ href, permission = 'view', title = "View" }) {
     );
 }
 
-export function EditButton({ href, permission = 'edit', title = "Edit" }) {
+export function EditButton({ href, onClick, permission = 'edit', title = "Edit", disabled = false, disabledTitle = "Not available" }) {
     const { can } = usePermissions();
-    
+
+    const style = "inline-flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors";
+
     if (permission && !can(permission)) {
         return null;
     }
-    
+
+    // Kept visible but inert, so the row does not change shape and the tooltip
+    // can explain why the action is unavailable.
+    if (disabled) {
+        return (
+            <span
+                aria-disabled="true"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 text-gray-300 cursor-not-allowed"
+                title={disabledTitle}
+            >
+                <Pencil className="h-4 w-4" />
+            </span>
+        );
+    }
+
+    // onClick wins over href: callers that open the record in a modal pass a
+    // handler instead of navigating away.
+    if (onClick) {
+        return (
+            <button type="button" onClick={onClick} className={style} title={title}>
+                <Pencil className="h-4 w-4" />
+            </button>
+        );
+    }
+
     return (
-        <Link 
-            href={href}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 hover:bg-green-100 text-green-600 transition-colors"
-            title={title}
-        >
+        <Link href={href} className={style} title={title}>
             <Pencil className="h-4 w-4" />
         </Link>
     );
 }
 
-export function DeleteButton({ href, onConfirm, permission = 'delete', title = "Delete" }) {
+export function DeleteButton({ href, onConfirm, permission = 'delete', title = "Delete", disabled = false, disabledTitle = "Not available" }) {
     const { can } = usePermissions();
-    
+
     if (permission && !can(permission)) {
         return null;
     }
-    
+
+    if (disabled) {
+        return (
+            <span
+                aria-disabled="true"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 text-gray-300 cursor-not-allowed"
+                title={disabledTitle}
+            >
+                <Trash2 className="h-4 w-4" />
+            </span>
+        );
+    }
+
     const handleClick = (e) => {
         e.preventDefault();
         if (confirm('Are you sure you want to delete this item?')) {

@@ -142,7 +142,7 @@ export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
             </div>
 
             {selectedCrop && (
-              <div className="p-4 bg-blue-50 rounded-lg text-sm">
+              <div className="p-4 bg-green-50 rounded-lg text-sm">
                 <p className="font-medium mb-1">Crop Configuration:</p>
                 <div className="grid grid-cols-2 gap-2 text-gray-700">
                   <div>Seeding Rate: {selectedCrop.seeding_rate_kg_per_ha || 'Not set'} kg/ha</div>
@@ -168,7 +168,7 @@ export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
             <div className={`rounded-xl border-2 p-4 ${
               results.confidence === 'none' ? 'bg-gray-50 border-gray-300' :
               results.confidence === 'low' ? 'bg-amber-50 border-amber-300' :
-              results.confidence === 'moderate' ? 'bg-blue-50 border-blue-300' :
+              results.confidence === 'moderate' ? 'bg-green-50 border-green-300' :
               'bg-green-50 border-green-300'
             }`}>
               <div className="flex items-start gap-3">
@@ -200,8 +200,8 @@ export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
 
             <Card>
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Package className="h-6 w-6 text-blue-600" />
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <Package className="h-6 w-6 text-green-600" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Est. Total Yield</p>
@@ -231,8 +231,8 @@ export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
 
             <Card>
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Package className="h-6 w-6 text-purple-600" />
+                <div className="p-3 bg-emerald-100 rounded-lg">
+                  <Package className="h-6 w-6 text-emerald-600" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Fertilizer</p>
@@ -247,7 +247,7 @@ export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card title="Crop Timeline">
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                  <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                     <span className="text-sm font-medium">Planting Date:</span>
                     <span className="font-bold">{new Date(results.planting_date).toLocaleDateString()}</span>
                   </div>
@@ -301,7 +301,7 @@ export default function CropEstimatorIndex({ farmers, crops, barangays = [] }) {
             <Card title="Best Planting Months (Based on Historical Data)">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {results.best_planting_months.map((month, i) => (
-                  <div key={i} className="p-4 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg border border-green-200">
+                  <div key={i} className="p-4 bg-gradient-to-br from-green-50 to-green-50 rounded-lg border border-green-200">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-lg font-bold text-green-700">{month.month_name}</span>
                       <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full">#{i + 1}</span>

@@ -12,10 +12,53 @@ use Inertia\Inertia;
 
 class ParcelController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        // Filtering and sorting run in SQL. The registry is sized for 8,000+
+        // farmers, so a browser-side filter would only ever see one page.
+        $sortable = ['parcel_number', 'barangay', 'total_area_ha', 'created_at'];
+        $sort = in_array($request->sort, $sortable, true) ? $request->sort : 'parcel_number';
+        $direction = $request->direction === 'desc' ? 'desc' : 'asc';
+        $perPage = in_array((int) $request->per_page, [25, 50, 100], true) ? (int) $request->per_page : 25;
+
+        $filtered = fn () => FarmParcel::query()
+            ->when($request->search, fn ($q, $s) => $q->where(function ($query) use ($s) {
+                $query->where('parcel_number', 'like', "%$s%")
+                    ->orWhere('location_address', 'like', "%$s%")
+                    ->orWhere('commodity', 'like', "%$s%")
+                    ->orWhereHas('farmer', fn ($f) => $f
+                        ->where('first_name', 'like', "%$s%")
+                        ->orWhere('last_name', 'like', "%$s%")
+                        ->orWhere('rsbsa_no', 'like', "%$s%"));
+            }))
+            ->when($request->barangay, fn ($q, $b) => $q->where('barangay', $b))
+            ->when($request->farm_type_id, fn ($q, $t) => $q->where('farm_type_id', $t))
+            ->when($request->ownership, fn ($q, $o) => $q->where('ownership_type', $o))
+            // A parcel counts as mapped once geometry has been drawn for it.
+            ->when($request->mapped === 'yes', fn ($q) => $q->whereNotNull('geojson_data'))
+            ->when($request->mapped === 'no', fn ($q) => $q->whereNull('geojson_data'));
+
+        $parcels = $filtered()
+            ->with(['farmer:id,first_name,middle_name,last_name,suffix,rsbsa_no', 'farmType:id,type_name'])
+            ->orderBy($sort, $direction)
+            ->orderBy('id')
+            ->paginate($perPage)
+            ->withQueryString();
+
         return Inertia::render('Admin/Parcels/Index', [
-            'parcels' => FarmParcel::with(['farmer', 'farmType'])->paginate(20),
+            'parcels'   => $parcels,
+            'filters'   => $request->only(['search', 'barangay', 'farm_type_id', 'ownership', 'mapped', 'sort', 'direction', 'per_page']),
+            'sort'      => ['column' => $sort, 'direction' => $direction],
+            'perPage'   => $perPage,
+            'barangays' => FarmParcel::distinct()->orderBy('barangay')->pluck('barangay')->filter()->values(),
+            'farmTypes' => FarmType::orderBy('type_name')->get(['id', 'type_name']),
+            // Totals follow the active filter, so the headline always describes
+            // what is listed below it.
+            'summary'   => [
+                'parcels'  => $filtered()->count(),
+                'hectares' => round((float) $filtered()->sum('total_area_ha'), 2),
+                'mapped'   => (clone $filtered())->whereNotNull('geojson_data')->count(),
+            ],
         ]);
     }
 

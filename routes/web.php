@@ -9,6 +9,8 @@ use App\Http\Controllers\Admin\FarmInventoryController;
 use App\Http\Controllers\Admin\FarmerController;
 use App\Http\Controllers\Admin\FishpondController;
 use App\Http\Controllers\Admin\GISController;
+use App\Http\Controllers\Admin\GlobalSearchController;
+use App\Http\Controllers\Admin\InventoryController;
 use App\Http\Controllers\Admin\LargeRuminantController;
 use App\Http\Controllers\Admin\LookupController;
 use App\Http\Controllers\Admin\NativePigController;
@@ -20,6 +22,7 @@ use App\Http\Controllers\Admin\SwineHybridController;
 use App\Http\Controllers\Admin\TreeCropController;
 use App\Http\Controllers\Admin\FarmerVerificationController;
 use App\Http\Controllers\Admin\PredictiveAnalyticsController;
+use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\FarmerRegistrationController;
 use App\Http\Controllers\Auth\LoginController;
@@ -49,12 +52,25 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
+    // Header search: no extra permission, but each result type is gated
+    // inside the controller by the caller's own view permissions.
+    Route::get('search', GlobalSearchController::class)->name('search');
+
+    // The signed-in user's own account. No extra permission: every staff role
+    // may view and edit their own details, and only their own.
+    Route::get('profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+
     // Farmers
     Route::get('farmers', [FarmerController::class, 'index'])->middleware('permission:view farmers')->name('farmers.index');
 
     // Verification queue for online registrations
     Route::get('farmer-verification', [FarmerVerificationController::class, 'index'])
         ->middleware('permission:view farmers')->name('farmer-verification.index');
+    // JSON feed for the header notification modal.
+    Route::get('farmer-verification/queue', [FarmerVerificationController::class, 'queue'])
+        ->middleware('permission:view farmers')->name('farmer-verification.queue');
     Route::post('farmer-verification/{farmer}/approve', [FarmerVerificationController::class, 'approve'])
         ->middleware('permission:edit farmers')->name('farmer-verification.approve');
     Route::post('farmer-verification/{farmer}/reject', [FarmerVerificationController::class, 'reject'])
@@ -64,6 +80,8 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     Route::get('farmers/create', [FarmerController::class, 'create'])->middleware('permission:create farmers')->name('farmers.create');
     Route::post('farmers', [FarmerController::class, 'store'])->middleware('permission:create farmers')->name('farmers.store');
     Route::get('farmers/{farmer}', [FarmerController::class, 'show'])->middleware('permission:view farmers')->name('farmers.show');
+    // Official RSBSA Enrollment Form, LEGAL size, ready to print.
+    Route::get('farmers/{farmer}/print', [FarmerController::class, 'print'])->middleware('permission:view farmers')->name('farmers.print');
     Route::get('farmers/{farmer}/edit', [FarmerController::class, 'edit'])->middleware('permission:edit farmers')->name('farmers.edit');
     Route::put('farmers/{farmer}', [FarmerController::class, 'update'])->middleware('permission:edit farmers')->name('farmers.update');
     Route::delete('farmers/{farmer}', [FarmerController::class, 'destroy'])->middleware('permission:delete farmers')->name('farmers.destroy');
@@ -82,6 +100,13 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     Route::post('assistance/{assistance}/distribute', [AssistanceController::class, 'distribute'])
         ->middleware('permission:edit assistance')
         ->name('assistance.distribute');
+    Route::patch('assistance/{assistance}/status', [AssistanceController::class, 'toggleStatus'])
+        ->middleware('permission:edit assistance')
+        ->name('assistance.status');
+    // Only Admin and Super Admin hold "lock assistance".
+    Route::patch('assistance/{assistance}/lock', [AssistanceController::class, 'toggleLock'])
+        ->middleware('permission:lock assistance')
+        ->name('assistance.lock');
 
     // Farm Parcels
     Route::get('parcels', [ParcelController::class, 'index'])->middleware('permission:view parcels')->name('parcels.index');
@@ -161,6 +186,27 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // Crop Yield Estimator (Predictive Analytics)
     Route::get('crop-estimator', [CropEstimatorController::class, 'index'])->middleware('permission:view predictive')->name('crop-estimator.index');
     Route::post('crop-estimator/estimate', [CropEstimatorController::class, 'estimate'])->middleware('permission:view predictive')->name('crop-estimator.estimate');
+
+    // Supply inventory: stock the Agriculture Office holds and hands out.
+    // Distinct from farm-inventory below, which aggregates what FARMERS own.
+    Route::get('inventory', [InventoryController::class, 'index'])
+        ->middleware('permission:view supplies')->name('inventory.index');
+    Route::get('inventory/farmer-options', [InventoryController::class, 'farmerOptions'])
+        ->middleware('permission:view supplies')->name('inventory.farmer-options');
+    Route::post('inventory', [InventoryController::class, 'store'])
+        ->middleware('permission:create supplies')->name('inventory.store');
+    Route::get('inventory/{inventory}', [InventoryController::class, 'show'])
+        ->middleware('permission:view supplies')->name('inventory.show');
+    Route::put('inventory/{inventory}', [InventoryController::class, 'update'])
+        ->middleware('permission:edit supplies')->name('inventory.update');
+    Route::delete('inventory/{inventory}', [InventoryController::class, 'destroy'])
+        ->middleware('permission:delete supplies')->name('inventory.destroy');
+    Route::post('inventory/{inventory}/adjust', [InventoryController::class, 'adjust'])
+        ->middleware('permission:edit supplies')->name('inventory.adjust');
+    Route::post('inventory/{inventory}/distribute', [InventoryController::class, 'distribute'])
+        ->middleware('permission:distribute supplies')->name('inventory.distribute');
+    Route::put('inventory-distributions/{distribution}', [InventoryController::class, 'updateDistribution'])
+        ->middleware('permission:distribute supplies')->name('inventory.distribution.update');
 
     // Farm Inventory
     Route::get('farm-inventory', [FarmInventoryController::class, 'index'])->middleware('permission:view inventory')->name('farm-inventory.index');

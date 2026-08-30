@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Check, X, Eye, ClipboardCheck, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '@/Components/ui/Card';
+import ModalShell from '@/Components/ui/ModalShell';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
 
@@ -176,7 +177,7 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                                     <div className="flex flex-col gap-2 flex-shrink-0">
                                         <Link
                                             href={`/admin/farmers/${farmer.id}`}
-                                            className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition"
+                                            className="flex items-center gap-2 px-4 py-2 text-sm text-green-600 border border-green-300 rounded-lg hover:bg-green-50 transition"
                                         >
                                             <Eye className="h-4 w-4" />
                                             View
@@ -210,28 +211,12 @@ export default function FarmerVerification({ submissions, filters, counts }) {
 
             {/* Rejection reason dialog */}
             {rejecting && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Reject submission</h3>
-                        <p className="text-sm text-gray-600 mb-4">
-                            {rejecting.first_name} {rejecting.last_name} · {rejecting.reference_code}
-                        </p>
-
-                        <label htmlFor="rejection_reason" className="block text-sm font-medium text-gray-700 mb-2">
-                            Reason <span className="text-red-500">*</span>
-                        </label>
-                        <textarea
-                            id="rejection_reason"
-                            name="rejection_reason"
-                            value={reason}
-                            onChange={e => setReason(e.target.value)}
-                            rows={4}
-                            maxLength={500}
-                            placeholder="e.g. Documents did not match the submitted information."
-                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                        />
-
-                        <div className="flex justify-end gap-3 mt-5">
+                <ModalShell
+                    title="Reject submission"
+                    onClose={() => setRejecting(null)}
+                    tone="plain"
+                    footer={
+                        <>
                             <button
                                 onClick={() => setRejecting(null)}
                                 className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition font-medium"
@@ -244,9 +229,27 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                             >
                                 Confirm rejection
                             </button>
-                        </div>
-                    </div>
-                </div>
+                        </>
+                    }
+                >
+                    <p className="text-sm text-gray-600 mb-4">
+                        {rejecting.first_name} {rejecting.last_name} · {rejecting.reference_code}
+                    </p>
+
+                    <label htmlFor="rejection_reason" className="block text-sm font-medium text-gray-700 mb-2">
+                        Reason <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                        id="rejection_reason"
+                        name="rejection_reason"
+                        value={reason}
+                        onChange={e => setReason(e.target.value)}
+                        rows={4}
+                        maxLength={500}
+                        placeholder="e.g. Documents did not match the submitted information."
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                </ModalShell>
             )}
         </AdminLayout>
     );

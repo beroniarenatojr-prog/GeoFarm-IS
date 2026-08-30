@@ -41,11 +41,32 @@ class CropSeasonController extends Controller
             ->paginate(20)
             ->withQueryString();
 
+        // Totals for the summary strip. Deliberately reflect the SAME filters
+        // as the table, so the headline figures always describe what is on
+        // screen rather than the whole database.
+        $scoped = fn () => CropSeason::query()
+            ->when($request->parcel_id, fn ($q, $p) => $q->where('parcel_id', $p))
+            ->when($request->season, fn ($q, $s) => $q->where('season', $s))
+            ->when($request->year, fn ($q, $y) => $q->where('cropping_year', $y))
+            ->when($request->crop_id, fn ($q, $c) => $q->where('crop_id', $c))
+            ->when($request->search, fn ($q, $search) => $q->whereHas(
+                'parcel.farmer',
+                fn ($f) => $f->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('rsbsa_no', 'like', "%{$search}%")
+            ));
+
         return Inertia::render('Admin/Seasonal/Index', [
             'parcels'        => $parcels,
             'seasons'        => $seasons,
             'crops'          => Crop::orderBy('crop_name')->get(['id', 'crop_name']),
             'filters'        => $request->only(['parcel_id', 'season', 'year', 'crop_id', 'search']),
+            'summary'        => [
+                'seasons'   => $scoped()->count(),
+                'hectares'  => round((float) $scoped()->sum('area_planted_ha'), 2),
+                'yield_kg'  => round((float) $scoped()->sum('yield_kg'), 2),
+                'harvested' => $scoped()->whereNotNull('harvest_date')->count(),
+            ],
         ]);
     }
 

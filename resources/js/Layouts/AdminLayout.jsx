@@ -1,47 +1,70 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { 
-    LayoutDashboard, 
-    Users, 
-    MapPin, 
-    Globe, 
-    Calendar, 
-    TrendingUp, 
-    Package, 
-    Layers, 
-    FileText, 
-    Search, 
-    UserCog, 
+import NotificationBell from '@/Components/ui/NotificationBell';
+import GlobalSearch from '@/Components/ui/GlobalSearch';
+import UserMenu from '@/Components/ui/UserMenu';
+import {
+    LayoutDashboard,
+    Users,
+    MapPin,
+    Globe,
+    Calendar,
+    TrendingUp,
+    Package,
+    Layers,
+    FileText,
+    Search,
+    UserCog,
     FileCheck,
-    ClipboardCheck,
-    LineChart
+    LineChart,
+    ChevronDown,
+    FolderOpen,
+    Settings,
+    Boxes
 } from 'lucide-react';
+
+/** Which sidebar groups the user left open. Per-browser convenience only. */
+const SECTIONS_KEY = 'geofarm.sidebar.sections';
+
+const readOpenSections = () => {
+    try {
+        const raw = localStorage.getItem(SECTIONS_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        // Private windows and blocked site data both throw here.
+        return null;
+    }
+};
 
 
 const nav = [
     { 
         section: 'OVERVIEW',
+        icon: LayoutDashboard,
         items: [
             { label: 'Dashboard', href: '/admin', icon: LayoutDashboard, permission: null },
         ]
     },
     {
         section: 'RECORDS',
+        icon: FolderOpen,
         items: [
             { label: 'Farmers', href: '/admin/farmers', icon: Users, permission: 'view farmers' },
-            { label: 'Verification', href: '/admin/farmer-verification', icon: ClipboardCheck, permission: 'view farmers' },
+            // Verification lives in the header notification bell, not here.
             { label: 'Parcels', href: '/admin/parcels', icon: MapPin, permission: 'view parcels' },
             { label: 'GIS Map', href: '/admin/gis/map', icon: Globe, permission: 'view maps' },
             { label: 'Seasonal Tracking', href: '/admin/seasonal', icon: Calendar, permission: 'view seasonal' },
             { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
             { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
-            { label: 'Farm Inventory', href: '/admin/farm-inventory', icon: Package, permission: 'view inventory' },
+            { label: 'Inventory', href: '/admin/inventory', icon: Boxes, permission: 'view supplies' },
+            { label: 'Farm Assets', href: '/admin/farm-inventory', icon: Package, permission: 'view inventory' },
             { label: 'Assistance', href: '/admin/assistance', icon: Layers, permission: 'view assistance' },
         ]
     },
     {
         section: 'SYSTEM',
+        icon: Settings,
         items: [
             { label: 'Reports', href: '/admin/reports', icon: FileText, permission: 'view reports' },
             { label: 'Lookups', href: '/admin/lookups', icon: Search, permission: 'manage lookups' },
@@ -52,9 +75,22 @@ const nav = [
 ];
 
 export default function AdminLayout({ children, title, showBack = true }) {
-    const { auth, flash } = usePage().props;
+    const page = usePage();
+    const { auth, flash } = page.props;
     const { can } = usePermissions();
-    const [expanded, setExpanded] = useState(false);
+    const [hovering, setHovering] = useState(false);
+
+    // The account panel is portalled outside the sidebar, so moving the mouse
+    // onto it would otherwise count as leaving and collapse the sidebar behind
+    // it. Keep the sidebar open for as long as that panel is.
+    const [menuOpen, setMenuOpen] = useState(false);
+    const expanded = hovering || menuOpen;
+
+    // Groups start open so nothing is hidden from a first-time user; whatever
+    // they collapse is remembered.
+    const [openSections, setOpenSections] = useState(
+        () => readOpenSections() ?? Object.fromEntries(nav.map(s => [s.section, true]))
+    );
 
     const handleBack = () => {
         window.history.back();
@@ -66,12 +102,41 @@ export default function AdminLayout({ children, title, showBack = true }) {
         items: section.items.filter(item => !item.permission || can(item.permission))
     })).filter(section => section.items.length > 0);
 
+    // Which sidebar group owns this page, for the header breadcrumb.
+    const crumb = visibleNav.find(s => s.items.some(i =>
+        i.href === '/admin' ? page.url === '/admin' : page.url.startsWith(i.href)
+    ))?.section;
+
+    const isActive = (href) =>
+        href === '/admin' ? page.url === '/admin' : page.url.startsWith(href);
+
+    const toggleSection = (name) => setOpenSections(prev => {
+        const next = { ...prev, [name]: prev[name] === false };
+        try {
+            localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
+        } catch {
+            // Not being able to remember the choice is not worth breaking over.
+        }
+        return next;
+    });
+
+    // Never leave the user on a page whose group is collapsed — they would
+    // have no visible cue for where they are.
+    useEffect(() => {
+        const active = visibleNav.find(s => s.items.some(i => isActive(i.href)));
+
+        if (active && openSections[active.section] === false) {
+            setOpenSections(prev => ({ ...prev, [active.section]: true }));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [page.url]);
+
     return (
         <div className="min-h-screen flex">
             {/* LAYER 1: Sidebar - Deep Forest Green */}
             <aside
-                onMouseEnter={() => setExpanded(true)}
-                onMouseLeave={() => setExpanded(false)}
+                onMouseEnter={() => setHovering(true)}
+                onMouseLeave={() => setHovering(false)}
                 className={`fixed left-0 top-0 bottom-0 flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} overflow-y-auto z-50 sidebar-scroll`}
                 style={{ 
                     background: '#006400',
@@ -94,52 +159,90 @@ export default function AdminLayout({ children, title, showBack = true }) {
 
                 {/* Nav items */}
                 <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden relative z-10">
-                    {visibleNav.map((section, sectionIndex) => (
-                        <div key={sectionIndex} className="mb-6">
-                            {/* Section Header */}
-                            {expanded && (
-                                <div className="px-4 mb-2">
-                                    <h3 className="text-xs font-semibold text-white/50 tracking-wider">
+                    {/* Narrow rail: one icon per category, not one per page.
+                        Thirteen unlabelled icons say nothing; three do. Hovering
+                        the sidebar opens the full categorised menu. */}
+                    {!expanded && visibleNav.map(section => {
+                        const SectionIcon = section.icon ?? FolderOpen;
+                        const hasActive = section.items.some(i => isActive(i.href));
+
+                        return (
+                            <div
+                                key={section.section}
+                                title={section.section}
+                                className={`flex items-center justify-center h-11 mx-2 mb-1 rounded transition-colors ${
+                                    hasActive ? 'bg-white/20 text-white' : 'text-white/70'
+                                }`}
+                            >
+                                <SectionIcon className="h-5 w-5" />
+                            </div>
+                        );
+                    })}
+
+                    {expanded && visibleNav.map(section => {
+                        const isOpen = openSections[section.section] !== false;
+                        const activeCount = section.items.filter(i => isActive(i.href)).length;
+
+                        return (
+                            <div key={section.section} className="mb-4">
+                                {/* Section Header — click to collapse */}
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSection(section.section)}
+                                    aria-expanded={isOpen}
+                                    title={isOpen ? `Hide ${section.section}` : `Show ${section.section}`}
+                                    className="w-full flex items-center justify-between px-4 py-1.5 mb-1 group"
+                                >
+                                    <h3 className="text-xs font-semibold text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
                                         {section.section}
                                     </h3>
-                                </div>
-                            )}
-                            
-                            {/* Section Items */}
-                            <div className="space-y-0.5">
-                                {section.items.map(item => {
-                                    const Icon = item.icon;
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            title={!expanded ? item.label : undefined}
-                                            className="flex items-center gap-3 py-2.5 text-sm rounded mx-2 px-3 transition-colors hover:bg-white/15 text-white/95 hover:text-white"
-                                        >
-                                            <Icon className="h-5 w-5 flex-shrink-0" />
-                                            {expanded && (
-                                                <span className="whitespace-nowrap">{item.label}</span>
-                                            )}
-                                        </Link>
-                                    );
-                                })}
+                                    <span className="flex items-center gap-1.5">
+                                        {/* A collapsed group holding the current page keeps a marker. */}
+                                        {!isOpen && activeCount > 0 && (
+                                            <span className="h-1.5 w-1.5 rounded-full bg-[#90EE90]" />
+                                        )}
+                                        <ChevronDown
+                                            className={`h-3.5 w-3.5 text-white/40 group-hover:text-white/70 transition-transform duration-200 ${
+                                                isOpen ? '' : '-rotate-90'
+                                            }`}
+                                        />
+                                    </span>
+                                </button>
+
+                                {/* Section Items */}
+                                {isOpen && (
+                                    <div className="space-y-0.5">
+                                        {section.items.map(item => {
+                                            const Icon = item.icon;
+                                            const active = isActive(item.href);
+
+                                            return (
+                                                <Link
+                                                    key={item.href}
+                                                    href={item.href}
+                                                    aria-current={active ? 'page' : undefined}
+                                                    className={`flex items-center gap-3 py-2.5 text-sm rounded mx-2 px-3 transition-colors ${
+                                                        active
+                                                            ? 'bg-white/20 text-white font-semibold'
+                                                            : 'text-white/95 hover:text-white hover:bg-white/15'
+                                                    }`}
+                                                >
+                                                    <Icon className="h-5 w-5 flex-shrink-0" />
+                                                    <span className="whitespace-nowrap">{item.label}</span>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </nav>
 
                 {/* User footer */}
                 <div className="border-t border-white/10 py-3 px-4 relative z-10">
-                    {expanded && (
-                        <div className="overflow-hidden mb-2">
-                            <p className="text-white/90 text-sm truncate">{auth.user?.name}</p>
-                            <p className="text-white/60 text-xs">{auth.user?.role}</p>
-                        </div>
-                    )}
-                    <Link href="/logout" method="post" as="button"
-                        className="text-red-300 hover:text-red-100 text-sm">
-                        {expanded ? 'Logout' : 'Exit'}
-                    </Link>
+                    {/* Profile opens a panel beside the sidebar; logout lives in it. */}
+                    <UserMenu expanded={expanded} onOpenChange={setMenuOpen} />
                 </div>
             </aside>
 
@@ -150,10 +253,10 @@ export default function AdminLayout({ children, title, showBack = true }) {
                 <div 
                     className="absolute inset-0 pointer-events-none" 
                     style={{ 
-                        background: '#FAF8F3',
+                        background: '#F7FBF7',
                         backgroundImage: `
-                            radial-gradient(circle at 20% 50%, rgba(139, 69, 19, 0.02) 0%, transparent 50%),
-                            radial-gradient(circle at 80% 80%, rgba(139, 69, 19, 0.02) 0%, transparent 50%)
+                            radial-gradient(circle at 20% 50%, rgba(0, 100, 0, 0.03) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 80%, rgba(0, 100, 0, 0.03) 0%, transparent 50%)
                         `
                     }}
                 />
@@ -186,19 +289,43 @@ export default function AdminLayout({ children, title, showBack = true }) {
                     <rect width="100%" height="100%" fill="url(#topoMap)"/>
                 </svg>
                 
-                <header className="bg-white/80 backdrop-blur-sm shadow-sm px-6 py-4 flex items-center gap-3 relative z-10 border-b border-gray-200/50">
-                    {showBack && (
-                        <button 
-                            onClick={handleBack}
-                            className="text-gray-600 hover:text-gray-900 transition-colors"
-                            title="Go back"
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                            </svg>
-                        </button>
-                    )}
-                    <h1 className="text-lg font-semibold text-gray-800">{title}</h1>
+                {/* z-30 keeps the header above <main> (z-10) so the notification
+                    dropdown is not painted over by page content. */}
+                <header className="bg-white/90 backdrop-blur-sm shadow-sm px-4 sm:px-6 py-3 relative z-30 border-b-2 border-[#006400]/70">
+                    <div className="flex items-center gap-3">
+                        {showBack && (
+                            <button
+                                onClick={handleBack}
+                                className="flex-shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-[#006400]"
+                                title="Go back"
+                                aria-label="Go back"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </button>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                            {/* Breadcrumb: which sidebar group this page belongs to. */}
+                            {crumb && (
+                                <p className="hidden sm:block text-[11px] font-semibold uppercase tracking-wider text-gray-400 leading-none mb-1">
+                                    {crumb} <span className="text-gray-300">›</span> {title}
+                                </p>
+                            )}
+                            <h1 className="truncate text-lg font-bold text-gray-900 leading-tight">{title}</h1>
+                        </div>
+
+                        {/* Hidden on the narrowest screens so the title keeps its room;
+                            the registry's own search still covers those cases. */}
+                        <div className="hidden md:block flex-shrink-0">
+                            <GlobalSearch />
+                        </div>
+
+                        <div className="flex flex-shrink-0 items-center gap-2">
+                            <NotificationBell />
+                        </div>
+                    </div>
                 </header>
                 <main className="flex-1 p-6 relative z-10">
                     {flash?.success && (

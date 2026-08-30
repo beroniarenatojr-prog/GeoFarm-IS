@@ -347,9 +347,9 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                     <p className="text-gray-600 mb-3">
                         Each part of the RSBSA form is its own step. Fill one part, then continue to the next.
                     </p>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-                        <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-blue-800">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+                        <Info className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-green-800">
                             Every field is labeled in English with its Filipino translation <span className="italic">(sa Filipino)</span> so farmers can fill this out themselves, in person or online.
                         </p>
                     </div>
@@ -832,12 +832,12 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                     </div>
 
                                     {/* PROVINCIAL ADDRESS (Only if Permanent Address is in NCR) */}
-                                    <div className="border-2 border-blue-200 rounded-xl p-6 bg-blue-50">
+                                    <div className="border-2 border-green-200 rounded-xl p-6 bg-green-50">
                                         <div className="mb-4">
                                             <h3 className="text-lg font-bold text-gray-900 uppercase">
                                                 Provincial Address <span className="text-gray-500 font-normal">(Tirahan sa Labas ng NCR)</span>
                                             </h3>
-                                            <p className="text-sm text-blue-700 mt-2">
+                                            <p className="text-sm text-green-700 mt-2">
                                                 <span className="font-semibold">Answer only if declared permanent address is in NCR</span> <span className="italic">(Sagutan lamang kung ang permanenteng tirahan ay sa NCR)</span>
                                             </p>
                                         </div>
@@ -1120,8 +1120,8 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                     ))}
                                 </div>
 
-                                <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                    <p className="text-sm text-blue-800">
+                                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                    <p className="text-sm text-green-800">
                                         <span className="font-semibold">Note:</span> If you are a <span className="font-semibold">FARM WORKER</span> or <span className="font-semibold">FISHER</span>, kindly request a <span className="font-semibold uppercase">Certification as Farm Worker/Fisher</span> from the City/Municipal Agriculture Office <span className="italic">(Mag-request ng SERTIPIKASYON BILANG MANGGAGAWA SA SAKAHAN/MANGINGISDA mula sa City/Municipal Agriculture Office)</span>.
                                     </p>
                                 </div>
@@ -1643,9 +1643,9 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                     </div>
 
                                     {/* Data Privacy Notice */}
-                                    <div className="border-2 border-blue-600 rounded-lg p-6 bg-blue-50">
-                                        <h3 className="text-lg font-bold text-blue-900 mb-3 uppercase">Data Privacy Notice</h3>
-                                        <div className="text-xs text-blue-900 leading-relaxed space-y-2">
+                                    <div className="border-2 border-green-600 rounded-lg p-6 bg-green-50">
+                                        <h3 className="text-lg font-bold text-green-900 mb-3 uppercase">Data Privacy Notice</h3>
+                                        <div className="text-xs text-green-900 leading-relaxed space-y-2">
                                             <p className="text-justify">
                                                 The Department of Agriculture (DA) commits to uphold your rights to privacy as a data subject under the Data Privacy Act of 2012 (DPA). In this regard, the DA shall strictly implement controls and measures compliant to the DPA, its IRR, and the Circulars issued by the National Privacy Commission (NPC).
                                             </p>
@@ -1656,7 +1656,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                 As further measure of information, objection to processing, claim for rectification, claim for compensation for harm caused by the misuse, and the option to file a complaint with the NPC for violation of privacy rights.
                                             </p>
                                             <p className="font-semibold mt-3">
-                                                For any data privacy-related concerns, you may contact the Data Privacy Officer at <span className="text-blue-700">dpo@da.gov.ph</span>.
+                                                For any data privacy-related concerns, you may contact the Data Privacy Officer at <span className="text-green-700">dpo@da.gov.ph</span>.
                                             </p>
                                         </div>
                                     </div>

@@ -11,6 +11,27 @@ class FinancialAssistance extends Model
 {
     protected $table = 'financial_assistance';
 
+    public const STATUS_DRAFT     = 'draft';
+    public const STATUS_ACTIVE    = 'active';
+    public const STATUS_INACTIVE  = 'inactive';
+    public const STATUS_COMPLETED = 'completed';
+    public const STATUS_CANCELLED = 'cancelled';
+
+    public const STATUSES = [
+        self::STATUS_DRAFT,
+        self::STATUS_ACTIVE,
+        self::STATUS_INACTIVE,
+        self::STATUS_COMPLETED,
+        self::STATUS_CANCELLED,
+    ];
+
+    /**
+     * Statuses the row toggle may flip. Completed and cancelled are endings —
+     * reopening one is a deliberate act that belongs in the edit form, not a
+     * single click in a list.
+     */
+    public const TOGGLEABLE = [self::STATUS_DRAFT, self::STATUS_ACTIVE, self::STATUS_INACTIVE];
+
     protected $fillable = [
         'program_name',
         'assistance_type_id',
@@ -20,12 +41,17 @@ class FinancialAssistance extends Model
         'end_date',
         'status',
         'created_by',
+        'is_locked',
+        'locked_at',
+        'locked_by',
     ];
 
     protected $casts = [
         'total_budget' => 'decimal:2',
         'start_date' => 'date',
         'end_date' => 'date',
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
     ];
 
     public function assistanceType(): BelongsTo
@@ -41,6 +67,25 @@ class FinancialAssistance extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function locker(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'locked_by');
+    }
+
+    /** Whether the row toggle may flip this programme's status. */
+    public function canToggleStatus(): bool
+    {
+        return !$this->is_locked && in_array($this->status, self::TOGGLEABLE, true);
+    }
+
+    /** Draft counts as "off": the toggle turns it on. */
+    public function oppositeStatus(): string
+    {
+        return $this->status === self::STATUS_ACTIVE
+            ? self::STATUS_INACTIVE
+            : self::STATUS_ACTIVE;
     }
 
     public function barangays(): BelongsToMany

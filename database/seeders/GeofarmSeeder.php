@@ -16,7 +16,7 @@ class GeofarmSeeder extends Seeder
             ['type_name' => 'Upland',      'description' => 'Hilly or mountainous area'],
             ['type_name' => 'Lowland',     'description' => 'Flat low-lying area'],
             ['type_name' => 'Aquaculture', 'description' => 'Fish pond or cage'],
-        ]);
+]);
 
         DB::table('crops')->insertOrIgnore([
             ['crop_name' => 'Rice',      'category' => 'Cereal'],

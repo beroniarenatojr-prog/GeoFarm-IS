@@ -45,6 +45,57 @@ class FarmerVerificationController extends Controller
         ]);
     }
 
+    /**
+     * Same queue as index(), but as JSON for the header notification modal so
+     * staff can review submissions without leaving the page they are on.
+     */
+    public function queue(Request $request)
+    {
+        $validated = $request->validate([
+            'status' => 'nullable|in:pending,rejected',
+            'search' => 'nullable|string|max:100',
+        ]);
+
+        $status = $validated['status'] ?? Farmer::STATUS_PENDING;
+        $search = $validated['search'] ?? null;
+
+        $submissions = Farmer::query()
+            ->withCount('parcels')
+            ->where('verification_status', $status)
+            ->when($search, fn ($q, $s) => $q->where(function ($query) use ($s) {
+                $query->where('first_name', 'like', "%$s%")
+                    ->orWhere('last_name', 'like', "%$s%")
+                    ->orWhere('reference_code', 'like', "%$s%");
+            }))
+            ->orderByDesc('submitted_online_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (Farmer $f) => [
+                'id'                  => $f->id,
+                'name'                => $f->full_name,
+                'reference_code'      => $f->reference_code,
+                'verification_status' => $f->verification_status,
+                'birthdate'           => $f->birthdate?->toDateString(),
+                'barangay'            => $f->barangay,
+                'livelihood_type'     => $f->livelihood_type,
+                'parcels_count'       => $f->parcels_count,
+                'mobile_no'           => $f->mobile_no,
+                'email'               => $f->email,
+                'valid_id_type'       => $f->valid_id_type,
+                'id_number'           => $f->id_number,
+                'submitted_at'        => $f->submitted_online_at?->toIso8601String(),
+                'rejection_reason'    => $f->rejection_reason,
+            ]);
+
+        return response()->json([
+            'submissions' => $submissions,
+            'counts'      => [
+                'pending'  => Farmer::pending()->count(),
+                'rejected' => Farmer::where('verification_status', Farmer::STATUS_REJECTED)->count(),
+            ],
+        ]);
+    }
+
     public function approve(Request $request, Farmer $farmer)
     {
         if (!$farmer->isPending()) {

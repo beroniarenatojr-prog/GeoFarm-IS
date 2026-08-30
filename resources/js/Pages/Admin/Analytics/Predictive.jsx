@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import Card from '@/Components/ui/Card';
 import ConfidenceBadge from '@/Components/ui/ConfidenceBadge';
+import { formatDate } from '@/utils/dateFormatter';
 
 const kg = (value) =>
     value === null || value === undefined
@@ -52,7 +53,7 @@ export default function PredictiveAnalytics({ readiness, filters, barangays }) {
     const readinessTone = {
         none: 'bg-red-50 border-red-300 text-red-900',
         thin: 'bg-amber-50 border-amber-300 text-amber-900',
-        usable: 'bg-blue-50 border-blue-300 text-blue-900',
+        usable: 'bg-green-50 border-green-300 text-green-900',
         good: 'bg-green-50 border-green-300 text-green-900',
     };
 
@@ -330,7 +331,7 @@ function AtRiskList({ atRisk = [] }) {
                             </div>
                             <p className="text-sm text-gray-700">
                                 {row.barangay || '—'} · {row.crop} · {row.area_ha} ha ·
-                                harvest around <strong>{row.harvest_date}</strong>
+                                harvest around <strong>{formatDate(row.harvest_date, 'date-only')}</strong>
                             </p>
                             <ul className="mt-2 text-sm text-gray-700 list-disc list-inside">
                                 {row.reasons.map((reason, i) => <li key={i}>{reason}</li>)}

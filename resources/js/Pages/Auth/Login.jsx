@@ -16,7 +16,7 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-800 via-teal-700 to-green-600 p-8">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-800 via-emerald-700 to-green-600 p-8">
             {/* Centered Login Card */}
             <div className="w-full max-w-5xl flex rounded-3xl shadow-2xl overflow-hidden bg-white">
                 {/* Left Panel - Dark Green */}

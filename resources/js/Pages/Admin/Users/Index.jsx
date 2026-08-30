@@ -41,9 +41,9 @@ export default function UsersIndex({ users, roles, canCreateAdmin, canDeleteAdmi
                                     <td className="px-4 py-3 text-gray-500">{u.email}</td>
                                     <td className="px-4 py-3">
                                         <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                            userRole === 'Super Admin' ? 'bg-purple-100 text-purple-700' :
+                                            userRole === 'Super Admin' ? 'bg-emerald-100 text-emerald-700' :
                                             userRole === 'Admin' ? 'bg-green-100 text-green-700' :
-                                            userRole === 'Staff' ? 'bg-blue-100 text-blue-700' :
+                                            userRole === 'Staff' ? 'bg-green-100 text-green-700' :
                                             'bg-gray-100 text-gray-700'
                                         }`}>
                                             {userRole ?? '—'}

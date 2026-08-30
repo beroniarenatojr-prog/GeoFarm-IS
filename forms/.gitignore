@@ -1,0 +1,3 @@
+# The official DA form is a source document, not source code — regenerate it
+# with export-official-pdf.ps1 rather than committing a 680KB binary.
+rsbsa-official.pdf
