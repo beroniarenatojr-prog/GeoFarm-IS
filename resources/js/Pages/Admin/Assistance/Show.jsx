@@ -1,5 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
-import { useForm, Link } from '@inertiajs/react';
+import { useForm, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Lock, Send } from 'lucide-react';
@@ -8,10 +8,18 @@ import FarmerPicker from '@/Components/ui/FarmerPicker';
 import { formatDate } from '@/utils/dateFormatter';
 
 export default function AssistanceShow({
-    program, distributions, summary, programItems = [], stockItems = [],
+    program, distributions, summary, programItems = [], stockItems = [], filters = {},
 }) {
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
     const [recording, setRecording] = useState(false);
+
+    const applySearch = (e) => {
+        e.preventDefault();
+        router.get(`/admin/assistance/${program.id}`, { search: searchTerm }, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
 
     // The standard package: what every beneficiary gets. Staff confirm it as-is
     // unless they tick Customize, which is the exception rather than the norm.
@@ -79,14 +87,8 @@ export default function AssistanceShow({
         });
     };
 
-    // Filter distributions based on search term
-    const filteredDistributions = distributions.data.filter(d => {
-        if (!searchTerm) return true;
-        const farmerName = `${d.farmer?.first_name} ${d.farmer?.last_name}`.toLowerCase();
-        const farmerId = d.farmer?.id?.toString() || '';
-        const search = searchTerm.toLowerCase();
-        return farmerName.includes(search) || farmerId.includes(search);
-    });
+    // Filter distributions based on search term — now server-side
+    const filteredDistributions = distributions.data;
 
     // Context-aware labels based on distribution type
     const distributionType = program.assistance_type?.distribution_type || 'financial';

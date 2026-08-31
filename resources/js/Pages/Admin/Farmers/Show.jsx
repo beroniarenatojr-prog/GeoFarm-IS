@@ -129,6 +129,11 @@ export default function FarmerShow({ farmer }) {
     parcel_number: p.parcel_number || '—',
     barangay: p.barangay,
     area: `${p.total_area_ha} ha`,
+    // What is actually grown or raised on the parcel, with the head/tree count
+    // beside it when one was recorded — the RSBSA form asks for the pair.
+    commodity: p.commodity
+      ? p.commodity + (p.no_of_heads_trees ? ` (${p.no_of_heads_trees})` : '')
+      : '—',
     type: p.farm_type?.type_name || '—',
     ownership: p.ownership_type || '—',
   }));
@@ -146,6 +151,10 @@ export default function FarmerShow({ farmer }) {
     { header: 'Parcel #', accessorKey: 'parcel_number' },
     { header: 'Barangay', accessorKey: 'barangay' },
     { header: 'Area', accessorKey: 'area' },
+    // Shown exactly as stored. The values are inconsistently cased ("Corn"
+    // beside "corn"); tidying that belongs in the data, not behind a CSS class
+    // that hides it from whoever has to clean it up.
+    { header: 'Commodity', accessorKey: 'commodity' },
     { header: 'Type', accessorKey: 'type' },
     { header: 'Ownership', accessorKey: 'ownership' },
   ];

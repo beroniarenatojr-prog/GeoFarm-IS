@@ -125,15 +125,16 @@ class AssistanceController extends Controller
         $this->resolveCustomType($request);
 
         $data = $request->validate([
-            'program_name'        => 'required|string|max:100',
-            'assistance_type_id'  => 'required|exists:assistance_types,id',
-            'description'         => 'nullable|string',
-            'total_budget'        => 'required|numeric|min:0',
-            'start_date'          => 'required|date',
-            'end_date'            => 'required|date|after_or_equal:start_date',
-            'status'              => 'nullable|in:' . implode(',', FinancialAssistance::STATUSES),
-            'barangay_ids'        => 'nullable|array',
-            'barangay_ids.*'      => 'exists:barangays,id',
+            'program_name'           => 'required|string|max:100',
+            'assistance_type_id'     => 'required|exists:assistance_types,id',
+            'description'            => 'nullable|string',
+            'total_budget'           => 'required|numeric|min:0',
+            'standard_cash_amount'   => 'nullable|numeric|min:0',
+            'start_date'             => 'required|date',
+            'end_date'               => 'required|date|after_or_equal:start_date',
+            'status'                 => 'nullable|in:' . implode(',', FinancialAssistance::STATUSES),
+            'barangay_ids'           => 'nullable|array',
+            'barangay_ids.*'         => 'exists:barangays,id',
         ]);
 
         // Separate barangay_ids from the main data
@@ -194,11 +195,14 @@ class AssistanceController extends Controller
 
     public function show(FinancialAssistance $assistance)
     {
+        $search = trim((string) request('search', ''));
+
         return Inertia::render('Admin/Assistance/Show', [
             'program' => $assistance->load([
                 'assistanceType', 'barangays', 'locker:id,name',
                 'programItems.item:id,item_name,unit,quantity,min_level',
             ]),
+            'filters' => ['search' => $search],
             // What this programme hands out, with live warehouse stock beside
             // each entitlement so staff see shortfalls before they promise.
             'programItems' => $assistance->programItems->map(fn ($line) => [
@@ -220,8 +224,16 @@ class AssistanceController extends Controller
                     'itemIssues.item:id,item_name,unit',
                 ])
                 ->where('assistance_id', $assistance->id)
+                ->when($search, function ($q, $s) {
+                    $q->whereHas('farmer', fn ($f) => $f
+                        ->where('first_name', 'like', "%{$s}%")
+                        ->orWhere('last_name', 'like', "%{$s}%")
+                        ->orWhere('rsbsa_no', 'like', "%{$s}%")
+                    );
+                })
                 ->latest('distribution_date')
                 ->paginate(20)
+                ->withQueryString()
                 ->through(fn ($d) => [
                     'id'                   => $d->id,
                     'farmer'               => $d->farmer,
@@ -360,15 +372,16 @@ class AssistanceController extends Controller
         $this->resolveCustomType($request);
 
         $data = $request->validate([
-            'program_name'        => 'required|string|max:100',
-            'assistance_type_id'  => 'required|exists:assistance_types,id',
-            'description'         => 'nullable|string',
-            'total_budget'        => 'required|numeric|min:0',
-            'start_date'          => 'required|date',
-            'end_date'            => 'required|date|after_or_equal:start_date',
-            'status'              => 'nullable|in:' . implode(',', FinancialAssistance::STATUSES),
-            'barangay_ids'        => 'nullable|array',
-            'barangay_ids.*'      => 'exists:barangays,id',
+            'program_name'           => 'required|string|max:100',
+            'assistance_type_id'     => 'required|exists:assistance_types,id',
+            'description'            => 'nullable|string',
+            'total_budget'           => 'required|numeric|min:0',
+            'standard_cash_amount'   => 'nullable|numeric|min:0',
+            'start_date'             => 'required|date',
+            'end_date'               => 'required|date|after_or_equal:start_date',
+            'status'                 => 'nullable|in:' . implode(',', FinancialAssistance::STATUSES),
+            'barangay_ids'           => 'nullable|array',
+            'barangay_ids.*'         => 'exists:barangays,id',
         ]);
 
         // Separate barangay_ids from the main data

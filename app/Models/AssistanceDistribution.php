@@ -32,18 +32,18 @@ class AssistanceDistribution extends Model
     protected static function boot()
     {
         parent::boot();
-        
+
         static::creating(function ($model) {
             $model->created_at = now();
+        });
+
+        // Record when a distribution is updated — e.g. marking pending → claimed.
+        static::updating(function ($model) {
+            $model->updated_at = now();
         });
     }
 
     public function program(): BelongsTo
-    {
-        return $this->belongsTo(FinancialAssistance::class, 'assistance_id');
-    }
-
-    public function assistance(): BelongsTo
     {
         return $this->belongsTo(FinancialAssistance::class, 'assistance_id');
     }

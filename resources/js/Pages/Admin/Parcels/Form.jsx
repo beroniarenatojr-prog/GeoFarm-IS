@@ -139,16 +139,6 @@ export default function ParcelForm({ parcel, farmTypes, geojson, onClose = null 
       });
 
       map.addLayer({
-        id: 'tumauini-boundary-fill',
-        type: 'fill',
-        source: 'tumauini-boundary',
-        paint: {
-          'fill-color': '#16a34a',
-          'fill-opacity': 0.07,
-        },
-      });
-
-      map.addLayer({
         id: 'tumauini-boundary-line',
         type: 'line',
         source: 'tumauini-boundary',

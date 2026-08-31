@@ -1,14 +1,32 @@
 export const TUMAUINI_CENTER = [121.8067, 17.2747];
 
+/*
+ * APPROXIMATE extent of Tumauini — not an official boundary.
+ *
+ * This was previously an 8.5 x 8.9 km box covering roughly 16% of a
+ * municipality of about 467 km2, which meant staff could not pan to most of
+ * their own territory: a parcel already recorded near 121.91 E sat 6.3 km
+ * outside the area the map allowed. Widened so the whole municipality is
+ * reachable.
+ *
+ * Replace with the real outline from PSA / NAMRIA or the Provincial Planning
+ * Office when that file is available; nothing here is survey data.
+ */
 export const TUMAUINI_BOUNDS = [
-  [121.7699, 17.234],
-  [121.8499, 17.314],
+  [121.68, 17.12],
+  [122.25, 17.45],
 ];
 
+/*
+ * The dashed rectangle on the map. Deliberately labelled "approximate extent"
+ * rather than "municipal boundary": it is a bounding box, and presenting a box
+ * as an administrative outline on a government system would be a lie staff
+ * might act on.
+ */
 export const TUMAUINI_BOUNDARY_FEATURE = {
   type: 'Feature',
   properties: {
-    name: 'Tumauini Municipal Focus Area',
+    name: 'Tumauini — approximate extent',
     north: 'Cabagan municipality',
     east: 'Divilacan municipality',
     south: 'Ilagan City',
@@ -17,11 +35,11 @@ export const TUMAUINI_BOUNDARY_FEATURE = {
   geometry: {
     type: 'Polygon',
     coordinates: [[
-      [121.7699, 17.234],
-      [121.8499, 17.234],
-      [121.8499, 17.314],
-      [121.7699, 17.314],
-      [121.7699, 17.234],
+      [121.68, 17.12],
+      [122.25, 17.12],
+      [122.25, 17.45],
+      [121.68, 17.45],
+      [121.68, 17.12],
     ]],
   },
 };

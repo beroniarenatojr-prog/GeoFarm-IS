@@ -83,7 +83,14 @@ class GISController extends Controller
                     'properties' => [
                         'id' => $parcel->id,
                         'parcel_number' => $parcel->parcel_number ?? 'N/A',
-                        'farmer_name' => $parcel->farmer ? $parcel->farmer->first_name . ' ' . $parcel->farmer->last_name : 'Unknown',
+                        // null, not 'Unknown' — the map needs to tell an
+                        // unassigned parcel from one whose farmer failed to
+                        // load, and only one of those is a job for staff.
+                        'farmer_id'   => $parcel->farmer_id,
+                        'farmer_name' => $parcel->farmer
+                            ? trim($parcel->farmer->first_name . ' ' . $parcel->farmer->last_name)
+                            : null,
+                        'rsbsa_no'    => $parcel->farmer?->rsbsa_no,
                         'barangay' => $parcel->barangay,
                         'area_ha' => $parcel->total_area_ha,
                         'commodity' => $parcel->commodity,

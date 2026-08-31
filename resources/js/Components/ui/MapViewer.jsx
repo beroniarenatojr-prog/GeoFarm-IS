@@ -76,16 +76,9 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
         data: TUMAUINI_BOUNDARY_COLLECTION,
       });
 
-      map.addLayer({
-        id: 'tumauini-boundary-fill',
-        type: 'fill',
-        source: 'tumauini-boundary',
-        paint: {
-          'fill-color': '#16a34a',
-          'fill-opacity': 0.06,
-        },
-      });
-
+      // No tinted fill: the extent rectangle now covers about 2,250 km2, and a
+      // wash across all of it reads as haze over the imagery rather than as a
+      // boundary. The dashed outline marks it well enough.
       map.addLayer({
         id: 'tumauini-boundary-line',
         type: 'line',

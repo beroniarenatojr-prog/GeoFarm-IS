@@ -379,6 +379,8 @@ class FarmInventoryController extends Controller
             fputcsv($file, ['FARMER INVENTORY REPORT']);
             fputcsv($file, ['Name', "{$farmer->first_name} {$farmer->last_name}"]);
             fputcsv($file, ['RSBSA', $farmer->rsbsa_no]);
+            fputcsv($file, ['Barangay', $farmer->barangay]);
+            fputcsv($file, ['Exported', now()->format('Y-m-d H:i')]);
             fputcsv($file, []);
             
             // Crops
@@ -394,18 +396,69 @@ class FarmInventoryController extends Controller
             }
             fputcsv($file, ['Total Area', '', '', $inventory['total_crop_area']]);
             fputcsv($file, []);
+
+            // Tree Crops
+            if (!empty($inventory['tree_crops']) && count($inventory['tree_crops']) > 0) {
+                fputcsv($file, ['TREE CROPS']);
+                fputcsv($file, ['Crop Type', 'Quantity (trees)', 'Area (ha)', 'Age (years)', 'Status']);
+                foreach ($inventory['tree_crops'] as $tc) {
+                    fputcsv($file, [
+                        $tc['crop_type'] ?? '',
+                        $tc['quantity'] ?? $tc['total_quantity'] ?? '',
+                        $tc['area_hectares'] ?? $tc['total_area'] ?? '',
+                        $tc['age_years'] ?? '',
+                        $tc['status'] ?? '',
+                    ]);
+                }
+                fputcsv($file, []);
+            }
+
+            // Fishponds
+            if (!empty($inventory['fishponds']) && count($inventory['fishponds']) > 0) {
+                fputcsv($file, ['FISHPONDS']);
+                fputcsv($file, ['Species', 'Pond Type', 'Area (ha)', 'Estimated Population', 'Last Harvest', 'Next Harvest']);
+                foreach ($inventory['fishponds'] as $fp) {
+                    fputcsv($file, [
+                        $fp['species'] ?? '',
+                        $fp['pond_type'] ?? '',
+                        $fp['area_hectares'] ?? $fp['total_area'] ?? '',
+                        $fp['estimated_population'] ?? '',
+                        $fp['last_harvest'] ?? '',
+                        $fp['next_harvest'] ?? '',
+                    ]);
+                }
+                fputcsv($file, []);
+            }
             
             // Livestock
             fputcsv($file, ['LIVESTOCK & POULTRY']);
             fputcsv($file, ['Type', 'Category', 'Male', 'Female', 'Total']);
             foreach ($inventory['livestock'] as $animal) {
+                $a = is_array($animal) ? $animal : (array) $animal;
                 fputcsv($file, [
-                    $animal->type,
-                    $animal->category,
-                    $animal->male,
-                    $animal->female,
-                    $animal->total
+                    $a['type'] ?? '',
+                    $a['category'] ?? '',
+                    $a['male'] ?? '',
+                    $a['female'] ?? '',
+                    $a['total'] ?? '',
                 ]);
+            }
+            fputcsv($file, []);
+
+            // Machinery
+            if (!empty($inventory['machinery']) && count($inventory['machinery']) > 0) {
+                fputcsv($file, ['FARM MACHINERY']);
+                fputcsv($file, ['Type', 'Brand', 'Model', 'Year Acquired', 'Status']);
+                foreach ($inventory['machinery'] as $m) {
+                    $m = is_array($m) ? $m : (array) $m;
+                    fputcsv($file, [
+                        $m['machinery_type'] ?? '',
+                        $m['brand'] ?? '',
+                        $m['model'] ?? '',
+                        $m['year_acquired'] ?? '',
+                        $m['status'] ?? '',
+                    ]);
+                }
             }
             
             fclose($file);

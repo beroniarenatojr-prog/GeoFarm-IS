@@ -247,6 +247,7 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Farmer</th>
                                         <SortHeader column="barangay" label="Barangay" sort={sort} onSort={onSort} />
                                         <SortHeader column="total_area_ha" label="Area (ha)" sort={sort} onSort={onSort} className="text-right" />
+                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Commodity</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Type</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Ownership</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-center">Map</th>
@@ -265,6 +266,12 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                             <td className="px-4 py-3 text-right font-semibold text-[#006400] tabular-nums">
                                                 {p.total_area_ha != null ? Number(p.total_area_ha).toFixed(2) : '—'}
                                             </td>
+                                            <td className="px-4 py-3 text-gray-700">
+                                                {p.commodity || <span className="text-gray-400">—</span>}
+                                                {p.no_of_heads_trees > 0 && (
+                                                    <span className="ml-1 text-xs text-gray-500">({p.no_of_heads_trees})</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-3 text-gray-700">{p.farm_type?.type_name || '—'}</td>
                                             <td className="px-4 py-3 text-gray-700">{p.ownership_type || '—'}</td>
                                             <td className="px-4 py-3 text-center">
@@ -276,6 +283,14 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
+                                                    {/* Offered only when there is a boundary to look at: a map link
+                                                        that opens on empty ground is worse than no link. */}
+                                                    {p.geojson_data && can('view maps') && (
+                                                        <a href={`/admin/gis/map?parcel=${p.id}`} title="View on map"
+                                                            className="p-2 text-[#006400] hover:bg-green-100 rounded-lg transition-colors">
+                                                            <Map className="h-4 w-4" />
+                                                        </a>
+                                                    )}
                                                     {can('edit parcels') && (
                                                         <button type="button" onClick={() => setEditing({ mode: 'edit', id: p.id })} title="Edit"
                                                             className="p-2 text-[#006400] hover:bg-green-100 rounded-lg transition-colors">
@@ -322,7 +337,16 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                         <dt className="text-[11px] uppercase tracking-wide text-gray-500">Type</dt>
                                         <dd className="text-gray-800">{p.farm_type?.type_name || '—'}</dd>
                                     </div>
-                                    <div className="col-span-2">
+                                    <div>
+                                        <dt className="text-[11px] uppercase tracking-wide text-gray-500">Commodity</dt>
+                                        <dd className="text-gray-800">
+                                            {p.commodity || '—'}
+                                            {p.no_of_heads_trees > 0 && (
+                                                <span className="ml-1 text-xs text-gray-500">({p.no_of_heads_trees})</span>
+                                            )}
+                                        </dd>
+                                    </div>
+                                    <div>
                                         <dt className="text-[11px] uppercase tracking-wide text-gray-500">Ownership</dt>
                                         <dd className="text-gray-800">{p.ownership_type || '—'}</dd>
                                     </div>
@@ -335,6 +359,10 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                         {p.geojson_data ? 'Mapped' : 'Not yet mapped'}
                                     </span>
                                     <div className="flex gap-1">
+                                        {p.geojson_data && can('view maps') && (
+                                            <a href={`/admin/gis/map?parcel=${p.id}`} aria-label="View on map"
+                                                className="p-2 text-[#006400] bg-green-50 rounded-lg"><Map className="h-4 w-4" /></a>
+                                        )}
                                         {can('edit parcels') && (
                                             <button type="button" onClick={() => setEditing({ mode: 'edit', id: p.id })} aria-label="Edit"
                                                 className="p-2 text-[#006400] bg-green-50 rounded-lg"><Edit3 className="h-4 w-4" /></button>
