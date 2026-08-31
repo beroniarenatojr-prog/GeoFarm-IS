@@ -1,20 +1,14 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { router, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-    Sprout, TreePine, Fish, Beef, Search, X, Users, Ruler, FileDown, Layers,
-    Tractor, Plus, Pencil, Trash2, Printer,
+    Sprout, TreePine, Fish, Beef, Search, X, Users, Ruler, FileDown,
+    Tractor, Plus, Pencil, Trash2, Printer, Bird,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
 import AssetModal from '@/Components/FarmInventory/AssetModal';
-
-const TABS = [
-    { key: 'crops', label: 'Crops', icon: Sprout },
-    { key: 'standing', label: 'Tree Crops & Fishponds', icon: TreePine },
-    { key: 'livestock', label: 'Livestock & Poultry', icon: Beef },
-    { key: 'machinery', label: 'Machinery', icon: Tractor },
-];
+import ModalShell from '@/Components/ui/ModalShell';
 
 const HEALTH_TONE = {
     healthy: 'bg-green-100 text-green-800',
@@ -83,11 +77,52 @@ function AddButton({ label, onClick }) {
     );
 }
 
-function SectionHead({ title, action }) {
+/**
+ * Take-away options for one farmer's record.
+ *
+ * There is no separate PDF generator: the printable sheet is the PDF, because
+ * every browser's print dialog can save it as one. Offering a second, subtly
+ * different document would only give the office two things to reconcile.
+ */
+function ExportMenu({ farmerId, canExport }) {
+    const [open, setOpen] = useState(false);
+
+    // Any click outside closes it; a menu that traps the page is worse than
+    // no menu at all.
+    useEffect(() => {
+        if (!open) return;
+        const close = () => setOpen(false);
+        window.addEventListener('click', close);
+        return () => window.removeEventListener('click', close);
+    }, [open]);
+
+    const item = 'flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-green-50';
+
     return (
-        <div className="mb-2 flex items-center justify-between gap-3">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-[#006400]">{title}</h3>
-            {action}
+        <div className="relative" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setOpen(o => !o)}
+                aria-expanded={open} aria-haspopup="menu"
+                className="flex items-center gap-2 rounded-xl border border-green-200 px-4 py-2.5 text-sm font-semibold text-[#006400] hover:bg-green-50 transition-colors">
+                <FileDown className="h-4 w-4" /> Export
+            </button>
+
+            {open && (
+                <div role="menu"
+                    className="absolute right-0 z-40 mt-1 w-56 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg">
+                    <a href={`/admin/farm-inventory/${farmerId}/print`} target="_blank" rel="noopener"
+                        className={item} onClick={() => setOpen(false)}>
+                        <Printer className="h-4 w-4 text-gray-400" />
+                        <span>Print<span className="block text-[11px] text-gray-400">Or save as PDF</span></span>
+                    </a>
+                    {canExport && (
+                        <a href={`/admin/farm-inventory/${farmerId}/export`}
+                            className={`${item} border-t border-gray-50`} onClick={() => setOpen(false)}>
+                            <FileDown className="h-4 w-4 text-gray-400" />
+                            <span>Spreadsheet<span className="block text-[11px] text-gray-400">CSV, opens in Excel</span></span>
+                        </a>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -324,22 +359,7 @@ export default function FarmInventoryIndex({
                                     className="px-4 py-2 rounded-xl border border-green-200 text-[#006400] text-sm font-semibold hover:bg-green-50 transition-colors">
                                     View profile
                                 </Link>
-                                {/* Every category on one sheet, unlike the tabbed
-                                    screen — opened in its own tab so the record
-                                    stays put behind it. */}
-                                <a href={`/admin/farm-inventory/${selectedFarmer.id}/print`}
-                                    target="_blank" rel="noopener"
-                                    title="Print asset record" aria-label="Print asset record"
-                                    className="p-2.5 rounded-xl border border-green-200 text-[#006400] hover:bg-green-50 transition-colors">
-                                    <Printer className="h-5 w-5" />
-                                </a>
-                                {can('export reports') && (
-                                    <a href={`/admin/farm-inventory/${selectedFarmer.id}/export`}
-                                        title="Export CSV" aria-label="Export CSV"
-                                        className="p-2.5 rounded-xl border border-green-200 text-[#006400] hover:bg-green-50 transition-colors">
-                                        <FileDown className="h-5 w-5" />
-                                    </a>
-                                )}
+                                <ExportMenu farmerId={selectedFarmer.id} canExport={can('export reports')} />
                                 <button onClick={() => choose('all')}
                                     className="p-2.5 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
                                     title="Back to all farmers" aria-label="Back to all farmers">
@@ -401,9 +421,9 @@ export default function FarmInventoryIndex({
             {/* Totals */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
                 <Stat icon={Ruler} tone="#006400" value={num(summary?.crop_area, 2)} label="Hectares planted" />
-                <Stat icon={Sprout} tone="#228B22" value={num(summary?.crop_types)} label="Crop types" />
-                <Stat icon={TreePine} tone="#4CAF50" value={num(summary?.trees)} label="Trees" />
-                <Stat icon={Beef} tone="#81C784" value={num(summary?.animals)} label="Animals" />
+                <Stat icon={Beef} tone="#228B22" value={num(summary?.livestock)} label="Livestock heads" />
+                <Stat icon={Bird} tone="#4CAF50" value={num(summary?.poultry)} label="Poultry" />
+                <Stat icon={TreePine} tone="#81C784" value={num(summary?.trees)} label="Trees" />
                 <Stat icon={Fish} tone="#2E7D32" value={num(summary?.pond_area, 2)} label="Pond hectares" />
                 {/* Already counted server-side but never shown until now. */}
                 <Stat icon={Tractor} tone="#1B5E20" value={num(summary?.machinery)} label="Machinery" />
@@ -501,14 +521,11 @@ export default function FarmInventoryIndex({
                                     )}
                                     empty={<Empty icon={TreePine} text="No tree crops recorded" />}
                                 />
-                            </div>
+                </Panel>
 
-                            <div>
-                                <SectionHead
-                                    title="Fishponds"
-                                    action={addable && <AddButton label="Add fishpond"
-                                        onClick={() => setAsset({ category: 'fishponds', record: null })} />}
-                                />
+                <Panel icon={Fish} title="Fishponds" count={fishponds.length}
+                    action={addable && <AddButton label="Add fishpond"
+                        onClick={() => setAsset({ category: 'fishponds', record: null })} />}>
                                 <DataBlock
                                     columns={[
                                         { key: 'species', label: 'Species', render: r => <span className="font-medium text-gray-900">{r.species ?? '—'}</span> },
@@ -522,7 +539,11 @@ export default function FarmInventoryIndex({
                                             { key: 'next', label: 'Next harvest',
                                               render: r => r.next_harvest ? formatDate(r.next_harvest, 'date-only') : '—' },
                                         ]),
-                                        ...actionsCol('fishponds', 'fishpond record'),
+                                        ...actionsCol('fishponds', 'fishpond record', r => [
+                                            ['Species', r.species],
+                                            ['Pond type', r.pond_type],
+                                            ['Area', `${num(r.total_area, 2)} ha`],
+                                        ]),
                                     ]}
                                     rows={fishponds}
                                     renderCard={r => (
@@ -535,29 +556,21 @@ export default function FarmInventoryIndex({
                                     )}
                                     empty={<Empty icon={Fish} text="No fishponds recorded" />}
                                 />
-                            </div>
-                        </div>
-                    )}
+                </Panel>
 
-                    {tab === 'livestock' && (
-                        <>
-                            {addable && (
-                                // Five separate RSBSA tables sit behind this tab, so
-                                // the user chooses which one they are adding to.
-                                <div className="mb-3 flex flex-wrap items-center gap-2">
-                                    <span className="text-xs font-medium text-gray-500">Add:</span>
-                                    {[
-                                        ['large-ruminants', 'Cattle / Carabao'],
-                                        ['small-ruminants', 'Goat / Sheep'],
-                                        ['native-pigs', 'Native pigs'],
-                                        ['swine-hybrid', 'Hybrid swine'],
-                                        ['poultry', 'Poultry'],
-                                    ].map(([cat, label]) => (
-                                        <AddButton key={cat} label={label}
-                                            onClick={() => setAsset({ category: cat, record: null })} />
-                                    ))}
-                                </div>
-                            )}
+                {/* Five separate RSBSA tables sit behind this one section, so
+                    adding means choosing which of them the animal belongs to. */}
+                <Panel icon={Beef} title="Livestock & Poultry" count={livestock.length}
+                    action={addable && [
+                        ['large-ruminants', 'Cattle / Carabao'],
+                        ['small-ruminants', 'Goat / Sheep'],
+                        ['native-pigs', 'Native pigs'],
+                        ['swine-hybrid', 'Hybrid swine'],
+                        ['poultry', 'Poultry'],
+                    ].map(([cat, label]) => (
+                        <AddButton key={cat} label={label}
+                            onClick={() => setAsset({ category: cat, record: null })} />
+                    ))}>
                             <DataBlock
                                 columns={[
                                     { key: 'type', label: 'Animal', render: r => <span className="font-medium text-gray-900">{r.type ?? '—'}</span> },
@@ -567,6 +580,7 @@ export default function FarmInventoryIndex({
                                         </span>
                                     ) },
                                     ...(aggregated ? [{ key: 'farmers', label: 'Farmers', render: r => r.farmer_count ?? '—' }] : [
+                                        { key: 'purpose', label: 'Purpose', render: r => r.purpose || '—' },
                                         { key: 'health', label: 'Health', render: r => (
                                             <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
                                                 HEALTH_TONE[r.health_status] ?? 'bg-gray-100 text-gray-600'
@@ -578,7 +592,11 @@ export default function FarmInventoryIndex({
                                     { key: 'male', label: 'Male', align: 'right', render: r => num(r.male) },
                                     { key: 'female', label: 'Female', align: 'right', render: r => num(r.female) },
                                     { key: 'total', label: 'Total heads', align: 'right', render: r => num(r.total) },
-                                    ...actionsCol('livestock', 'animal record'),
+                                    ...actionsCol('livestock', 'animal record', r => [
+                                        ['Animal', r.type],
+                                        ['Category', r.category],
+                                        ['Heads', `${num(r.total)} (${num(r.male)}m / ${num(r.female)}f)`],
+                                    ]),
                                 ]}
                                 rows={livestock}
                                 renderCard={r => (
@@ -601,17 +619,11 @@ export default function FarmInventoryIndex({
                                 )}
                                 empty={<Empty icon={Beef} text="No livestock or poultry recorded" />}
                             />
-                        </>
-                    )}
+                </Panel>
 
-                    {tab === 'machinery' && (
-                        <>
-                            {addable && (
-                                <div className="mb-3 flex justify-end">
-                                    <AddButton label="Add machinery"
-                                        onClick={() => setAsset({ category: 'machinery', record: null })} />
-                                </div>
-                            )}
+                <Panel icon={Tractor} title="Machinery" count={machinery.length}
+                    action={addable && <AddButton label="Add machinery"
+                        onClick={() => setAsset({ category: 'machinery', record: null })} />}>
                             <DataBlock
                                 columns={aggregated ? [
                                     { key: 'type', label: 'Machinery', render: r => <span className="font-medium text-gray-900">{r.machinery_type}</span> },
@@ -642,7 +654,12 @@ export default function FarmInventoryIndex({
                                             MACHINE_TONE[r.status] ?? 'bg-gray-100 text-gray-600'
                                         }`}>{(r.status ?? '').replace('_', ' ')}</span>
                                     ) },
-                                    ...actionsCol('machinery', 'machinery record'),
+                                    ...actionsCol('machinery', 'machinery record', r => [
+                                        ['Machinery', r.machinery_type],
+                                        ['Make', [r.brand, r.model].filter(Boolean).join(' ')],
+                                        ['Serial no.', r.serial_number],
+                                        ['Acquired', r.year_acquired],
+                                    ]),
                                 ]}
                                 rows={machinery}
                                 renderCard={r => (
@@ -664,9 +681,7 @@ export default function FarmInventoryIndex({
                                 )}
                                 empty={<Empty icon={Tractor} text="No farm machinery recorded" />}
                             />
-                        </>
-                    )}
-                </div>
+                </Panel>
             </div>
 
             {asset && (
@@ -676,7 +691,17 @@ export default function FarmInventoryIndex({
                     record={asset.record}
                     farmerId={selectedFarmer?.id}
                     parcels={parcels}
+                    cropOptions={cropOptions}
                     onClose={() => setAsset(null)}
+                />
+            )}
+
+            {pendingDelete && (
+                <DeleteDialog
+                    target={pendingDelete}
+                    busy={deleting}
+                    onCancel={() => setPendingDelete(null)}
+                    onConfirm={confirmDelete}
                 />
             )}
         </AdminLayout>

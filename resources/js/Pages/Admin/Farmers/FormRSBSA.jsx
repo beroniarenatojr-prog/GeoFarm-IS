@@ -4,6 +4,7 @@ import { useForm, router } from '@inertiajs/react';
 import { User, MapPin, Users, Briefcase, Map, Image as ImageIcon, FileCheck, ChevronLeft, ChevronRight, Check, Info, X, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
+import { formatRsbsa, formatMobile, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
 
 export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
     const isEdit = !!farmer;
@@ -183,6 +184,10 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
             case 5:
             case 6:
                 return true; // All these steps are flexible
+            case 7:
+                // The review step carries no fields of its own — the consent
+                // box is checked separately, and only for a new registration.
+                return true;
             default:
                 return false;
         }
@@ -242,41 +247,15 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         }
     };
 
-    const submit = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        console.log('===== FORM SUBMIT CALLED =====');
-        console.log('Current Step:', currentStep);
-        console.log('Is Edit Mode:', isEdit);
-        console.log('Livelihood Type:', data.livelihood_type);
-        console.log('Consent Checked:', consentChecked);
-        
-        // Safety check - don't submit if not on final step
-        if (currentStep !== 7) {
-            console.error('Attempted to submit but not on Step 7!');
-            toast.error('Please complete all steps before submitting');
-            return;
-        }
-        
-        // Require consent checkbox to be checked
-        if (!consentChecked) {
-            toast.error('Please check the consent checkbox to agree to the terms before submitting');
-            return;
-        }
-
-        // Public self-registration also needs login credentials
-        if (publicMode) {
-            if (!data.email_account?.trim() || !data.password) {
-                toast.error('Please provide an email and password for your account');
-                return;
-            }
-            if (data.password !== data.password_confirmation) {
-                toast.error('Passwords do not match');
-                return;
-            }
-        }
-
+    /**
+     * Builds the payload and sends it.
+     *
+     * Kept separate from the guards below so an edit can be saved from
+     * whichever step the user happens to be on: correcting one phone number
+     * should not mean clicking through seven pages of a form that is already
+     * filled in.
+     */
+    const send = () => {
         const formData = new FormData();
 
         // Credential fields are handled separately below, never as farmer columns
@@ -322,15 +301,59 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         } else if (isEdit) {
             formData.append('_method', 'PUT');
             router.post(`/admin/farmers/${farmer.id}`, formData, {
-                onSuccess: () => toast.success('Farmer updated successfully'),
                 onError: () => toast.error('Failed to update farmer'),
             });
         } else {
             router.post('/admin/farmers', formData, {
-                onSuccess: () => toast.success('Farmer registered successfully'),
                 onError: () => toast.error('Failed to register farmer'),
             });
         }
+    };
+
+    /**
+     * The full run through the wizard: everything must be filled in and the
+     * consent box ticked before a NEW record is created.
+     */
+    const submit = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (currentStep !== 7) {
+            toast.error('Please complete all steps before submitting');
+            return;
+        }
+
+        if (!consentChecked) {
+            toast.error('Please check the consent checkbox to agree to the terms before submitting');
+            return;
+        }
+
+        // Public self-registration also needs login credentials.
+        if (publicMode) {
+            if (!data.email_account?.trim() || !data.password) {
+                toast.error('Please provide an email and password for your account');
+                return;
+            }
+            if (data.password !== data.password_confirmation) {
+                toast.error('Passwords do not match');
+                return;
+            }
+        }
+
+        send();
+    };
+
+    /**
+     * Saving an existing record from any step.
+     *
+     * The consent declaration belongs to first registration — the farmer has
+     * already signed it — so it is not asked for again. The step the user is
+     * on is validated so an obviously wrong field is caught before the round
+     * trip; the rest of the record is untouched and already valid.
+     */
+    const saveEdit = () => {
+        if (!validateStep(currentStep)) return;
+        send();
     };
 
     // Public self-registration renders without the admin shell.
@@ -423,8 +446,14 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.rsbsa_no}
-                                                onChange={e => setData('rsbsa_no', e.target.value)}
-                                                placeholder="e.g. 02-13-11-045-000123"
+                                                // Hyphens are inserted as they type, so the clerk
+                                                // enters digits and cannot mis-punctuate it.
+                                                onChange={e => setData('rsbsa_no', formatRsbsa(e.target.value, {
+                                                    deleting: e.nativeEvent?.inputType?.startsWith('delete'),
+                                                }))}
+                                                placeholder={RSBSA_MASK}
+                                                inputMode="numeric"
+                                                maxLength={RSBSA_MASK.length}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -675,8 +704,10 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                 <input
                                                     type="tel"
                                                     value={data.mobile_no}
-                                                    onChange={e => setData('mobile_no', e.target.value)}
-                                                    placeholder="09XX XXX XXXX"
+                                                    onChange={e => setData('mobile_no', formatMobile(e.target.value))}
+                                                    placeholder={MOBILE_MASK}
+                                                    inputMode="numeric"
+                                                    maxLength={MOBILE_MASK.length}
                                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                 />
                                             </div>
@@ -1801,13 +1832,44 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                         </div>
 
                         {currentStep < 7 ? (
+                            <div className="flex items-center gap-2">
+                                {/* Editing an existing record can be saved from
+                                    any step — the rest of the form is already
+                                    filled in, so walking to step 7 to correct
+                                    one field is wasted clicks. */}
+                                {isEdit && !publicMode && (
+                                    <button
+                                        type="button"
+                                        onClick={saveEdit}
+                                        disabled={processing}
+                                        title="Save your changes and return to the registry"
+                                        className="flex items-center gap-2 px-6 py-3 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Check className="h-4 w-4" />
+                                        {processing ? 'Saving…' : 'Save changes'}
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={nextStep}
+                                    className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium shadow-md"
+                                >
+                                    Continue to {steps[currentStep]?.title}
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ) : isEdit && !publicMode ? (
+                            // The consent declaration belongs to first
+                            // registration; this farmer has already signed it,
+                            // so an edit is not asked to agree to it again.
                             <button
                                 type="button"
-                                onClick={nextStep}
-                                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium shadow-md"
+                                onClick={saveEdit}
+                                disabled={processing}
+                                className="flex items-center gap-2 px-8 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700 transition font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                Continue to {steps[currentStep]?.title}
-                                <ChevronRight className="h-4 w-4" />
+                                <Check className="h-5 w-5" />
+                                {processing ? 'Saving…' : 'Save changes'}
                             </button>
                         ) : (
                             <button
@@ -1823,8 +1885,8 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                 }}
                                 disabled={processing || !consentChecked}
                                 className={`flex items-center gap-2 px-8 py-3 rounded-lg transition font-medium shadow-lg ${
-                                    consentChecked 
-                                        ? 'bg-green-600 text-white hover:bg-green-700' 
+                                    consentChecked
+                                        ? 'bg-green-600 text-white hover:bg-green-700'
                                         : 'bg-gray-400 text-gray-200 cursor-not-allowed'
                                 } disabled:opacity-50`}
                             >

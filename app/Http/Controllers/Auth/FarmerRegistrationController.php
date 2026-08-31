@@ -41,7 +41,7 @@ class FarmerRegistrationController extends Controller
             'password'          => ['required', 'confirmed', Password::min(8)],
 
             // Personal information - only name and sex are required
-            'rsbsa_no'          => 'nullable|string|unique:farmers,rsbsa_no',
+            'rsbsa_no'          => ['nullable', 'string', Farmer::RSBSA_RULE, 'unique:farmers,rsbsa_no'],
             'sex'               => 'required|in:Male,Female',
             'first_name'        => 'required|string|max:50',
             'last_name'         => 'required|string|max:50',
@@ -56,7 +56,7 @@ class FarmerRegistrationController extends Controller
             'civil_status'      => 'nullable|in:Single,Married,Widowed,Separated',
             'religion'          => 'nullable|string|max:50',
             'highest_education' => 'nullable|string|max:50',
-            'mobile_no'         => 'nullable|string|max:20',
+            'mobile_no'         => ['nullable', 'string', Farmer::MOBILE_RULE],
             'valid_id_type'     => 'nullable|string|max:50',
             'id_number'         => 'nullable|string|max:100',
 
@@ -92,7 +92,7 @@ class FarmerRegistrationController extends Controller
 
             // Farm parcels (only kept for livelihood_type = Farmer)
             'parcels'           => 'nullable|json',
-        ]);
+        ], Farmer::FORMAT_MESSAGES);
 
         // Guard against an obvious duplicate submission for the same person.
         if ($this->alreadySubmitted($data)) {

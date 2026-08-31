@@ -17,6 +17,42 @@ class Farmer extends Model
     /** Staff rejected the submission. Kept for audit, excluded from the registry. */
     public const STATUS_REJECTED = 'rejected';
 
+    /**
+     * The RSBSA reference number, exactly as the registry writes it:
+     * 00-00-00-000-00000 — region, province, municipality, barangay, then the
+     * farmer's sequence. Fourteen digits, four hyphens, nothing else.
+     */
+    public const RSBSA_REGEX = '/^\d{2}-\d{2}-\d{2}-\d{3}-\d{5}$/';
+    public const RSBSA_RULE = 'regex:' . self::RSBSA_REGEX;
+    public const RSBSA_MASK = '00-00-00-000-00000';
+
+    /** Philippine mobile number as dialled locally: 09 then nine more digits. */
+    public const MOBILE_REGEX = '/^09\d{9}$/';
+    public const MOBILE_RULE = 'regex:' . self::MOBILE_REGEX;
+    public const MOBILE_MASK = '09000000000';
+
+    /**
+     * Laravel's default regex message ("format is invalid") tells a clerk
+     * nothing, so both rules say what the format actually is.
+     */
+    public const FORMAT_MESSAGES = [
+        'rsbsa_no.regex'  => 'The RSBSA number must be written as ' . self::RSBSA_MASK
+            . ' — 14 digits with the hyphens.',
+        'mobile_no.regex' => 'The mobile number must be 11 digits starting with 09, like '
+            . self::MOBILE_MASK . '.',
+    ];
+
+    /** Whether a value already matches the registry format. */
+    public static function isValidRsbsa(?string $value): bool
+    {
+        return $value !== null && $value !== '' && (bool) preg_match(self::RSBSA_REGEX, $value);
+    }
+
+    public static function isValidMobile(?string $value): bool
+    {
+        return $value !== null && $value !== '' && (bool) preg_match(self::MOBILE_REGEX, $value);
+    }
+
     protected $fillable = [
         'rsbsa_no','first_name','last_name','middle_name','suffix','birthdate','birthplace',
         'sex','civil_status','mobile_no','email','religion','pwd','is_4ps','is_indigenous',

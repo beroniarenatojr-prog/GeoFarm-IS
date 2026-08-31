@@ -122,7 +122,6 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
         if (!confirm(`Delete parcel ${parcel.parcel_number || '(no number)'}? This cannot be undone.`)) return;
         router.delete(`/admin/parcels/${parcel.id}`, {
             preserveScroll: true,
-            onSuccess: () => toast.success('Parcel deleted.'),
             onError: () => toast.error('Could not delete this parcel.'),
         });
     };

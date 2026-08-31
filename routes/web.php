@@ -88,6 +88,9 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     Route::get('farmers/{farmer}', [FarmerController::class, 'show'])->middleware('permission:view farmers')->name('farmers.show');
     // Official RSBSA Enrollment Form, LEGAL size, ready to print.
     Route::get('farmers/{farmer}/print', [FarmerController::class, 'print'])->middleware('permission:view farmers')->name('farmers.print');
+    // The RSBSA ID card, front and back. Carries the QR that used to sit on the
+    // profile page, plus the farmer's photo.
+    Route::get('farmers/{farmer}/id-card', [FarmerController::class, 'idCard'])->middleware('permission:view farmers')->name('farmers.id-card');
     Route::get('farmers/{farmer}/edit', [FarmerController::class, 'edit'])->middleware('permission:edit farmers')->name('farmers.edit');
     Route::put('farmers/{farmer}', [FarmerController::class, 'update'])->middleware('permission:edit farmers')->name('farmers.update');
     Route::delete('farmers/{farmer}', [FarmerController::class, 'destroy'])->middleware('permission:delete farmers')->name('farmers.destroy');

@@ -35,7 +35,6 @@ export default function ProfileIndex({ profile }) {
         e.preventDefault();
         details.put('/admin/profile', {
             preserveScroll: true,
-            onSuccess: () => toast.success('Profile updated.'),
             onError: errs => toast.error(Object.values(errs)[0] || 'Could not save your profile.'),
         });
     };

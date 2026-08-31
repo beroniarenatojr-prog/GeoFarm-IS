@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { User, MapPin, Phone, Mail, Calendar, Map, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer } from 'lucide-react';
+import { User, MapPin, Phone, Mail, Calendar, Map, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '@/Components/ui/DataTable';
 import Tabs from '@/Components/ui/Tabs';
@@ -110,7 +110,17 @@ export default function FarmerShow({ farmer }) {
     treeCrops: farmer.tree_crops?.length || 0,
     fishponds: farmer.fishponds?.length || 0,
     assistance: farmer.distributions?.length || 0,
+    seasons: farmer.crop_seasons?.length || 0,
   };
+
+  // Planted area is reported for the latest cropping year only. Summing every
+  // season on record adds the same land back once per season and once per
+  // year, which produces a "hectares" figure larger than the farm itself.
+  const latestYear = (farmer.crop_seasons || [])
+    .reduce((max, s) => Math.max(max, Number(s.cropping_year) || 0), 0);
+  const plantedLatest = (farmer.crop_seasons || [])
+    .filter(s => Number(s.cropping_year) === latestYear)
+    .reduce((total, s) => total + Number(s.area_planted_ha || 0), 0);
 
   const hasProvincialAddress = [
     farmer.provincial_house_lot,
@@ -120,7 +130,6 @@ export default function FarmerShow({ farmer }) {
     farmer.provincial_province,
     farmer.provincial_region,
   ].some(Boolean);
-  const [showQR, setShowQR] = useState(false);
   const [loading, setLoading] = useState(false);
   const [assetModal, setAssetModal] = useState({ open: false, type: null, record: null });
 
@@ -136,6 +145,20 @@ export default function FarmerShow({ farmer }) {
       : '—',
     type: p.farm_type?.type_name || '—',
     ownership: p.ownership_type || '—',
+  }));
+
+  // Cropping seasons reach the farmer through their parcels, so a farmer with
+  // fifty seasons recorded used to show nothing here at all.
+  const cropsData = (farmer.crop_seasons || []).map(s => ({
+    id: s.id,
+    crop: s.crop?.crop_name || '—',
+    season: s.season ? s.season[0].toUpperCase() + s.season.slice(1) : '—',
+    year: s.cropping_year ?? '—',
+    parcel: s.parcel?.parcel_number ? `#${s.parcel.parcel_number}` : '—',
+    area: s.area_planted_ha != null ? `${Number(s.area_planted_ha).toFixed(2)} ha` : '—',
+    yield: s.yield_kg != null
+      ? `${Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })} kg`
+      : 'Not harvested',
   }));
 
   const livestockData = (farmer.livestock || []).map(l => ({
@@ -157,6 +180,15 @@ export default function FarmerShow({ farmer }) {
     { header: 'Commodity', accessorKey: 'commodity' },
     { header: 'Type', accessorKey: 'type' },
     { header: 'Ownership', accessorKey: 'ownership' },
+  ];
+
+  const cropsColumns = [
+    { header: 'Crop', accessorKey: 'crop' },
+    { header: 'Season', accessorKey: 'season' },
+    { header: 'Year', accessorKey: 'year' },
+    { header: 'Parcel', accessorKey: 'parcel' },
+    { header: 'Area', accessorKey: 'area' },
+    { header: 'Yield', accessorKey: 'yield' },
   ];
 
   const livestockColumns = [
@@ -242,15 +274,20 @@ export default function FarmerShow({ farmer }) {
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-3">
-              {farmer.qr_code_path && (
-                <button 
-                  onClick={() => setShowQR(true)}
+              {/* The QR lives on the back of the ID card now, beside the photo,
+                  rather than floating on its own in a modal. Only a verified
+                  farmer can be issued one, so the button is hidden otherwise. */}
+              {farmer.verification_status === 'verified' && (
+                <a
+                  href={`/admin/farmers/${farmer.id}/id-card`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open the RSBSA ID card (front and back) to print"
                   className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm"
-                  title="View QR Code"
                 >
-                  <Download className="h-4 w-4" />
-                  QR Code
-                </button>
+                  <IdCard className="h-4 w-4" />
+                  ID Card
+                </a>
               )}
               {/* Opens the official RSBSA Enrollment Form (LEGAL size) in a new tab. */}
               <a
@@ -299,10 +336,13 @@ export default function FarmerShow({ farmer }) {
               content: (
                 <div className="space-y-6">
                   {/* Farm summary strip */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
                     {[
                       { label: 'Parcels', value: summary.parcels, tone: 'text-green-600' },
-                      { label: 'Hectares', value: summary.hectares.toFixed(2), tone: 'text-emerald-600' },
+                      { label: 'Land (ha)', value: summary.hectares.toFixed(2), tone: 'text-emerald-600' },
+                      // Latest year only — see the note beside plantedLatest.
+                      { label: latestYear ? `Planted ${latestYear} (ha)` : 'Planted (ha)',
+                        value: plantedLatest.toFixed(2), tone: 'text-lime-600' },
                       { label: 'Livestock Head', value: summary.animalHeads, tone: 'text-green-600' },
                       { label: 'Tree Crops', value: summary.treeCrops, tone: 'text-lime-600' },
                       { label: 'Fishponds', value: summary.fishponds, tone: 'text-emerald-600' },
@@ -414,6 +454,30 @@ export default function FarmerShow({ farmer }) {
               content: <DataTable columns={parcelsColumns} data={parcelsData} filename={`farmer-${farmer.id}-parcels`} />
             },
             {
+              // Directly after Parcels, because a season is planted on one.
+              id: 'crops',
+              label: (
+                <span className="flex items-center gap-2">
+                  <Sprout className="h-4 w-4" />
+                  Crops ({cropsData.length})
+                </span>
+              ),
+              content: (
+                <>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Cropping seasons recorded against this farmer&rsquo;s parcels. Add or edit them in{' '}
+                    <Link href={`/admin/farm-inventory?farmer_id=${farmer.id}`}
+                      className="font-semibold text-[#006400] hover:underline">Farm Assets</Link>
+                    {' '}or{' '}
+                    <Link href="/admin/seasonal" className="font-semibold text-[#006400] hover:underline">
+                      Seasonal Tracking
+                    </Link>.
+                  </p>
+                  <DataTable columns={cropsColumns} data={cropsData} filename={`farmer-${farmer.id}-crops`} />
+                </>
+              )
+            },
+            {
               id: 'map',
               label: (
                 <span className="flex items-center gap-2">
@@ -495,7 +559,6 @@ export default function FarmerShow({ farmer }) {
                                     router.delete(`/admin/tree-crops/${row.id}`, {
                                       preserveState: true,
                                       preserveScroll: true,
-                                      onSuccess: () => toast.success('Deleted successfully')
                                     });
                                   }
                                 }}
@@ -555,7 +618,6 @@ export default function FarmerShow({ farmer }) {
                                     router.delete(`/admin/fishponds/${row.id}`, {
                                       preserveState: true,
                                       preserveScroll: true,
-                                      onSuccess: () => toast.success('Deleted successfully')
                                     });
                                   }
                                 }}
@@ -619,7 +681,6 @@ export default function FarmerShow({ farmer }) {
                                       router.delete(`/admin/large-ruminants/${row.id}`, {
                                         preserveState: true,
                                         preserveScroll: true,
-                                        onSuccess: () => toast.success('Deleted')
                                       });
                                     }
                                   }}
@@ -671,7 +732,6 @@ export default function FarmerShow({ farmer }) {
                                       router.delete(`/admin/small-ruminants/${row.id}`, {
                                         preserveState: true,
                                         preserveScroll: true,
-                                        onSuccess: () => toast.success('Deleted')
                                       });
                                     }
                                   }}
@@ -734,7 +794,6 @@ export default function FarmerShow({ farmer }) {
                                       router.delete(`/admin/native-pigs/${row.id}`, {
                                         preserveState: true,
                                         preserveScroll: true,
-                                        onSuccess: () => toast.success('Deleted')
                                       });
                                     }
                                   }}
@@ -786,7 +845,6 @@ export default function FarmerShow({ farmer }) {
                                       router.delete(`/admin/swine-hybrid/${row.id}`, {
                                         preserveState: true,
                                         preserveScroll: true,
-                                        onSuccess: () => toast.success('Deleted')
                                       });
                                     }
                                   }}
@@ -838,7 +896,6 @@ export default function FarmerShow({ farmer }) {
                                     router.delete(`/admin/poultry/${row.id}`, {
                                       preserveState: true,
                                       preserveScroll: true,
-                                      onSuccess: () => toast.success('Deleted')
                                     });
                                   }
                                 }}
@@ -859,31 +916,6 @@ export default function FarmerShow({ farmer }) {
             },
           ]}
         />
-
-        {/* QR Modal */}
-        <Modal isOpen={showQR} onClose={() => setShowQR(false)} title="Farmer QR Code">
-          {farmer.qr_code_path && (
-            <div className="flex flex-col items-center gap-4 p-8">
-              <img src={`/storage/${farmer.qr_code_path}`} alt="QR" className="w-64 h-64 shadow-2xl" />
-              <div className="text-center">
-                <p className="text-sm text-gray-600 mb-2">Scan to view profile</p>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => {
-                      const link = document.createElement('a');
-                      link.href = `/storage/${farmer.qr_code_path}`;
-                      link.download = `farmer-${farmer.id}-qr.svg`;
-                      link.click();
-                    }}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-                  >
-                    Download SVG
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </Modal>
 
         {/* Agricultural Assets Modal */}
         <Modal

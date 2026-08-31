@@ -3,6 +3,7 @@ import { useForm, router } from '@inertiajs/react';
 import { User, Phone, MapPin, UserCheck, Image, CheckCircle2, ChevronRight, ChevronLeft, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
+import { formatRsbsa, formatMobile, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
 
 export default function FarmerForm({ farmer }) {
     const isEdit = !!farmer;
@@ -93,12 +94,10 @@ export default function FarmerForm({ farmer }) {
         if (isEdit) {
             formData.append('_method', 'PUT');
             router.post(`/admin/farmers/${farmer.id}`, formData, {
-                onSuccess: () => toast.success('Farmer updated successfully'),
                 onError: () => toast.error('Failed to update farmer'),
             });
         } else {
             router.post('/admin/farmers', formData, {
-                onSuccess: () => toast.success('Farmer added successfully'),
                 onError: () => toast.error('Failed to add farmer'),
             });
         }
@@ -182,8 +181,14 @@ export default function FarmerForm({ farmer }) {
                                             <input
                                                 type="text"
                                                 value={data.rsbsa_no}
-                                                onChange={e => setData('rsbsa_no', e.target.value)}
-                                                placeholder="e.g. 02-13-11-045-000123"
+                                                // Hyphens are inserted as they type, so the clerk
+                                                // enters digits and cannot mis-punctuate it.
+                                                onChange={e => setData('rsbsa_no', formatRsbsa(e.target.value, {
+                                                    deleting: e.nativeEvent?.inputType?.startsWith('delete'),
+                                                }))}
+                                                placeholder={RSBSA_MASK}
+                                                inputMode="numeric"
+                                                maxLength={RSBSA_MASK.length}
                                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                             />
                                             {errors.rsbsa_no && <p className="mt-1 text-sm text-red-600">{errors.rsbsa_no}</p>}
@@ -317,8 +322,10 @@ export default function FarmerForm({ farmer }) {
                                             <input
                                                 type="tel"
                                                 value={data.mobile_no}
-                                                onChange={e => setData('mobile_no', e.target.value)}
-                                                placeholder="09XX XXX XXXX"
+                                                onChange={e => setData('mobile_no', formatMobile(e.target.value))}
+                                                placeholder={MOBILE_MASK}
+                                                inputMode="numeric"
+                                                maxLength={MOBILE_MASK.length}
                                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
                                             />
                                             {errors.mobile_no && <p className="mt-1 text-sm text-red-600">{errors.mobile_no}</p>}

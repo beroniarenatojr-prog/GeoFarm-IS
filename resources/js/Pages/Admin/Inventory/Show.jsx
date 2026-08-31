@@ -41,7 +41,6 @@ export default function InventoryShow({ item, issued, recipients, programs }) {
     const remove = () => {
         if (!confirm(`Delete ${item.item_name}? This cannot be undone.`)) return;
         router.delete(`/admin/inventory/${item.id}`, {
-            onSuccess: () => toast.success('Item deleted.'),
             onError: () => toast.error('Could not delete this item.'),
         });
     };
@@ -150,7 +149,6 @@ export default function InventoryShow({ item, issued, recipients, programs }) {
                                                     { status: e.target.value },
                                                     {
                                                         preserveScroll: true,
-                                                        onSuccess: () => toast.success('Updated.'),
                                                         onError: errs => toast.error(Object.values(errs)[0] || 'Could not update.'),
                                                     })}
                                                 className={`px-2 py-1 rounded-lg text-[11px] font-semibold border-0 outline-none cursor-pointer ${DIST_STATUS[d.status]}`}

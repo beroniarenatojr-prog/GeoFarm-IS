@@ -25,7 +25,6 @@ export default function FarmerVerification({ submissions, filters, counts }) {
 
         router.post(`/admin/farmer-verification/${farmer.id}/approve`, {}, {
             preserveScroll: true,
-            onSuccess: () => toast.success('Farmer verified and account activated'),
             onError: () => toast.error('Could not approve this submission'),
         });
     };

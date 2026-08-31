@@ -105,12 +105,21 @@ class FarmInventoryController extends Controller
      */
     private function summarise(array $inventory): array
     {
+        // Birds are counted apart from four-legged stock: the office reports
+        // them separately, and 50 chickens next to 5 cattle in one "animals"
+        // figure tells nobody anything useful.
+        $animals = collect($inventory['livestock'] ?? [])
+            ->map(fn ($a) => is_array($a) ? $a : (array) $a);
+        [$birds, $stock] = $animals->partition(fn ($a) => ($a['category'] ?? '') === 'Poultry');
+
         return [
             'crop_area'  => round((float) collect($inventory['crops'] ?? [])->sum('total_area'), 2),
             'crop_types' => collect($inventory['crops'] ?? [])->pluck('crop_id')->filter()->unique()->count(),
             'trees'      => (int) collect($inventory['tree_crops'] ?? [])->sum('total_quantity'),
             'pond_area'  => round((float) collect($inventory['fishponds'] ?? [])->sum('total_area'), 2),
-            'animals'    => (int) collect($inventory['livestock'] ?? [])->sum('total'),
+            'animals'    => (int) $animals->sum('total'),
+            'livestock'  => (int) $stock->sum('total'),
+            'poultry'    => (int) $birds->sum('total'),
             'machinery'  => (int) collect($inventory['machinery'] ?? [])
                 ->sum(fn ($m) => (int) (is_array($m) ? 1 : ($m->total_units ?? 1))),
         ];

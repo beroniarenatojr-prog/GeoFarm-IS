@@ -11,6 +11,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
@@ -72,7 +73,7 @@ class FarmerController extends Controller
     {
         $data = $request->validate([
             // Personal Information - Only name and sex are required
-            'rsbsa_no'          => 'nullable|string|unique:farmers',
+            'rsbsa_no'          => ['nullable', 'string', Farmer::RSBSA_RULE, 'unique:farmers'],
             'sex'               => 'required|in:Male,Female',
             'first_name'        => 'required|string|max:50',
             'last_name'         => 'required|string|max:50',
@@ -87,7 +88,7 @@ class FarmerController extends Controller
             'civil_status'      => 'nullable|in:Single,Married,Widowed,Separated',
             'religion'          => 'nullable|string|max:50',
             'highest_education' => 'nullable|string|max:50',
-            'mobile_no'         => 'nullable|string|max:20',
+            'mobile_no'         => ['nullable', 'string', Farmer::MOBILE_RULE],
             'email'             => 'nullable|email|max:100',
             'valid_id_type'     => 'nullable|string|max:50',
             'id_number'         => 'nullable|string|max:100',
@@ -126,7 +127,7 @@ class FarmerController extends Controller
             
             // Parcels (as JSON) - Optional
             'parcels'           => 'nullable|json',
-        ]);
+        ], Farmer::FORMAT_MESSAGES);
 
         // Handle file uploads
         if ($request->hasFile('photo')) {
@@ -159,6 +160,100 @@ class FarmerController extends Controller
         return redirect()->route('admin.farmers.index')->with('success', 'Farmer registered successfully.');
     }
 
+    /**
+     * The farmer's RSBSA identification card, front and back, ready to print.
+     *
+     * Rendered as HTML rather than a generated PDF so the browser's own print
+     * dialog handles both card stock and "Save as PDF" — the same approach as
+     * the farm assets record.
+     *
+     * Two fields on the card are DERIVED, not stored: the ID number and the
+     * expiry. Both are computed the same way every time, so reprinting a card
+     * reproduces it exactly, but the office should confirm the numbering
+     * format and the validity period before these go out.
+     */
+    public function idCard(Farmer $farmer)
+    {
+        // An identification card asserts that the office has checked this
+        // person. A pending or rejected record has not been checked.
+        if ($farmer->verification_status !== Farmer::STATUS_VERIFIED) {
+            return back()->with(
+                'error',
+                'Only a verified farmer can be issued an ID card. This record is '
+                . $farmer->verification_status . '.'
+            );
+        }
+
+        // Older records predate QR generation, so make one now rather than
+        // printing a card with an empty box on the back.
+        if (!$farmer->qr_code_path || !Storage::disk('public')->exists($farmer->qr_code_path)) {
+            $qrPath = "farmers/qrcodes/{$farmer->id}.svg";
+            Storage::disk('public')->put(
+                $qrPath,
+                QrCode::format('svg')->size(200)->generate(url("/admin/farmers/{$farmer->id}"))
+            );
+            $farmer->update(['qr_code_path' => $qrPath]);
+        }
+
+        $farmer->load('parcels.farmType');
+
+        // What this farmer actually produces, for the "Farmer Type" line.
+        $commodities = $farmer->parcels->pluck('commodity')->filter()->unique();
+        if ($commodities->isEmpty()) {
+            $commodities = $farmer->parcels->pluck('farmType.type_name')->filter()->unique();
+        }
+
+        $issued = $farmer->verified_at ?? $farmer->created_at ?? now();
+
+        return response()->view('farmers.id-card', [
+            'farmer'      => $farmer,
+            'idNumber'    => sprintf('GF-%s-%06d', $issued->format('Y'), $farmer->id),
+            'issued'      => $issued,
+            'validUntil'  => $issued->copy()->addYears(3),
+            'farmerType'  => $commodities->take(3)->implode(' / ') ?: '—',
+            'qrSvg'       => $this->inlineSvg($farmer->qr_code_path),
+            'photoData'   => $this->inlineImage($farmer->photo_path),
+        ]);
+    }
+
+    /**
+     * A stored SVG, ready to drop into an HTML body.
+     *
+     * simple-qrcode writes a full XML document, prolog and all. Inlined into
+     * HTML that leading `<?xml …?>` is a stray processing instruction the
+     * parser treats as a bogus comment, so everything before the <svg> tag is
+     * dropped here.
+     */
+    private function inlineSvg(string $path): string
+    {
+        $svg = Storage::disk('public')->get($path);
+
+        return preg_replace('/^.*?(?=<svg)/s', '', $svg) ?? $svg;
+    }
+
+    /**
+     * A stored image as a data: URI.
+     *
+     * The card is printed, and a browser will happily drop an <img> whose file
+     * has gone missing without saying so — leaving a card with a blank photo
+     * box. Reading it here means a missing file falls back to the placeholder.
+     */
+    private function inlineImage(?string $path): ?string
+    {
+        if (!$path || !Storage::disk('public')->exists($path)) {
+            return null;
+        }
+
+        $mime = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'png'        => 'image/png',
+            'gif'        => 'image/gif',
+            'webp'       => 'image/webp',
+            default      => 'image/jpeg',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode(Storage::disk('public')->get($path));
+    }
+
     public function show(Farmer $farmer)
     {
         return Inertia::render('Admin/Farmers/Show', [
@@ -166,6 +261,13 @@ class FarmerController extends Controller
                 'parcels.farmType',
                 'livestock.livestockType',
                 'distributions.program',
+                // Cropping seasons hang off the parcels, not the farmer, which
+                // is why they were missing here: a farmer with fifty seasons
+                // recorded looked like they farmed nothing at all.
+                'cropSeasons' => fn ($q) => $q
+                    ->with(['crop:id,crop_name', 'parcel:id,parcel_number'])
+                    ->orderByDesc('cropping_year')
+                    ->orderBy('season'),
                 'treeCrops',
                 'fishponds',
                 'largeRuminants',
@@ -232,8 +334,23 @@ class FarmerController extends Controller
 
     public function update(Request $request, Farmer $farmer)
     {
+        // The edit form has always offered this field, but it was missing from
+        // the rules below, so validate() stripped it and every change to a
+        // farmer's RSBSA number was discarded while the page still reported
+        // that the record had been updated.
+        $rsbsaRules = ['nullable', 'string', Rule::unique('farmers')->ignore($farmer->id)];
+
+        // Records predating the format keep their old number until somebody
+        // actually changes it. Enforcing the format on an untouched value
+        // would block every unrelated edit — an address, a phone number —
+        // behind an RSBSA number the clerk may not have to hand.
+        if ($request->input('rsbsa_no') !== $farmer->rsbsa_no) {
+            $rsbsaRules[] = Farmer::RSBSA_RULE;
+        }
+
         $data = $request->validate([
             // Personal Information - Only name and sex are required
+            'rsbsa_no'          => $rsbsaRules,
             'sex'               => 'required|in:Male,Female',
             'first_name'        => 'required|string|max:50',
             'last_name'         => 'required|string|max:50',
@@ -248,7 +365,7 @@ class FarmerController extends Controller
             'civil_status'      => 'nullable|in:Single,Married,Widowed,Separated',
             'religion'          => 'nullable|string|max:50',
             'highest_education' => 'nullable|string|max:50',
-            'mobile_no'         => 'nullable|string|max:20',
+            'mobile_no'         => ['nullable', 'string', Farmer::MOBILE_RULE],
             'email'             => 'nullable|email|max:100',
             'valid_id_type'     => 'nullable|string|max:50',
             'id_number'         => 'nullable|string|max:100',
@@ -287,7 +404,7 @@ class FarmerController extends Controller
             
             // Parcels (as JSON) - Optional
             'parcels'           => 'nullable|json',
-        ]);
+        ], Farmer::FORMAT_MESSAGES);
 
         $old = $farmer->toArray();
 
