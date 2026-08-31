@@ -136,6 +136,11 @@ export default function MapIndex({ parcels }) {
     [parcels, selectedParcel],
   );
 
+  // ── Timing fix: when parcels arrive BEFORE the map finishes loading, the
+  // setData effect silently returns (source not ready). This flag lets the
+  // load handler paint the already-fetched collection on its own.
+  const mapLoadedRef = useRef(false);
+
   useEffect(() => {
     parcelsRef.current = parcels;
   }, [parcels]);
@@ -157,7 +162,24 @@ export default function MapIndex({ parcels }) {
   const loadParcels = useCallback(() => {
     fetch('/admin/gis/parcels-geojson')
       .then((res) => res.json())
-      .then((data) => setGeoJsonData(colouriseParcels(normalizeFeatureCollection(data))))
+      .then((data) => {
+        const colourised = colouriseParcels(normalizeFeatureCollection(data));
+        setGeoJsonData(colourised);
+
+        // If the map is already loaded, push the data directly.
+        // The useEffect watching geoJsonData handles the normal path, but if
+        // the map finished loading AFTER the fetch completed the source exists
+        // and we can call setData immediately rather than waiting for a re-render.
+        const map = mapRef.current;
+        if (map && mapLoadedRef.current) {
+          map.getSource('parcels')?.setData(colourised);
+          map.getSource('parcel-pins')?.setData(buildPinCollection(colourised));
+          if (!fittedRef.current && colourised.features.length > 0) {
+            fittedRef.current = true;
+            map.fitBounds(bbox(colourised), { padding: 80, maxZoom: 16, duration: 900 });
+          }
+        }
+      })
       .catch((err) => {
         console.error('Error loading parcels:', err);
         toast.error('Unable to load farm boundary layers');
@@ -237,6 +259,23 @@ export default function MapIndex({ parcels }) {
     }));
 
     src.setData({ type: 'FeatureCollection', features });
+  }, []);
+
+  /** Build centroid Point features for each mapped parcel, for the pin layer. */
+  const buildPinCollection = (collection) => ({
+    type: 'FeatureCollection',
+    features: (collection.features ?? []).map((f) => {
+      const [lng, lat] = center(f).geometry.coordinates;
+      return {
+        type: 'Feature',
+        properties: { ...f.properties },
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+      };
+    }),
+  });
+
+  const paintPins = useCallback((map, collection) => {
+    map?.getSource('parcel-pins')?.setData(buildPinCollection(collection));
   }, []);
 
   const resetDraft = useCallback(() => {
@@ -361,6 +400,8 @@ export default function MapIndex({ parcels }) {
      */
 
     map.on('load', () => {
+      mapLoadedRef.current = true;
+
       map.addSource('tumauini-boundary', {
         type: 'geojson',
         data: TUMAUINI_BOUNDARY_COLLECTION,
@@ -379,17 +420,10 @@ export default function MapIndex({ parcels }) {
 
       /*
        * Saved parcels, rendered by us.
-       *
-       * These used to be pushed into MapboxDraw as editable features, which
-       * gave no control over how they looked and made them selectable by a
-       * tool that is no longer used for drawing. A plain GeoJSON source with a
-       * heavy outline reads far better over aerial imagery — the boundary is
-       * the point, so the line carries the weight and the fill stays light
-       * enough to see the field through it.
        */
       map.addSource('parcels', {
         type: 'geojson',
-        // Whatever has already been fetched; the effect keeps it current after.
+        // Paint whatever has arrived; the setData effect keeps it current.
         data: geoJsonRef.current,
       });
 
@@ -399,7 +433,7 @@ export default function MapIndex({ parcels }) {
         source: 'parcels',
         paint: {
           'fill-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
-          'fill-opacity': 0.18,
+          'fill-opacity': 0.22,
         },
       });
 
@@ -408,9 +442,7 @@ export default function MapIndex({ parcels }) {
         type: 'line',
         source: 'parcels',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        // A dark casing under every colour keeps the edge readable over both
-        // pale stubble and dark tree cover.
-        paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.6 },
+        paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.55 },
       });
 
       map.addLayer({
@@ -420,21 +452,73 @@ export default function MapIndex({ parcels }) {
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
-          'line-width': 3,
+          'line-width': 3.5,
         },
       });
 
-      /*
-       * No text labels here.
-       *
-       * A symbol layer with text-field needs a `glyphs` endpoint in the style,
-       * and this basemap is raster-only — it has none. Adding one anyway threw
-       * inside this load handler, and everything after it (the whole
-       * parcel-draft source and its layers) never ran, which is why tracing
-       * showed nothing on screen.
-       *
-       * Parcel numbers can come back once there is a font source to serve them.
-       */
+      // ── Arrow / pin markers at each parcel centroid ──────────────────────
+      // A separate source holds one Point per parcel at its centroid so we
+      // can render the downward-pointing arrow the design shows. Using a
+      // separate source (not the polygon source) means we can filter on
+      // geometry-type without affecting the fill/line layers.
+      map.addSource('parcel-pins', {
+        type: 'geojson',
+        data: EMPTY_FEATURE_COLLECTION,
+      });
+
+      // Outer circle (white halo)
+      map.addLayer({
+        id: 'parcel-pin-halo',
+        type: 'circle',
+        source: 'parcel-pins',
+        paint: {
+          'circle-radius': 11,
+          'circle-color': '#ffffff',
+          'circle-opacity': 0.92,
+        },
+      });
+
+      // Coloured inner dot — same colour as the parcel border
+      map.addLayer({
+        id: 'parcel-pin-dot',
+        type: 'circle',
+        source: 'parcel-pins',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
+          'circle-opacity': 1,
+        },
+      });
+
+      // Downward-pointing triangle "arrow" drawn with a rotated triangle
+      // marker — MapLibre has no built-in arrow symbol without a font, so we
+      // draw a filled circle with a caret using a second offset circle.
+      // Arrow tail: a small rectangle below the dot
+      map.addLayer({
+        id: 'parcel-pin-tail',
+        type: 'circle',
+        source: 'parcel-pins',
+        paint: {
+          'circle-radius': 4,
+          'circle-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
+          'circle-translate': [0, 14],   // shifted down in pixels
+          'circle-opacity': 1,
+        },
+      });
+
+      // Tip of the arrow
+      map.addLayer({
+        id: 'parcel-pin-tip',
+        type: 'circle',
+        source: 'parcel-pins',
+        paint: {
+          'circle-radius': 2.5,
+          'circle-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
+          'circle-translate': [0, 22],
+          'circle-opacity': 1,
+        },
+      });
+
       // The outline being traced, drawn by us rather than by MapboxDraw.
       map.addSource('parcel-draft', {
         type: 'geojson',
@@ -464,7 +548,6 @@ export default function MapIndex({ parcels }) {
         source: 'parcel-draft',
         filter: ['==', ['geometry-type'], 'Point'],
         paint: {
-          // The first corner is bigger: clicking it is how the ring closes.
           'circle-radius': ['case', ['get', 'first'], 8, 5],
           'circle-color': ['case', ['get', 'first'], '#f59e0b', '#1d4ed8'],
           'circle-stroke-color': '#ffffff',
@@ -472,16 +555,32 @@ export default function MapIndex({ parcels }) {
         },
       });
 
-      /*
-       * MapboxDraw is deliberately NOT attached to this map.
-       *
-       * Every one of its ~17 style layers uses the legacy filter syntax that
-       * MapLibre 6 removed, so addControl() throws part-way through adding
-       * them and leaves the style in a half-built state. It also no longer has
-       * a job here: tracing is native, and saved parcels render from our own
-       * `parcels` source. `draw.add(geoJsonData)` used to run on this line and
-       * threw for the same reason.
-       */
+      // If parcels already arrived before the map finished loading, paint them now.
+      if (geoJsonRef.current.features.length > 0) {
+        map.getSource('parcels')?.setData(geoJsonRef.current);
+        paintPins(map, geoJsonRef.current);
+        if (!fittedRef.current) {
+          fittedRef.current = true;
+          map.fitBounds(bbox(geoJsonRef.current), { padding: 80, maxZoom: 16, duration: 900 });
+        }
+      } else {
+        // Fetch hasn't returned yet — kick it off now that sources exist.
+        // loadParcels will call setData directly because mapLoadedRef is true.
+        fetch('/admin/gis/parcels-geojson')
+          .then((res) => res.json())
+          .then((data) => {
+            const colourised = colouriseParcels(normalizeFeatureCollection(data));
+            map.getSource('parcels')?.setData(colourised);
+            map.getSource('parcel-pins')?.setData(buildPinCollection(colourised));
+            // Update state so the sidebar counters and parcel effects stay in sync.
+            setGeoJsonData(colourised);
+            if (!fittedRef.current && colourised.features.length > 0) {
+              fittedRef.current = true;
+              map.fitBounds(bbox(colourised), { padding: 80, maxZoom: 16, duration: 900 });
+            }
+          })
+          .catch(console.error);
+      }
     });
 
     // The draw.create / draw.update / draw.delete handlers were removed with
@@ -593,30 +692,18 @@ export default function MapIndex({ parcels }) {
   // Saved parcels go into our own source now, not into the draw control.
   useEffect(() => {
     const map = mapRef.current;
-    const src = map?.getSource('parcels');
+    if (!map || !mapLoadedRef.current) return;
 
-    /* eslint-disable no-console */
-    if (!src) {
-      // Not necessarily wrong — the map may not have finished loading, in which
-      // case the load handler paints from geoJsonRef instead. Worth saying so,
-      // because a silent return here looks identical to a broken layer.
-      console.warn('[GIS] parcels source not ready; the load handler will paint',
-        geoJsonData.features.length, 'feature(s)');
-      return;
-    }
+    const src = map.getSource('parcels');
+    if (!src) return;
 
-    src.setData(showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION);
-
-    console.log('[GIS] painted', geoJsonData.features.length, 'parcel(s).',
-      'layers present:', ['parcels-fill', 'parcels-casing', 'parcels-line']
-        .filter((id) => map.getLayer(id)).join(', ') || 'NONE');
-    /* eslint-enable no-console */
+    const data = showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION;
+    src.setData(data);
+    paintPins(map, showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION);
 
     if (fittedRef.current || !geoJsonData.features.length) return;
     fittedRef.current = true;
 
-    // Arriving from a parcel's "View on map" link: go to that one and select
-    // it, so the sidebar shows its details straight away.
     const wanted = new URLSearchParams(window.location.search).get('parcel');
     const target = wanted
       && geoJsonData.features.find((f) => String(f.properties?.id) === String(wanted));
@@ -628,10 +715,8 @@ export default function MapIndex({ parcels }) {
       return;
     }
 
-    // Otherwise show them all. Boundaries that render correctly but sit
-    // off-screen look exactly like boundaries that do not render at all.
     map.fitBounds(bbox(geoJsonData), { padding: 80, maxZoom: 16, duration: 900 });
-  }, [geoJsonData, showParcels]);
+  }, [geoJsonData, showParcels, paintPins]);
 
   useEffect(() => {
     const map = mapRef.current;

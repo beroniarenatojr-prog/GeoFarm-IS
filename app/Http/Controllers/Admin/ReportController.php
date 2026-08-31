@@ -70,7 +70,7 @@ class ReportController extends Controller
 
     public function assistanceSummary(Request $request)
     {
-        $data = AssistanceDistribution::with(['farmer', 'assistance'])
+        $data = AssistanceDistribution::with(['farmer', 'program'])
             ->when($request->date_from, fn($q, $v) => $q->whereDate('distribution_date', '>=', $v))
             ->when($request->date_to, fn($q, $v) => $q->whereDate('distribution_date', '<=', $v))
             ->get();

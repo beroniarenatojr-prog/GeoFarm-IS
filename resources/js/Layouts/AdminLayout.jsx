@@ -55,8 +55,11 @@ const nav = [
             { label: 'Parcels', href: '/admin/parcels', icon: MapPin, permission: 'view parcels' },
             { label: 'GIS Map', href: '/admin/gis/map', icon: Globe, permission: 'view maps' },
             { label: 'Seasonal Tracking', href: '/admin/seasonal', icon: Calendar, permission: 'view seasonal' },
-            { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
-            { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
+            // Hidden from the menu for now, at the office's request. The routes
+            // and controllers are untouched, so anyone with the URL can still
+            // reach them — this only removes them from view.
+            // { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
+            // { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
             { label: 'Inventory', href: '/admin/inventory', icon: Boxes, permission: 'view supplies' },
             { label: 'Farm Assets', href: '/admin/farm-inventory', icon: Package, permission: 'view inventory' },
             { label: 'Assistance', href: '/admin/assistance', icon: Layers, permission: 'view assistance' },
@@ -74,7 +77,19 @@ const nav = [
     }
 ];
 
-export default function AdminLayout({ children, title, showBack = true }) {
+export default function AdminLayout({
+    children,
+    title,
+    showBack = true,
+    // Pins the back arrow to one destination. Pages that live inside a module
+    // set this to their own list so staff always land back where they came
+    // from conceptually, not wherever browser history happens to point.
+    backHref = null,
+    backLabel = 'Go back',
+    // The page has locked itself. The visit is refused by the page's own guard
+    // either way; this just stops the arrow looking merely broken.
+    backLocked = false,
+}) {
     const page = usePage();
     const { auth } = page.props;
     const { can } = usePermissions();
@@ -95,6 +110,23 @@ export default function AdminLayout({ children, title, showBack = true }) {
     const handleBack = () => {
         window.history.back();
     };
+
+    const backClass = backLocked
+        ? 'flex-shrink-0 rounded-lg p-1.5 text-amber-600 bg-amber-50 cursor-not-allowed'
+        : 'flex-shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-[#006400]';
+
+    const backIcon = backLocked ? (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+    ) : (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+    );
+
+    const backTitle = backLocked ? 'This page is locked — unlock it to leave' : backLabel;
 
     // Filter navigation items based on permissions
     const visibleNav = nav.map(section => ({
@@ -293,18 +325,15 @@ export default function AdminLayout({ children, title, showBack = true }) {
                     dropdown is not painted over by page content. */}
                 <header className="bg-white/90 backdrop-blur-sm shadow-sm px-4 sm:px-6 py-3 relative z-30 border-b-2 border-[#006400]/70">
                     <div className="flex items-center gap-3">
-                        {showBack && (
-                            <button
-                                onClick={handleBack}
-                                className="flex-shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-[#006400]"
-                                title="Go back"
-                                aria-label="Go back"
-                            >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                                </svg>
+                        {showBack && (backHref ? (
+                            <Link href={backHref} className={backClass} title={backTitle} aria-label={backTitle}>
+                                {backIcon}
+                            </Link>
+                        ) : (
+                            <button onClick={handleBack} className={backClass} title={backTitle} aria-label={backTitle}>
+                                {backIcon}
                             </button>
-                        )}
+                        ))}
 
                         <div className="min-w-0 flex-1">
                             {/* Breadcrumb: which sidebar group this page belongs to. */}

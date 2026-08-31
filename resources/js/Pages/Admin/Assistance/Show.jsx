@@ -2,16 +2,63 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Lock, Send } from 'lucide-react';
+import { Lock, Unlock, Send, Wallet, Users, Package as PackageIcon } from 'lucide-react';
 import ModalShell from '@/Components/ui/ModalShell';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
-import { formatDate } from '@/utils/dateFormatter';
+import { usePageLock } from '@/hooks/usePageLock';
+import { formatDate, formatDateForInput } from '@/utils/dateFormatter';
+
+/** Whole pesos — the overview is for scanning, not for reconciling centavos. */
+const peso = (n) => `₱${Number(n || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 })}`;
+
+const STATUS_TONE = {
+    active:    'bg-white text-[#006400]',
+    inactive:  'bg-amber-100 text-amber-800',
+    draft:     'bg-white/25 text-white',
+    completed: 'bg-emerald-100 text-emerald-800',
+    cancelled: 'bg-red-100 text-red-700',
+};
+
+/**
+ * Where the programme sits in its own date window.
+ *
+ * Distributions outside that window are refused by the server, so saying so up
+ * front is better than letting staff find out at the moment of hand-out.
+ */
+function periodNote(program) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const start = program.start_date ? new Date(program.start_date) : null;
+    const end = program.end_date ? new Date(program.end_date) : null;
+    const days = (d) => Math.round((d - today) / 86400000);
+
+    if (start && days(start) > 0) {
+        return `Starts in ${days(start)} day${days(start) === 1 ? '' : 's'}`;
+    }
+    if (end) {
+        const left = days(end);
+        if (left < 0) return `Ended ${Math.abs(left)} day${left === -1 ? '' : 's'} ago`;
+        if (left === 0) return 'Last day';
+        return `${left} day${left === 1 ? '' : 's'} left`;
+    }
+    return 'No end date';
+}
 
 export default function AssistanceShow({
     program, distributions, summary, programItems = [], stockItems = [], filters = {},
 }) {
     const [searchTerm, setSearchTerm] = useState(filters.search ?? '');
     const [recording, setRecording] = useState(false);
+
+    // Staff switch this on for the length of a hand-out session. Keyed to the
+    // programme so locking one does not lock the others.
+    const pageLock = usePageLock(`assistance:${program.id}`, {
+        onBlocked: () => toast('This page is locked. Unlock it before leaving.', {
+            icon: '🔒',
+            id: 'page-lock',   // one message however many times they click
+        }),
+    });
 
     const applySearch = (e) => {
         e.preventDefault();
@@ -29,7 +76,18 @@ export default function AssistanceShow({
     }));
 
     const { data, setData, post, processing, reset, errors } = useForm({
-        farmer_id: '', distribution_date: '', quantity_given: '', notes: '',
+        // quantity_given and notes were dropped from this form: the items list
+        // below records what was actually handed over, and a free-text note
+        // duplicated the customisation reason. The columns still exist, so
+        // older records keep their values.
+        farmer_id: '',
+        // Today by default — a hand-out is recorded as it happens, and staff
+        // serving a queue should not retype the date for every farmer. It stays
+        // editable for anything recorded after the fact.
+        //
+        // Built from local date parts rather than toISOString(), which returns
+        // the UTC day: at 12:30am in Manila that would stamp yesterday.
+        distribution_date: formatDateForInput(new Date()),
         amount_given: program.standard_cash_amount ?? '',
         is_customized: false,
         customization_reason: '',
@@ -121,60 +179,187 @@ export default function AssistanceShow({
     const label = labels[distributionType];
 
     return (
-        <AdminLayout title={program.program_name}>
-            {/* Program Info */}
-            <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <p className="text-gray-500">Type</p>
-                        <p className="font-medium">{program.assistance_type?.type_name}</p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500">Budget</p>
-                        <p className="font-medium">₱{Number(program.total_budget ?? 0).toLocaleString()}</p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500">Period</p>
-                        <p className="font-medium">{formatDate(program.start_date, 'date-only')} to {formatDate(program.end_date, 'date-only')}</p>
-                    </div>
-                    <div>
-                        <p className="text-gray-500">Status</p>
-                        <span className={`text-xs px-2 py-1 rounded-full
-                            ${program.status === 'active' ? 'bg-green-100 text-green-700' :
-                              program.status === 'draft' ? 'bg-gray-100 text-gray-700' :
-                              program.status === 'completed' ? 'bg-green-100 text-green-700' :
-                              'bg-red-100 text-red-600'}`}>
+        <AdminLayout
+            title={program.program_name}
+            backHref="/admin/assistance"
+            backLabel="Back to Financial Assistance"
+            backLocked={pageLock.locked}
+        >
+            {/* ---------------------------------------- programme header */}
+            <div className="rounded-xl shadow-sm mb-6 overflow-hidden">
+                {/* The identity strip: what this programme is, and whether it is
+                    running. Everything here answers "can I hand out today?" */}
+                <div className="bg-gradient-to-r from-[#004d00] via-[#006400] to-[#228B22] px-5 py-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                            {program.assistance_type?.type_name || 'Untyped'}
+                        </span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold capitalize ${STATUS_TONE[program.status] ?? STATUS_TONE.draft}`}>
                             {program.status}
                         </span>
+                        {program.is_locked && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                                <Lock className="h-3 w-3" /> Locked
+                            </span>
+                        )}
+                        <span className="ml-auto text-xs font-medium text-white/80">
+                            {periodNote(program)}
+                        </span>
                     </div>
-                    {program.barangays && program.barangays.length > 0 && (
-                        <div className="col-span-2">
-                            <p className="text-gray-500 mb-2">Target Barangays ({program.barangays.length})</p>
-                            <div className="flex flex-wrap gap-1">
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-white p-5">
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Runs</p>
+                        <p className="mt-1 text-sm font-semibold text-gray-900">
+                            {formatDate(program.start_date, 'date-only')} – {formatDate(program.end_date, 'date-only')}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                            Total budget {peso(program.total_budget)}
+                        </p>
+                    </div>
+
+                    {/* What one farmer receives — previously only visible inside
+                        the distribution modal, which is too late to check. */}
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Each farmer gets</p>
+                        {program.standard_cash_amount || programItems.length ? (
+                            <ul className="mt-1 space-y-0.5 text-sm text-gray-900">
+                                {program.standard_cash_amount > 0 && (
+                                    <li className="font-semibold">{peso(program.standard_cash_amount)} cash</li>
+                                )}
+                                {programItems.map(i => (
+                                    <li key={i.inventory_item_id}>
+                                        {i.quantity_per_farmer} {i.unit} {i.item_name}
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="mt-1 text-sm text-amber-700">
+                                No package set — add one in Edit.
+                            </p>
+                        )}
+                    </div>
+
+                    <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                            Covers {program.barangays?.length ? `${program.barangays.length} barangay${program.barangays.length > 1 ? 's' : ''}` : 'everywhere'}
+                        </p>
+                        {program.barangays?.length ? (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
                                 {program.barangays.map(b => (
-                                    <span key={b.id} className="text-xs bg-green-50 text-green-700 px-2 py-1 rounded">
+                                    <span key={b.id} className="rounded bg-green-50 px-2 py-0.5 text-xs text-green-800">
                                         {b.name}
                                     </span>
                                 ))}
                             </div>
-                        </div>
-                    )}
+                        ) : (
+                            <p className="mt-1 text-sm text-gray-700">
+                                Every barangay in Tumauini.
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-                {[
-                    ['Total', summary.total],
-                    ['Claimed', summary.claimed],
-                    ['Pending', summary.pending],
-                    ['Disbursed', `₱${Number(summary.disbursed ?? 0).toLocaleString()}`],
-                ].map(([label, val]) => (
-                    <div key={label} className="bg-white rounded-xl shadow-sm p-4">
-                        <p className="text-xs text-gray-500">{label}</p>
-                        <p className="text-2xl font-bold text-green-700">{val}</p>
+            {/* ------------------------------------------------- overview */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+
+                {/* Money: what was committed, what has gone out, what is left. */}
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Wallet className="h-4 w-4 text-[#006400]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Budget</h3>
                     </div>
-                ))}
+
+                    <p className="text-2xl font-bold text-gray-900 tabular-nums">
+                        {peso(summary.remaining ?? 0)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                        left of {peso(summary.budget ?? 0)}
+                    </p>
+
+                    {summary.budget_used_pct !== null && summary.budget_used_pct !== undefined && (
+                        <>
+                            <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                                <div className="h-full rounded-full bg-[#006400]"
+                                    style={{ width: `${Math.max(summary.budget_used_pct, 0.5)}%` }} />
+                            </div>
+                            <p className="mt-1.5 text-xs text-gray-500">
+                                {peso(summary.disbursed ?? 0)} disbursed · {summary.budget_used_pct}% used
+                            </p>
+                        </>
+                    )}
+
+                    {summary.cash_covers_more != null && (
+                        <p className="mt-2 text-xs text-gray-500">
+                            Covers about <b className="text-gray-700">{summary.cash_covers_more.toLocaleString()}</b> more
+                            farmers at {peso(program.standard_cash_amount ?? 0)} each.
+                        </p>
+                    )}
+                </div>
+
+                {/* Who has been served. */}
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Users className="h-4 w-4 text-[#006400]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Beneficiaries</h3>
+                    </div>
+
+                    <p className="text-2xl font-bold text-gray-900 tabular-nums">{summary.beneficiaries ?? 0}</p>
+                    <p className="text-xs text-gray-500">farmers served</p>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">
+                            {summary.claimed ?? 0} claimed
+                        </span>
+                        {summary.pending > 0 && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                {summary.pending} pending
+                            </span>
+                        )}
+                        {summary.forfeited > 0 && (
+                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
+                                {summary.forfeited} forfeited
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Goods this programme has taken out of the store. */}
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <PackageIcon className="h-4 w-4 text-[#006400]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Items given out</h3>
+                    </div>
+
+                    {summary.goods?.length ? (
+                        <ul className="space-y-2">
+                            {summary.goods.map(g => (
+                                <li key={g.item}>
+                                    <div className="flex items-baseline justify-between gap-3">
+                                        <span className="text-sm text-gray-800 truncate">{g.item}</span>
+                                        <span className="text-sm font-bold tabular-nums text-[#006400] whitespace-nowrap">
+                                            {Number(g.issued).toLocaleString()} {g.unit}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500">
+                                        {Number(g.in_stock).toLocaleString()} {g.unit} still in the store
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <>
+                            <p className="text-2xl font-bold text-gray-300 tabular-nums">—</p>
+                            <p className="text-xs text-gray-500">
+                                {programItems.length
+                                    ? 'Nothing issued yet.'
+                                    : 'Cash only — no items in this program’s package.'}
+                            </p>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Add distribution — hidden entirely while the program is locked,
@@ -193,6 +378,24 @@ export default function AssistanceShow({
                     </div>
                 </div>
             ) : (
+            <>
+            {/* Says plainly why the menus have stopped responding, and carries
+                its own way out so staff are never stuck hunting for one. */}
+            {pageLock.locked && (
+                <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <Lock className="h-4 w-4 flex-shrink-0" />
+                    <span className="min-w-0">
+                        <strong className="font-semibold">This page is locked.</strong>{' '}
+                        The back arrow and the side menu are blocked so you keep your
+                        place while serving the queue.
+                    </span>
+                    <button type="button" onClick={pageLock.unlock}
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100">
+                        <Unlock className="h-3.5 w-3.5" /> Unlock
+                    </button>
+                </div>
+            )}
+
             <div className="bg-white rounded-xl shadow-sm p-5 mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h3 className="font-semibold text-gray-700">{label.record}</h3>
@@ -202,11 +405,27 @@ export default function AssistanceShow({
                             : 'Record what this program gave a farmer.'}
                     </p>
                 </div>
-                <button type="button" onClick={() => setRecording(true)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#006400] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#228B22]">
-                    <Send className="h-4 w-4" /> {label.record}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" onClick={pageLock.toggle} aria-pressed={pageLock.locked}
+                        title={pageLock.locked
+                            ? 'Release the page so you can use the menus again'
+                            : 'Stay on this page — blocks the back arrow and the side menu'}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                            pageLock.locked
+                                ? 'border-amber-400 bg-amber-100 text-amber-900 hover:bg-amber-200'
+                                : 'border-gray-300 bg-white text-gray-600 hover:border-[#006400] hover:text-[#006400]'
+                        }`}>
+                        {pageLock.locked
+                            ? <><Lock className="h-4 w-4" /> Locked</>
+                            : <><Unlock className="h-4 w-4" /> Lock page</>}
+                    </button>
+                    <button type="button" onClick={() => setRecording(true)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#006400] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#228B22]">
+                        <Send className="h-4 w-4" /> {label.record}
+                    </button>
+                </div>
             </div>
+            </>
             )}
 
             {/* The form itself, as a modal — the same shape as Inventory's
@@ -262,18 +481,6 @@ export default function AssistanceShow({
                             onChange={e => setData('amount_given', e.target.value)}
                             className={`border rounded-lg px-3 py-2 text-sm w-full focus:ring-2 focus:ring-green-500 outline-none ${errors.amount_given ? 'border-red-500' : ''}`} />
                         {errors.amount_given && <p className="text-xs text-red-500 mt-1">{errors.amount_given}</p>}
-                    </div>
-                    <div>
-                        <input placeholder={label.quantity} type="number" value={data.quantity_given}
-                            onChange={e => setData('quantity_given', e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm w-full focus:ring-2 focus:ring-green-500 outline-none ${errors.quantity_given ? 'border-red-500' : ''}`} />
-                        {errors.quantity_given && <p className="text-xs text-red-500 mt-1">{errors.quantity_given}</p>}
-                    </div>
-                    <div>
-                        <input placeholder="Notes" value={data.notes}
-                            onChange={e => setData('notes', e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm w-full focus:ring-2 focus:ring-green-500 outline-none ${errors.notes ? 'border-red-500' : ''}`} />
-                        {errors.notes && <p className="text-xs text-red-500 mt-1">{errors.notes}</p>}
                     </div>
 
                     {(programItems.length > 0 || program.standard_cash_amount) && (

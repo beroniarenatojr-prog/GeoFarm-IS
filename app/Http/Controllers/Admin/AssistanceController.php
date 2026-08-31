@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\AssistanceDistribution;
 use App\Models\AssistanceType;
 use App\Models\Barangay;
+use App\Models\FarmParcel;
 use App\Models\Farmer;
 use App\Models\FinancialAssistance;
 use App\Models\InventoryItem;
+use App\Services\AuditService;
 use App\Services\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -89,6 +91,58 @@ class AssistanceController extends Controller
         );
 
         $request->merge(['assistance_type_id' => $type->id]);
+    }
+
+    /**
+     * Keep a programme inside the barangays it was declared for.
+     *
+     * A farmer qualifies on either their own barangay or any barangay they hold
+     * a parcel in — someone may live in one barangay and farm in another, and a
+     * fertiliser programme is about the land, not the address.
+     *
+     * A programme with no barangays selected covers the whole municipality;
+     * that is the existing convention on the form and is left alone.
+     */
+    private function blockIfOutsideTargetBarangays(
+        FinancialAssistance $assistance,
+        $farmerId,
+    ): ?RedirectResponse {
+        $targets = $assistance->barangays->pluck('name')
+            ->filter()
+            ->map(fn ($n) => mb_strtolower(trim($n)));
+
+        if ($targets->isEmpty() || !$farmerId) {
+            return null;
+        }
+
+        $farmer = Farmer::find($farmerId);
+
+        if (!$farmer) {
+            return null;   // validation reports the missing farmer
+        }
+
+        $farmerAreas = collect([$farmer->barangay])
+            ->merge(FarmParcel::where('farmer_id', $farmer->id)->pluck('barangay'))
+            ->filter()
+            ->map(fn ($n) => mb_strtolower(trim($n)))
+            ->unique();
+
+        if ($farmerAreas->intersect($targets)->isNotEmpty()) {
+            return null;
+        }
+
+        $name = trim("{$farmer->first_name} {$farmer->last_name}") ?: 'That farmer';
+        $where = $farmerAreas->isEmpty()
+            ? 'has no barangay recorded'
+            : 'is in ' . collect([$farmer->barangay])->filter()->implode(', ');
+
+        return back()->with('error', sprintf(
+            '%s %s, but "%s" only covers %s. Add the barangay to the programme, or correct the farmer\'s record, if this is right.',
+            $name,
+            $where,
+            $assistance->program_name,
+            $assistance->barangays->pluck('name')->implode(', ')
+        ));
     }
 
     /**
@@ -255,14 +309,49 @@ class AssistanceController extends Controller
                             : (float) $i->balance_after + (float) $i->quantity,
                     ]),
                 ]),
-            'summary' => [
-                'total'         => $assistance->distributions()->count(),
-                'claimed'       => $assistance->distributions()->where('status', 'claimed')->count(),
-                'pending'       => $assistance->distributions()->where('status', 'pending')->count(),
-                'forfeited'     => $assistance->distributions()->where('status', 'forfeited')->count(),
-                'disbursed'     => $assistance->distributions()->sum('amount_given'),
-                'beneficiaries' => $assistance->distributions()->distinct('farmer_id')->count('farmer_id'),
-            ],
+            'summary' => (function () use ($assistance) {
+                $budget    = (float) $assistance->total_budget;
+                $disbursed = (float) $assistance->distributions()->sum('amount_given');
+                $perFarmer = (float) $assistance->standard_cash_amount;
+
+                // Goods actually issued by this programme, item by item, with
+                // what is left in the store beside it. A forfeited hand-out went
+                // back on the shelf, so it is not counted as consumed.
+                $goods = $assistance->itemIssues()
+                    ->where('status', '!=', 'forfeited')
+                    ->selectRaw('inventory_item_id, SUM(quantity) AS issued')
+                    ->groupBy('inventory_item_id')
+                    ->with('item:id,item_name,unit,quantity')
+                    ->get()
+                    ->map(fn ($row) => [
+                        'item'     => $row->item?->item_name ?? 'Unknown item',
+                        'unit'     => $row->item?->unit,
+                        'issued'   => (float) $row->issued,
+                        'in_stock' => (float) ($row->item?->quantity ?? 0),
+                    ]);
+
+                return [
+                    'total'         => $assistance->distributions()->count(),
+                    'claimed'       => $assistance->distributions()->where('status', 'claimed')->count(),
+                    'pending'       => $assistance->distributions()->where('status', 'pending')->count(),
+                    'forfeited'     => $assistance->distributions()->where('status', 'forfeited')->count(),
+                    'disbursed'     => $disbursed,
+                    'beneficiaries' => $assistance->distributions()->distinct('farmer_id')->count('farmer_id'),
+
+                    'budget'         => $budget,
+                    'remaining'      => round($budget - $disbursed, 2),
+                    // Guarded: a programme with no budget would divide by zero.
+                    'budget_used_pct' => $budget > 0 ? min(100, round($disbursed / $budget * 100, 1)) : null,
+
+                    // How many more farmers the cash could cover at the standard
+                    // rate. The honest ceiling is usually the stock, not the money.
+                    'cash_covers_more' => $perFarmer > 0
+                        ? max(0, (int) floor(($budget - $disbursed) / $perFarmer))
+                        : null,
+
+                    'goods' => $goods,
+                ];
+            })(),
         ]);
     }
 
@@ -279,6 +368,49 @@ class AssistanceController extends Controller
     {
         if ($blocked = $this->blockIfLocked($assistance)) {
             return $blocked;
+        }
+
+        // A programme that has ended, or has not started, must not hand anything
+        // out. The dates are the office's own commitment about when it runs.
+        $on = $request->date('distribution_date') ?? now();
+
+        if ($assistance->start_date && $on->lt($assistance->start_date)) {
+            return back()->with('error', sprintf(
+                '"%s" does not start until %s. Nothing can be distributed before then.',
+                $assistance->program_name,
+                $assistance->start_date->format('d M Y')
+            ));
+        }
+
+        if ($assistance->end_date && $on->gt($assistance->end_date)) {
+            return back()->with('error', sprintf(
+                '"%s" ended on %s. Extend the end date, or create a new programme, before distributing.',
+                $assistance->program_name,
+                $assistance->end_date->format('d M Y')
+            ));
+        }
+
+        // One farmer, one hand-out per programme. A forfeited record does not
+        // count — those goods went back on the shelf, so the farmer may be
+        // served again.
+        $already = AssistanceDistribution::where('assistance_id', $assistance->id)
+            ->where('farmer_id', $request->input('farmer_id'))
+            ->where('status', '!=', 'forfeited')
+            ->first();
+
+        if ($already) {
+            $farmer = Farmer::find($request->input('farmer_id'));
+
+            return back()->with('error', sprintf(
+                '%s was already served by "%s" on %s. Recording it twice would double-count the budget and the stock.',
+                trim(($farmer->first_name ?? '') . ' ' . ($farmer->last_name ?? '')) ?: 'That farmer',
+                $assistance->program_name,
+                $already->distribution_date?->format('d M Y') ?? 'an earlier date'
+            ));
+        }
+
+        if ($outside = $this->blockIfOutsideTargetBarangays($assistance, $request->input('farmer_id'))) {
+            return $outside;
         }
 
         $data = $request->validate([
@@ -320,9 +452,18 @@ class AssistanceController extends Controller
 
         try {
             DB::transaction(function () use ($assistance, $data, $items, $inventory, $request) {
+                /*
+                 * Recorded means handed over.
+                 *
+                 * Staff record a distribution at the moment the farmer receives
+                 * it, so "pending" described a state that never existed in
+                 * practice — every hand-out sat pending forever and the Claimed
+                 * figure stayed at zero. Anything genuinely not yet collected
+                 * can be set back to pending on the record itself.
+                 */
                 $payout = AssistanceDistribution::create($data + [
                     'assistance_id' => $assistance->id,
-                    'status'        => $data['status'] ?? 'pending',
+                    'status'        => $data['status'] ?? 'claimed',
                 ]);
 
                 foreach ($items as $line) {
@@ -335,11 +476,28 @@ class AssistanceController extends Controller
                             'assistance_distribution_id' => $payout->id,
                             'quantity'                   => $line['quantity'],
                             'distribution_date'          => $data['distribution_date'],
-                            'status'                     => $data['status'] ?? 'pending',
+                            // Matches the payout: the goods went with the farmer.
+                            'status'                     => $data['status'] ?? 'claimed',
                         ],
                         $request->user()?->id,
                     );
                 }
+
+                // The stock movements were already logged by InventoryService.
+                // This records the payout itself, so the audit trail answers
+                // "who served this farmer, when, and with what" in one entry
+                // rather than only showing the goods leaving the store.
+                AuditService::log('distribute', 'assistance_distributions', $payout->id, null, [
+                    'assistance_id'  => $assistance->id,
+                    'program_name'   => $assistance->program_name,
+                    'farmer_id'      => $data['farmer_id'],
+                    'amount_given'   => $data['amount_given'] ?? null,
+                    'is_customized'  => $data['is_customized'],
+                    'items'          => $items->map(fn ($i) => [
+                        'inventory_item_id' => $i['inventory_item_id'],
+                        'quantity'          => $i['quantity'],
+                    ])->all(),
+                ]);
             });
         } catch (RuntimeException $e) {
             // Insufficient stock — the message names the item and the shortfall.

@@ -13,8 +13,8 @@
             @foreach($data as $d)
             <tr>
                 <td>{{ $d->farmer?->first_name }} {{ $d->farmer?->last_name }}</td>
-                <td>{{ $d->assistance?->program_name }}</td>
-                <td>{{ $d->distribution_date }}</td>
+                <td>{{ $d->program?->program_name }}</td>
+                <td>{{ $d->distribution_date?->format('M d, Y') }}</td>
                 <td>₱{{ number_format($d->amount_given, 2) }}</td>
                 <td>{{ $d->status }}</td>
             </tr>
