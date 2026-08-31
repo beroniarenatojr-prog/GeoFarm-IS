@@ -501,6 +501,13 @@ class FarmerController extends Controller
             'parcels.farmType',
             'livestock.livestockType',
             'distributions.program',
+            // Seasons hang off the parcels, not the farmer — without this the
+            // portal shows nothing for someone with years of cropping recorded.
+            'cropSeasons' => fn ($q) => $q
+                ->with(['crop:id,crop_name', 'parcel:id,parcel_number'])
+                ->orderByDesc('cropping_year')
+                ->orderBy('season'),
+            'machinery',
             'treeCrops',
             'fishponds',
             'largeRuminants',
@@ -529,19 +536,113 @@ class FarmerController extends Controller
             $animalRecords += $herd->count();
         }
 
+        $mapped = $farmer->parcels->filter(fn ($p) => filled($p->geojson_data));
+
         return Inertia::render('Farmer/Dashboard', [
             'farmer' => $farmer,
             'stats' => [
                 'parcels'          => $farmer->parcels->count(),
+                'parcels_mapped'   => $mapped->count(),
                 'total_area'       => (float) $farmer->parcels->sum('total_area_ha'),
                 'animal_heads'     => $animalHeads,
                 'animal_records'   => $animalRecords,
                 'tree_crops'       => $farmer->treeCrops->count(),
                 'fishponds'        => $farmer->fishponds->count(),
+                'machinery'        => $farmer->machinery->count(),
+                'seasons'          => $farmer->cropSeasons->count(),
                 'assistance'       => $farmer->distributions->count(),
                 'assistance_total' => (float) $farmer->distributions->sum('amount_given'),
-            ]
+            ],
+            // Read-only: the portal shows a farmer where their land is, it does
+            // not let them redraw it. Boundaries are surveyed by the office.
+            'parcelGeoJson' => $this->parcelGeoJson($mapped),
+            'mapCenter'     => $this->centreOf($mapped),
         ]);
+    }
+
+    /**
+     * The farmer's own parcels as a FeatureCollection.
+     *
+     * Only their own: the portal must never hand a farmer the outlines of
+     * their neighbours' land, which is what the admin GIS endpoint returns.
+     */
+    private function parcelGeoJson($parcels): array
+    {
+        $features = [];
+
+        foreach ($parcels as $parcel) {
+            $geometry = json_decode((string) $parcel->geojson_data, true);
+
+            // A malformed outline is skipped rather than crashing the page —
+            // the parcel still appears in the list below the map.
+            if (!is_array($geometry) || !isset($geometry['type'])) {
+                continue;
+            }
+
+            $features[] = [
+                'type'     => 'Feature',
+                'geometry' => $geometry,
+                'properties' => [
+                    'id'            => $parcel->id,
+                    'parcel_number' => $parcel->parcel_number ?? 'Parcel',
+                    'barangay'      => $parcel->barangay,
+                    'area_ha'       => $parcel->total_area_ha,
+                    'commodity'     => $parcel->commodity,
+                    'farm_type'     => $parcel->farmType?->type_name,
+                ],
+            ];
+        }
+
+        return ['type' => 'FeatureCollection', 'features' => $features];
+    }
+
+    /**
+     * Roughly the middle of the farmer's land, so the map opens on their farm
+     * rather than on the municipality. Null when nothing is mapped; the page
+     * falls back to the Tumauini centre.
+     */
+    private function centreOf($parcels): ?array
+    {
+        $points = [];
+
+        foreach ($parcels as $parcel) {
+            $geometry = json_decode((string) $parcel->geojson_data, true);
+            $this->collectPoints($geometry['coordinates'] ?? null, $points);
+        }
+
+        if (!$points) {
+            return null;
+        }
+
+        $lngs = array_column($points, 0);
+        $lats = array_column($points, 1);
+
+        return [
+            round((min($lngs) + max($lngs)) / 2, 6),
+            round((min($lats) + max($lats)) / 2, 6),
+        ];
+    }
+
+    /**
+     * Pulls [lng, lat] pairs out of a GeoJSON coordinates array.
+     *
+     * Polygons nest their rings, MultiPolygons nest those again, so this
+     * descends until it reaches a pair of numbers rather than assuming a depth.
+     */
+    private function collectPoints($coordinates, array &$points): void
+    {
+        if (!is_array($coordinates) || !$coordinates) {
+            return;
+        }
+
+        if (is_numeric($coordinates[0] ?? null) && is_numeric($coordinates[1] ?? null)) {
+            $points[] = [(float) $coordinates[0], (float) $coordinates[1]];
+            return;
+        }
+
+        foreach ($coordinates as $child) {
+            $this->collectPoints($child, $points);
+        }
     }
 
     public function export()

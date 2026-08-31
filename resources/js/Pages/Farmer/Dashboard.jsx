@@ -2,8 +2,10 @@ import { router } from '@inertiajs/react';
 import {
     Leaf, MapPin, LogOut, FileText, Sprout, ShieldCheck, ShieldAlert, ShieldX,
     Beef, Bird, Fish, TreePine, PiggyBank, Mail, Phone, User, Calendar,
-    BadgeCheck, Ruler, Banknote,
+    BadgeCheck, Ruler, Banknote, Map as MapIcon, Tractor, Eye, Info,
 } from 'lucide-react';
+import MapViewer from '@/Components/ui/MapViewer';
+import { TUMAUINI_CENTER } from '@/config/tumauiniMap';
 
 const peso = (value) =>
     `₱${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -105,7 +107,7 @@ function InfoRow({ icon: Icon, label, value }) {
 
 /* ------------------------------------------------------------------- page */
 
-export default function FarmerDashboard({ auth, farmer, stats }) {
+export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, mapCenter }) {
     const handleLogout = () => {
         router.post('/logout');
     };
@@ -134,7 +136,14 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
         { key: 'livestock', label: 'Other Livestock', icon: Sprout, tint: 'bg-emerald-50 text-emerald-600 border-emerald-100', rows: farmer.livestock, describe: (a) => a.livestock_type?.type_name || a.breed, qty: (a) => a.count, unit: 'head' },
         { key: 'tree_crops', label: 'Tree Crops', icon: TreePine, tint: 'bg-green-50 text-green-700 border-green-100', rows: farmer.tree_crops, describe: (a) => a.crop_type, qty: (a) => a.quantity, unit: 'tree' },
         { key: 'fishponds', label: 'Fishponds', icon: Fish, tint: 'bg-emerald-50 text-emerald-600 border-emerald-100', rows: farmer.fishponds, describe: (a) => a.species, qty: (a) => a.area_hectares, unit: 'ha' },
+        { key: 'machinery', label: 'Farm Machinery', icon: Tractor, tint: 'bg-slate-50 text-slate-600 border-slate-200', rows: farmer.machinery, describe: (a) => [a.brand, a.machinery_type].filter(Boolean).join(' '), qty: () => 1, unit: 'unit' },
     ].filter((group) => group.rows?.length > 0);
+
+    // A parcel without a surveyed outline cannot be drawn, so the map says how
+    // many are missing rather than quietly showing fewer shapes than the list.
+    const mappedCount = parcelGeoJson?.features?.length ?? 0;
+    const unmapped = (stats.parcels ?? 0) - mappedCount;
+    const seasons = farmer.crop_seasons ?? [];
 
     return (
         <div className="min-h-screen bg-[#FAF8F3]">
@@ -319,6 +328,63 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                     </div>
                 </div>
 
+                {/* ---------------------------------------------------- farm map */}
+                {farmer.parcels?.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
+                        <SectionHeading
+                            icon={MapIcon}
+                            title="Where My Land Is"
+                            aside={mappedCount > 0
+                                ? `${mappedCount} of ${stats.parcels} ${stats.parcels === 1 ? 'parcel' : 'parcels'} mapped`
+                                : undefined}
+                        />
+
+                        {/* View only. Boundaries are surveyed and maintained by the
+                            Agriculture Office; the portal shows them, it does not
+                            let a farmer redraw their own land. */}
+                        <div className="mb-3 flex items-start gap-2 rounded-xl bg-green-50/70 border border-green-100 px-3 py-2">
+                            <Eye className="h-4 w-4 flex-shrink-0 text-[#006400] mt-0.5" />
+                            <p className="text-xs text-gray-600">
+                                <span className="font-semibold text-gray-800">View only.</span>{' '}
+                                Tap a parcel to see its details. Boundaries are surveyed by the
+                                Municipal Agriculture Office — visit them if anything looks wrong.
+                            </p>
+                        </div>
+
+                        {mappedCount > 0 ? (
+                            <>
+                                <div className="overflow-hidden rounded-xl border border-gray-200">
+                                    <MapViewer
+                                        geojson={parcelGeoJson}
+                                        center={mapCenter ?? TUMAUINI_CENTER}
+                                        zoom={mapCenter ? 15 : 12}
+                                        height="420px"
+                                    />
+                                </div>
+
+                                {unmapped > 0 && (
+                                    <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700">
+                                        <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                                        {unmapped} of your {stats.parcels} parcels {unmapped === 1 ? 'has' : 'have'} no
+                                        surveyed boundary yet, so {unmapped === 1 ? 'it does' : 'they do'} not appear on
+                                        the map. {unmapped === 1 ? 'It is' : 'They are'} still listed below.
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50/60 py-12 text-center">
+                                <MapIcon className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                                <p className="text-sm font-medium text-gray-600">No boundaries mapped yet</p>
+                                <p className="mx-auto mt-1 max-w-md text-xs text-gray-500">
+                                    Your {stats.parcels === 1 ? 'parcel is' : `${stats.parcels} parcels are`} recorded,
+                                    but {stats.parcels === 1 ? 'its outline has' : 'their outlines have'} not been
+                                    surveyed. Ask the Agriculture Office to map {stats.parcels === 1 ? 'it' : 'them'}.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* ------------------------------------------------------ parcels */}
                 {farmer.parcels?.length > 0 && (
                     <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
@@ -395,6 +461,81 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                                             <dd className="text-gray-800 font-medium">{parcel.ownership_type || '—'}</dd>
                                         </div>
                                     </dl>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* -------------------------------------------------------- crops */}
+                {seasons.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
+                        <SectionHeading
+                            icon={Sprout}
+                            title="My Cropping Seasons"
+                            aside={`${seasons.length} recorded`}
+                        />
+
+                        <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200">
+                            <table className="min-w-full">
+                                <thead>
+                                    <tr className="bg-gradient-to-r from-[#006400] to-[#228B22]">
+                                        {['Crop', 'Season', 'Year', 'Parcel', 'Area (ha)', 'Yield (kg)'].map((h, i) => (
+                                            <th key={h}
+                                                className={`px-4 py-3 text-xs font-semibold text-white uppercase tracking-wider ${i >= 4 ? 'text-right' : 'text-left'}`}>
+                                                {h}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {seasons.map((s) => (
+                                        <tr key={s.id} className="hover:bg-green-50/50 transition-colors">
+                                            <td className="px-4 py-3 text-sm font-semibold text-gray-900">{s.crop?.crop_name || '—'}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${
+                                                    s.season === 'dry' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                                                }`}>{s.season || '—'}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">{s.cropping_year || '—'}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-600">
+                                                {s.parcel?.parcel_number ? `#${s.parcel.parcel_number}` : '—'}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-gray-700 text-right tabular-nums">
+                                                {s.area_planted_ha != null ? Number(s.area_planted_ha).toFixed(2) : '—'}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-right tabular-nums">
+                                                {s.yield_kg != null
+                                                    ? <span className="font-bold text-[#006400]">{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}</span>
+                                                    : <span className="text-gray-400">Not harvested</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="md:hidden space-y-3">
+                            {seasons.map((s) => (
+                                <div key={s.id} className="border border-gray-200 rounded-xl p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-gray-900">{s.crop?.crop_name || '—'}</p>
+                                            <p className="mt-0.5 text-xs text-gray-500 capitalize">
+                                                {s.season} {s.cropping_year}
+                                                {s.parcel?.parcel_number && ` · Parcel #${s.parcel.parcel_number}`}
+                                            </p>
+                                        </div>
+                                        <span className="px-2.5 py-1 rounded-lg bg-green-50 text-[#006400] font-bold text-sm tabular-nums whitespace-nowrap">
+                                            {s.area_planted_ha != null ? `${Number(s.area_planted_ha).toFixed(2)} ha` : '—'}
+                                        </span>
+                                    </div>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        Yield:{' '}
+                                        {s.yield_kg != null
+                                            ? <span className="font-semibold text-gray-800">{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })} kg</span>
+                                            : 'not harvested yet'}
+                                    </p>
                                 </div>
                             ))}
                         </div>
