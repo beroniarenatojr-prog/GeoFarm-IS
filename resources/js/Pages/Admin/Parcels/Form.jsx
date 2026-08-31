@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm } from '@inertiajs/react';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
+import FarmerPicker from '@/Components/ui/FarmerPicker';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import bbox from '@turf/bbox';
@@ -44,8 +45,18 @@ function parseGeometry(value) {
   }
 }
 
-export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
+/**
+ * Used two ways: as the full page at /admin/parcels/create|edit, and inside a
+ * modal on the parcel list. Passing onClose switches it to the embedded form —
+ * no page chrome, and Cancel closes the dialog instead of navigating away.
+ *
+ * The map is the reason this component is shared rather than duplicated: it
+ * carries a MapLibre instance, a draw control and a ResizeObserver, and a
+ * second copy of that would be a second thing to keep correct.
+ */
+export default function ParcelForm({ parcel, farmTypes, geojson, onClose = null }) {
   const isEdit = Boolean(parcel);
+  const embedded = Boolean(onClose);
   const mapRef = useRef(null);
   const mapContainerRef = useRef(null);
   const drawRef = useRef(null);
@@ -201,27 +212,36 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
 
   const submit = (event) => {
     event.preventDefault();
-    isEdit ? put(`/admin/parcels/${parcel.id}`) : post('/admin/parcels');
+
+    // In the modal the list behind stays put and simply refreshes; as a page
+    // the controller's redirect does the navigating.
+    const options = embedded
+      ? { preserveScroll: true, onSuccess: onClose }
+      : {};
+
+    isEdit
+      ? put(`/admin/parcels/${parcel.id}`, options)
+      : post('/admin/parcels', options);
   };
 
-  return (
-    <AdminLayout title={isEdit ? 'Edit Parcel' : 'Add Farm Parcel'}>
-      <form onSubmit={submit} className="max-w-5xl space-y-6">
+  const body = (
+      <form onSubmit={submit} className={embedded ? 'space-y-5' : 'max-w-5xl space-y-6'}>
         <div className="grid grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-white p-6 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Farmer</label>
-            <select
-              value={data.farmer_id}
-              onChange={(event) => setData('farmer_id', event.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
-            >
-              <option value="">Select farmer</option>
-              {farmers.map((farmer) => (
-                <option key={farmer.id} value={farmer.id}>{farmer.last_name}, {farmer.first_name}</option>
-              ))}
-            </select>
-            {errors.farmer_id && <p className="mt-1 text-xs text-red-600">{errors.farmer_id}</p>}
-          </div>
+          {/* A type-ahead rather than a dropdown: the registry is heading for
+              8,000+ farmers, and a select of that size is unusable — and would
+              have to be shipped to the parcel list just to open this modal. */}
+          <FarmerPicker
+            label="Farmer"
+            required
+            value={data.farmer_id}
+            onChange={(id) => setData('farmer_id', id)}
+            error={errors.farmer_id}
+            initial={parcel?.farmer ? {
+              id: parcel.farmer.id,
+              label: [parcel.farmer.last_name, parcel.farmer.first_name].filter(Boolean).join(', '),
+              meta: parcel.farmer.rsbsa_no ? `RSBSA ${parcel.farmer.rsbsa_no}` : '',
+            } : null}
+          />
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Farm Type</label>
@@ -339,19 +359,44 @@ export default function ParcelForm({ parcel, farmers, farmTypes, geojson }) {
           </div>
         </div>
 
-        <div className="flex gap-3">
+        {/* Pinned to the bottom of the modal body so Save stays reachable
+            without scrolling past the map. */}
+        <div className={
+          embedded
+            ? 'sticky bottom-0 -mx-5 -mb-4 flex justify-end gap-3 border-t border-slate-200 bg-white px-5 py-3'
+            : 'flex gap-3'
+        }>
+          {embedded ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+          ) : (
+            <a href="/admin/parcels" className="order-2 rounded-md border border-slate-300 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Cancel
+            </a>
+          )}
           <button
             type="submit"
             disabled={processing}
-            className="rounded-md bg-emerald-700 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
+            className="order-1 rounded-md bg-emerald-700 px-6 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:opacity-50"
           >
             {processing ? 'Saving...' : isEdit ? 'Update Parcel' : 'Add Parcel'}
           </button>
-          <a href="/admin/parcels" className="rounded-md border border-slate-300 px-6 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Cancel
-          </a>
         </div>
       </form>
+  );
+
+  if (embedded) {
+    return body;
+  }
+
+  return (
+    <AdminLayout title={isEdit ? 'Edit Parcel' : 'Add Farm Parcel'}>
+      {body}
     </AdminLayout>
   );
 }

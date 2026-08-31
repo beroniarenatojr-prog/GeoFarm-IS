@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Lock, Unlock, Plus } from 'lucide-react';
 import { ViewButton, EditButton, DeleteButton } from '@/Components/ui/ActionButtons';
 import ModalShell from '@/Components/ui/ModalShell';
+import LockConfirmModal from '@/Components/ui/LockConfirmModal';
 import { ProgramFormFields, useProgramForm } from '@/Components/Assistance/ProgramForm';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
@@ -21,11 +22,15 @@ const STATUS_STYLE = {
     cancelled: 'bg-red-100 text-red-700',
 };
 
-export default function AssistanceIndex({ programs, canLock, assistanceTypes = [], barangays = [] }) {
+export default function AssistanceIndex({
+    programs, canLock, hasLockPassword, assistanceTypes = [], barangays = [], stockItems = [],
+}) {
     const { can } = usePermissions();
 
     // null = closed, 'new' = create, otherwise the programme being edited.
     const [editing, setEditing] = useState(null);
+    // The programme whose lock is being confirmed.
+    const [confirmingLock, setConfirmingLock] = useState(null);
 
     return (
         <AdminLayout title="Agricultural Assistance Programs">
@@ -59,6 +64,7 @@ export default function AssistanceIndex({ programs, canLock, assistanceTypes = [
                                 canLock={canLock}
                                 can={can}
                                 onEdit={() => setEditing(p)}
+                                onToggleLock={() => setConfirmingLock(p)}
                             />
                         ))}
                         {programs.data.length === 0 && (
@@ -80,14 +86,24 @@ export default function AssistanceIndex({ programs, canLock, assistanceTypes = [
                     program={editing === 'new' ? null : editing}
                     assistanceTypes={assistanceTypes}
                     barangays={barangays}
+                    stockItems={stockItems}
                     onClose={() => setEditing(null)}
+                />
+            )}
+
+            {confirmingLock && (
+                <LockConfirmModal
+                    key={confirmingLock.id}
+                    program={confirmingLock}
+                    hasLockPassword={hasLockPassword}
+                    onClose={() => setConfirmingLock(null)}
                 />
             )}
         </AdminLayout>
     );
 }
 
-function ProgramFormModal({ program, assistanceTypes, barangays, onClose }) {
+function ProgramFormModal({ program, assistanceTypes, barangays, stockItems, onClose }) {
     const isEdit = !!program;
     const form = useProgramForm(program);
 
@@ -124,12 +140,13 @@ function ProgramFormModal({ program, assistanceTypes, barangays, onClose }) {
                 form={form}
                 assistanceTypes={assistanceTypes}
                 barangays={barangays}
+                stockItems={stockItems}
             />
         </ModalShell>
     );
 }
 
-function ProgramRow({ program: p, canLock, can, onEdit }) {
+function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
     // Local pending flag, so toggling one row does not grey out the whole table.
     const [busy, setBusy] = useState(null);
 
@@ -214,7 +231,9 @@ function ProgramRow({ program: p, canLock, can, onEdit }) {
                         canLock={canLock}
                         busy={busy === 'lock'}
                         note={lockedNote}
-                        onToggle={() => patch('lock', `/admin/assistance/${p.id}/lock`)}
+                        // Opens the confirm dialog; the request is sent from
+                        // there, once the lock password checks out.
+                        onToggle={onToggleLock}
                     />
                 </div>
             </td>

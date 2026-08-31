@@ -43,12 +43,26 @@ export function getBasemapStyle() {
     sources: {
       osm: {
         type: 'raster',
-        tiles: [
-          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        ],
+        /*
+         * One canonical host, not the old a/b/c subdomains.
+         *
+         * OSM retired the per-subdomain hostnames, and they no longer reliably
+         * send Access-Control-Allow-Origin. That matters here because MapLibre
+         * fetches raster tiles with fetch() — which enforces CORS — where
+         * Leaflet used plain <img> tags and did not.
+         */
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
         tileSize: 256,
+        /*
+         * OSM's standard tiles stop at zoom 19. MapLibre asks for tile zoom
+         * (map zoom + 1) when tileSize is 256, so a map allowed to reach 19
+         * was requesting z20 tiles that do not exist; the 404 came back without
+         * CORS headers, which is what filled the console.
+         *
+         * Declaring the source's real limit makes MapLibre scale z19 tiles up
+         * instead of asking for a zoom nobody serves.
+         */
+        maxzoom: 19,
         attribution: '© OpenStreetMap contributors',
       },
     },

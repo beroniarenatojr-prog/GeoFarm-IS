@@ -3,14 +3,35 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Farmer;
 use App\Models\CropSeason;
+use App\Models\Farmer;
+use App\Models\FarmMachinery;
+use App\Models\Fishpond;
+use App\Models\LargeRuminant;
+use App\Models\NativePig;
+use App\Models\Poultry;
+use App\Models\SmallRuminant;
+use App\Models\SwineHybrid;
+use App\Models\TreeCrop;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class FarmInventoryController extends Controller
 {
+    /**
+     * The five RSBSA animal tables. Same shape, different discriminator
+     * column — so they are read in one loop rather than five copied blocks.
+     * `route` matches FarmAssetController's registry key.
+     */
+    private const ANIMAL_SOURCES = [
+        ['model' => LargeRuminant::class, 'route' => 'large-ruminants', 'category' => 'Large Ruminant', 'field' => 'animal_type'],
+        ['model' => SmallRuminant::class, 'route' => 'small-ruminants', 'category' => 'Small Ruminant', 'field' => 'animal_type'],
+        ['model' => NativePig::class,     'route' => 'native-pigs',     'category' => 'Swine',          'field' => null, 'fixed' => 'Native Pig'],
+        ['model' => SwineHybrid::class,   'route' => 'swine-hybrid',    'category' => 'Swine',          'field' => 'variety', 'prefix' => 'Swine Hybrid'],
+        ['model' => Poultry::class,       'route' => 'poultry',         'category' => 'Poultry',        'field' => 'bird_type'],
+    ];
+
     public function index(Request $request)
     {
         // A plain <select> of every farmer would be an 8,000-option list once
@@ -61,7 +82,13 @@ class FarmInventoryController extends Controller
                 'trees'       => (int) collect($inventory['tree_crops'] ?? [])->sum('total_quantity'),
                 'pond_area'   => round((float) collect($inventory['fishponds'] ?? [])->sum('total_area'), 2),
                 'animals'     => (int) collect($inventory['livestock'] ?? [])->sum('total'),
+                'machinery'   => (int) collect($inventory['machinery'] ?? [])
+                    ->sum(fn ($m) => (int) (is_array($m) ? 1 : ($m->total_units ?? 1))),
             ],
+            // The tree-crop form can tie a stand of trees to a specific parcel.
+            'parcels' => $selectedFarmer
+                ? $selectedFarmer->parcels()->orderBy('parcel_number')->get(['id', 'parcel_number', 'barangay'])
+                : [],
         ]);
     }
 
@@ -194,20 +221,37 @@ class FarmInventoryController extends Controller
             ->merge($swineHybrids)
             ->merge($poultry);
 
+        // Machinery aggregated by type, with the working share called out —
+        // a municipality needs to know how many of its tractors still run.
+        $machinery = DB::table('farm_machinery')
+            ->select('machinery_type')
+            ->selectRaw('COUNT(*) as total_units')
+            ->selectRaw("SUM(status = 'active') as active_units")
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
+            ->groupBy('machinery_type')
+            ->orderBy('machinery_type')
+            ->get();
+
         return [
             'crops' => $crops,
             'total_crop_area' => $crops->sum('total_area'),
             'tree_crops' => $treeCrops,
             'fishponds' => $fishponds,
+            'machinery' => $machinery,
             'livestock' => $livestock,
             'is_aggregated' => true,
         ];
     }
 
+    /**
+     * One farmer's assets, shaped identically to the aggregated view so the
+     * page can render either without branching: every section exposes
+     * total_quantity / total_area, plus the raw columns the edit forms need
+     * and the `route` segment FarmAssetController is addressed by.
+     */
     private function getInventory($farmerId)
     {
-        // Crops (aggregated by crop, season, year)
-        $crops = CropSeason::whereHas('parcel', fn($q) => $q->where('farmer_id', $farmerId))
+        $crops = CropSeason::whereHas('parcel', fn ($q) => $q->where('farmer_id', $farmerId))
             ->with('crop')
             ->select('crop_id', 'season', 'cropping_year')
             ->selectRaw('SUM(area_planted_ha) as total_area')
@@ -216,106 +260,103 @@ class FarmInventoryController extends Controller
             ->orderBy('season')
             ->get();
 
-        // Tree crops
-        $treeCrops = DB::table('tree_crops')
-            ->where('farmer_id', $farmerId)
-            ->get();
-
-        // Fishponds
-        $fishponds = DB::table('fishponds')
-            ->where('farmer_id', $farmerId)
-            ->get();
-
-        // Large ruminants
-        $largeRuminants = DB::table('large_ruminants')
-            ->where('farmer_id', $farmerId)
+        $treeCrops = TreeCrop::where('farmer_id', $farmerId)
+            ->orderBy('crop_type')
             ->get()
-            ->map(fn($r) => (object)[
-                'id' => $r->id,
-                'type' => $r->animal_type,
-                'category' => 'Large Ruminant',
-                'male' => $r->male_count,
-                'female' => $r->female_count,
-                'total' => $r->total_heads,
-                'is_large_raiser' => $r->is_large_raiser,
-                'table' => 'large_ruminants'
+            ->map(fn ($r) => [
+                'id'             => $r->id,
+                'route'          => 'tree-crops',
+                'crop_type'      => $r->crop_type,
+                'total_quantity' => (int) $r->quantity,
+                'total_area'     => (float) $r->area_hectares,
+                'quantity'       => (int) $r->quantity,
+                'area_hectares'  => $r->area_hectares,
+                'age_years'      => $r->age_years,
+                'status'         => $r->status,
+                'parcel_id'      => $r->parcel_id,
+                'notes'          => $r->notes,
             ]);
 
-        // Small ruminants
-        $smallRuminants = DB::table('small_ruminants')
-            ->where('farmer_id', $farmerId)
+        $fishponds = Fishpond::where('farmer_id', $farmerId)
+            ->orderBy('species')
             ->get()
-            ->map(fn($r) => (object)[
-                'id' => $r->id,
-                'type' => $r->animal_type,
-                'category' => 'Small Ruminant',
-                'male' => $r->male_count,
-                'female' => $r->female_count,
-                'total' => $r->total_heads,
-                'is_large_raiser' => false,
-                'table' => 'small_ruminants'
+            ->map(fn ($r) => [
+                'id'                   => $r->id,
+                'route'                => 'fishponds',
+                'species'              => $r->species,
+                'pond_type'            => $r->pond_type,
+                'total_area'           => (float) $r->area_hectares,
+                'area_hectares'        => $r->area_hectares,
+                'stocking_density'     => $r->stocking_density,
+                'estimated_population' => $r->estimated_population,
+                'projected_population' => $r->projectedPopulation(),
+                'harvest_cycle_months' => $r->harvest_cycle_months,
+                'last_harvest'         => $r->last_harvest?->format('Y-m-d'),
+                'next_harvest'         => $r->next_harvest?->format('Y-m-d'),
+                'notes'                => $r->notes,
             ]);
 
-        // Native pigs
-        $nativePigs = DB::table('native_pigs')
-            ->where('farmer_id', $farmerId)
+        $machinery = FarmMachinery::where('farmer_id', $farmerId)
+            ->orderBy('machinery_type')
             ->get()
-            ->map(fn($r) => (object)[
-                'id' => $r->id,
-                'type' => 'Native Pig',
-                'category' => 'Swine',
-                'male' => $r->male_count,
-                'female' => $r->female_count,
-                'total' => $r->total_heads,
-                'is_large_raiser' => false,
-                'table' => 'native_pigs'
+            ->map(fn ($r) => [
+                'id'               => $r->id,
+                'route'            => 'machinery',
+                'machinery_type'   => $r->machinery_type,
+                'brand'            => $r->brand,
+                'model'            => $r->model,
+                'serial_number'    => $r->serial_number,
+                'engine_number'    => $r->engine_number,
+                'year_acquired'    => $r->year_acquired,
+                'age_years'        => $r->age_years,
+                'acquisition_type' => $r->acquisition_type,
+                'status'           => $r->status,
+                'notes'            => $r->notes,
             ]);
 
-        // Swine hybrids
-        $swineHybrids = DB::table('swine_hybrid')
-            ->where('farmer_id', $farmerId)
-            ->get()
-            ->map(fn($r) => (object)[
-                'id' => $r->id,
-                'type' => "Swine Hybrid ({$r->variety})",
-                'category' => 'Swine',
-                'male' => $r->male_count,
-                'female' => $r->female_count,
-                'total' => $r->total_heads,
-                'is_large_raiser' => false,
-                'table' => 'swine_hybrid'
-            ]);
-
-        // Poultry
-        $poultry = DB::table('poultry')
-            ->where('farmer_id', $farmerId)
-            ->get()
-            ->map(fn($r) => (object)[
-                'id' => $r->id,
-                'type' => $r->bird_type,
-                'category' => 'Poultry',
-                'male' => $r->male_count,
-                'female' => $r->female_count,
-                'total' => $r->total_heads,
-                'is_large_raiser' => false,
-                'table' => 'poultry'
-            ]);
-
-        // Merge all livestock
-        $livestock = collect()
-            ->merge($largeRuminants)
-            ->merge($smallRuminants)
-            ->merge($nativePigs)
-            ->merge($swineHybrids)
-            ->merge($poultry);
+        // Five RSBSA animal tables, same columns, different discriminator.
+        $livestock = collect(self::ANIMAL_SOURCES)->flatMap(
+            fn ($src) => $src['model']::where('farmer_id', $farmerId)->get()->map(fn ($r) => [
+                'id'               => $r->id,
+                'route'            => $src['route'],
+                'category'         => $src['category'],
+                'type'             => $this->animalLabel($src, $r),
+                'type_field'       => $src['field'],
+                'type_value'       => $src['field'] ? $r->{$src['field']} : null,
+                'male'             => (int) $r->male_count,
+                'female'           => (int) $r->female_count,
+                'total'            => (int) $r->total_heads,
+                'male_count'       => (int) $r->male_count,
+                'female_count'     => (int) $r->female_count,
+                'is_large_raiser'  => (bool) $r->is_large_raiser,
+                'breed'            => $src['route'] === 'poultry' ? $r->breed : null,
+                'purpose'          => $r->purpose,
+                'health_status'    => $r->health_status,
+                'last_vaccination' => $r->last_vaccination?->format('Y-m-d'),
+                'notes'            => $r->notes,
+            ])
+        )->values();
 
         return [
-            'crops' => $crops,
+            'crops'           => $crops,
             'total_crop_area' => $crops->sum('total_area'),
-            'tree_crops' => $treeCrops,
-            'fishponds' => $fishponds,
-            'livestock' => $livestock,
+            'tree_crops'      => $treeCrops,
+            'fishponds'       => $fishponds,
+            'machinery'       => $machinery,
+            'livestock'       => $livestock,
         ];
+    }
+
+    /** "Swine Hybrid (White)", "Native Pig", "Cattle" … */
+    private function animalLabel(array $src, $row): string
+    {
+        if (!$src['field']) {
+            return $src['fixed'];
+        }
+
+        $value = $row->{$src['field']};
+
+        return isset($src['prefix']) ? "{$src['prefix']} ({$value})" : (string) $value;
     }
 
     public function export($farmerId)

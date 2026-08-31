@@ -1,6 +1,8 @@
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
+import ModalShell from '@/Components/ui/ModalShell';
+import ParcelForm from './Form';
 import {
     Plus, Search, MapPin, Map, Ruler, X, Edit3, Trash2,
     ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
@@ -29,9 +31,69 @@ function SortHeader({ column, label, sort, onSort, className = '' }) {
 
 const select = 'px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-green-500 outline-none';
 
+/**
+ * Add / edit a parcel without leaving the list.
+ *
+ * Editing fetches first: the boundary is derived from the spatial column with
+ * ST_AsGeoJSON and is not part of a list row, so opening the form straight from
+ * the table would show an empty map for a parcel that already has one.
+ */
+function ParcelModal({ editing, farmTypes, onClose }) {
+    const isEdit = editing.mode === 'edit';
+    const [loaded, setLoaded] = useState(isEdit ? null : { parcel: null, geojson: null });
+    const [failed, setFailed] = useState(false);
+
+    useEffect(() => {
+        if (!isEdit) return;
+
+        let cancelled = false;
+
+        fetch(`/admin/parcels/${editing.id}/edit-data`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then(res => (res.ok ? res.json() : Promise.reject(res.status)))
+            .then(data => { if (!cancelled) setLoaded(data); })
+            .catch(() => { if (!cancelled) setFailed(true); });
+
+        return () => { cancelled = true; };
+    }, [isEdit, editing.id]);
+
+    return (
+        <ModalShell
+            title={isEdit ? 'Edit farm parcel' : 'Add farm parcel'}
+            size="xl"
+            onClose={onClose}
+            bodyClass="px-5 py-4"
+        >
+            {failed && (
+                <p className="py-10 text-center text-sm text-red-600">
+                    Could not load this parcel. Close and try again.
+                </p>
+            )}
+
+            {!failed && !loaded && (
+                <p className="py-10 text-center text-sm text-gray-500">Loading parcel…</p>
+            )}
+
+            {!failed && loaded && (
+                <ParcelForm
+                    parcel={loaded.parcel}
+                    geojson={loaded.geojson}
+                    farmTypes={farmTypes}
+                    onClose={onClose}
+                />
+            )}
+        </ModalShell>
+    );
+}
+
 export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, sort, perPage, summary }) {
     const { can } = usePermissions();
     const [search, setSearch] = useState(filters.search ?? '');
+
+    // { mode: 'new' } or { mode: 'edit', id } — null when the modal is closed.
+    const [editing, setEditing] = useState(null);
 
     const go = (params = {}) => router.get('/admin/parcels',
         {
@@ -110,10 +172,10 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                         Search
                     </button>
                     {can('create parcels') && (
-                        <Link href="/admin/parcels/create"
+                        <button type="button" onClick={() => setEditing({ mode: 'new' })}
                             className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#006400] text-white rounded-xl text-sm font-semibold hover:bg-[#228B22] transition-colors whitespace-nowrap">
                             <Plus className="h-4 w-4" /> Add Parcel
-                        </Link>
+                        </button>
                     )}
                 </div>
 
@@ -215,10 +277,10 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center justify-end gap-1">
                                                     {can('edit parcels') && (
-                                                        <Link href={`/admin/parcels/${p.id}/edit`} title="Edit"
+                                                        <button type="button" onClick={() => setEditing({ mode: 'edit', id: p.id })} title="Edit"
                                                             className="p-2 text-[#006400] hover:bg-green-100 rounded-lg transition-colors">
                                                             <Edit3 className="h-4 w-4" />
-                                                        </Link>
+                                                        </button>
                                                     )}
                                                     {can('delete parcels') && (
                                                         <button onClick={() => destroy(p)} title="Delete"
@@ -274,8 +336,8 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                                     </span>
                                     <div className="flex gap-1">
                                         {can('edit parcels') && (
-                                            <Link href={`/admin/parcels/${p.id}/edit`} aria-label="Edit"
-                                                className="p-2 text-[#006400] bg-green-50 rounded-lg"><Edit3 className="h-4 w-4" /></Link>
+                                            <button type="button" onClick={() => setEditing({ mode: 'edit', id: p.id })} aria-label="Edit"
+                                                className="p-2 text-[#006400] bg-green-50 rounded-lg"><Edit3 className="h-4 w-4" /></button>
                                         )}
                                         {can('delete parcels') && (
                                             <button onClick={() => destroy(p)} aria-label="Delete"
@@ -289,6 +351,15 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
 
                     <Pagination page={parcels} onGo={url => router.get(url, {}, { preserveState: true, preserveScroll: true })} />
                 </>
+            )}
+
+            {editing && (
+                <ParcelModal
+                    key={editing.mode === 'edit' ? editing.id : 'new'}
+                    editing={editing}
+                    farmTypes={farmTypes}
+                    onClose={() => setEditing(null)}
+                />
             )}
         </AdminLayout>
     );

@@ -1,8 +1,9 @@
-import { useForm, Link } from '@inertiajs/react';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, Leaf } from 'lucide-react';
+import { useForm, Link, usePage } from '@inertiajs/react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Leaf, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Login() {
+    const { flash } = usePage().props;
     const [showPassword, setShowPassword] = useState(false);
     const { data, setData, post, processing, errors } = useForm({
         email: '',
@@ -90,6 +91,15 @@ export default function Login() {
                                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome back</h2>
                                 <p className="text-gray-600">Sign in to access your dashboard</p>
                             </div>
+
+                            {/* Why the user was sent here — an expired session
+                                lands on this page with a flashed reason. */}
+                            {flash?.error && (
+                                <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                    <p className="text-sm text-amber-800">{flash.error}</p>
+                                </div>
+                            )}
 
                             <form onSubmit={submit} className="space-y-6">
                                 {/* Email Input */}

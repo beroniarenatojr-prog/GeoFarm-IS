@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm } from '@inertiajs/react';
 import toast from 'react-hot-toast';
-import { User, Mail, ShieldCheck, Clock, CalendarDays, KeyRound, Save } from 'lucide-react';
+import { User, Mail, ShieldCheck, Clock, CalendarDays, KeyRound, Save, Lock } from 'lucide-react';
 import Card from '@/Components/ui/Card';
 import { formatDate } from '@/utils/dateFormatter';
 
@@ -23,6 +23,10 @@ const input = (hasError) =>
 export default function ProfileIndex({ profile }) {
     const details = useForm({ name: profile.name ?? '', email: profile.email ?? '' });
     const password = useForm({ current_password: '', password: '', password_confirmation: '' });
+    const lock = useForm({
+        current_password: '', current_lock_password: '',
+        lock_password: '', lock_password_confirmation: '',
+    });
 
     const initials = (profile.name || '')
         .split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
@@ -45,6 +49,18 @@ export default function ProfileIndex({ profile }) {
                 toast.success('Password changed.');
             },
             onError: errs => toast.error(Object.values(errs)[0] || 'Could not change your password.'),
+        });
+    };
+
+    const saveLockPassword = e => {
+        e.preventDefault();
+        lock.put('/admin/profile/lock-password', {
+            preserveScroll: true,
+            onSuccess: () => {
+                lock.reset();
+                toast.success('Lock password updated.');
+            },
+            onError: errs => toast.error(Object.values(errs)[0] || 'Could not update your lock password.'),
         });
     };
 
@@ -219,6 +235,82 @@ export default function ProfileIndex({ profile }) {
                             </div>
                         </form>
                     </Card>
+
+                    {/* Only shown to roles that can actually lock records. */}
+                    {profile.can_lock && (
+                        <Card title={profile.has_lock_password ? 'Change lock password' : 'Set a lock password'}>
+                            <form onSubmit={saveLockPassword} className="space-y-4">
+                                <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 border border-amber-200 p-3">
+                                    <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                    <p className="text-xs text-amber-900">
+                                        Used only to confirm locking and unlocking records. It must be
+                                        different from your login password — otherwise confirming a lock
+                                        would prove nothing beyond being signed in.
+                                        {profile.lock_password_set_at && (
+                                            <span className="block mt-1 text-amber-700">
+                                                Last set {formatDate(profile.lock_password_set_at, 'date-only')}.
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+
+                                <Field label="Your login password" error={lock.errors.current_password}>
+                                    <input
+                                        type="password"
+                                        autoComplete="current-password"
+                                        value={lock.data.current_password}
+                                        onChange={e => { lock.setData('current_password', e.target.value); lock.clearErrors('current_password'); }}
+                                        className={input(lock.errors.current_password)}
+                                    />
+                                </Field>
+
+                                {profile.has_lock_password && (
+                                    <Field label="Current lock password" error={lock.errors.current_lock_password}>
+                                        <input
+                                            type="password"
+                                            autoComplete="off"
+                                            value={lock.data.current_lock_password}
+                                            onChange={e => { lock.setData('current_lock_password', e.target.value); lock.clearErrors('current_lock_password'); }}
+                                            className={input(lock.errors.current_lock_password)}
+                                        />
+                                    </Field>
+                                )}
+
+                                <Field label="New lock password" error={lock.errors.lock_password}>
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={lock.data.lock_password}
+                                        onChange={e => { lock.setData('lock_password', e.target.value); lock.clearErrors('lock_password'); }}
+                                        className={input(lock.errors.lock_password)}
+                                    />
+                                </Field>
+
+                                <Field label="Confirm new lock password">
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={lock.data.lock_password_confirmation}
+                                        onChange={e => lock.setData('lock_password_confirmation', e.target.value)}
+                                        className={input(false)}
+                                    />
+                                </Field>
+
+                                <div className="flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={lock.processing}
+                                        className="inline-flex items-center gap-2 px-6 py-2.5 bg-amber-600 text-white rounded-xl shadow-lg hover:bg-amber-700 transition-all text-sm font-semibold disabled:opacity-50"
+                                    >
+                                        <Lock className="h-4 w-4" />
+                                        {lock.processing
+                                            ? 'Saving…'
+                                            : profile.has_lock_password ? 'Change lock password' : 'Set lock password'}
+                                    </button>
+                                </div>
+                            </form>
+                        </Card>
+                    )}
                 </div>
             </div>
         </AdminLayout>

@@ -86,11 +86,18 @@ class InventoryService
                 ));
             }
 
-            $locked->update(['quantity' => (float) $locked->quantity - $quantity]);
+            $balance = (float) $locked->quantity - $quantity;
+            $locked->update(['quantity' => $balance]);
 
             $distribution = $locked->distributions()->create([
+                // Recorded at the moment of issue so history can show
+                // "45 -> 43" without replaying the whole ledger.
+                'balance_after'     => $balance,
                 'farmer_id'         => $data['farmer_id'],
                 'assistance_id'     => $data['assistance_id'] ?? null,
+                // Set when the issue is part of a recorded assistance payout,
+                // so the payout and its stock movements stay tied together.
+                'assistance_distribution_id' => $data['assistance_distribution_id'] ?? null,
                 'quantity'          => $quantity,
                 'distribution_date' => $data['distribution_date'] ?? now()->toDateString(),
                 'status'            => $data['status'] ?? 'pending',

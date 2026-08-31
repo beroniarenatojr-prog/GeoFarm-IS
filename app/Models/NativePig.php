@@ -2,42 +2,36 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksHerdSize;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NativePig extends Model
 {
+    use TracksHerdSize;
+
+    protected $table = 'native_pigs';
+
     protected $fillable = [
         'farmer_id',
         'male_count',
         'female_count',
-        'is_large_raiser',
+        'purpose',
+        'health_status',
+        'last_vaccination',
+        'notes',
     ];
 
     protected $casts = [
-        'male_count' => 'integer',
-        'female_count' => 'integer',
-        'total_heads' => 'integer',
-        'is_large_raiser' => 'boolean',
+        'male_count'       => 'integer',
+        'female_count'     => 'integer',
+        'total_heads'      => 'integer',
+        'is_large_raiser'  => 'boolean',
+        'last_vaccination' => 'date:Y-m-d',
     ];
-
-    protected $appends = ['total_heads'];
 
     public function farmer(): BelongsTo
     {
         return $this->belongsTo(Farmer::class);
-    }
-
-    public function getTotalHeadsAttribute(): int
-    {
-        return $this->male_count + $this->female_count;
-    }
-
-    protected static function booted(): void
-    {
-        static::saving(function (NativePig $pig) {
-            $total = $pig->male_count + $pig->female_count;
-            $pig->is_large_raiser = $total > 20;
-        });
     }
 }

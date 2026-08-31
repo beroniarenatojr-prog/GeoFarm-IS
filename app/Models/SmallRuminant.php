@@ -2,43 +2,35 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksHerdSize;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SmallRuminant extends Model
 {
+    use TracksHerdSize;
+
     protected $fillable = [
         'farmer_id',
         'animal_type',
         'male_count',
         'female_count',
-        'is_large_raiser',
+        'purpose',
+        'health_status',
+        'last_vaccination',
+        'notes',
     ];
 
     protected $casts = [
-        'male_count' => 'integer',
-        'female_count' => 'integer',
-        'total_heads' => 'integer',
-        'is_large_raiser' => 'boolean',
+        'male_count'       => 'integer',
+        'female_count'     => 'integer',
+        'total_heads'      => 'integer',
+        'is_large_raiser'  => 'boolean',
+        'last_vaccination' => 'date:Y-m-d',
     ];
-
-    protected $appends = ['total_heads'];
 
     public function farmer(): BelongsTo
     {
         return $this->belongsTo(Farmer::class);
-    }
-
-    public function getTotalHeadsAttribute(): int
-    {
-        return $this->male_count + $this->female_count;
-    }
-
-    protected static function booted(): void
-    {
-        static::saving(function (SmallRuminant $ruminant) {
-            $total = $ruminant->male_count + $ruminant->female_count;
-            $ruminant->is_large_raiser = $total > 20;
-        });
     }
 }

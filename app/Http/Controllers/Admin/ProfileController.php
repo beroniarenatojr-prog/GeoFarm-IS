@@ -32,6 +32,10 @@ class ProfileController extends Controller
                 'last_login'  => $user->last_login?->toIso8601String(),
                 'member_since' => $user->created_at?->toIso8601String(),
                 'permissions' => $user->getAllPermissions()->pluck('name')->sort()->values(),
+                // The lock password itself is never sent — only whether one exists.
+                'has_lock_password'    => $user->hasLockPassword(),
+                'lock_password_set_at' => $user->lock_password_set_at?->toIso8601String(),
+                'can_lock'             => $user->can('lock assistance'),
             ],
         ]);
     }
@@ -68,5 +72,39 @@ class ProfileController extends Controller
         AuditService::log('update', 'users', $request->user()->id, null, ['password_changed' => true]);
 
         return back()->with('success', 'Password changed.');
+    }
+
+    /**
+     * Set or change the lock password used to confirm locking and unlocking
+     * records. Deliberately separate from the login password: if the two could
+     * be the same, confirming a lock would prove nothing beyond being signed in.
+     */
+    public function updateLockPassword(Request $request)
+    {
+        $user = $request->user();
+
+        $request->validate([
+            // The login password proves identity; the current lock password
+            // proves they are the one who set it. Require both to change it.
+            'current_password'  => ['required', 'current_password'],
+            'current_lock_password' => [$user->hasLockPassword() ? 'required' : 'nullable', 'string'],
+            'lock_password'     => ['required', 'confirmed', 'string', 'min:6', 'max:72'],
+        ], [], ['lock_password' => 'lock password']);
+
+        if ($user->hasLockPassword() && !$user->checkLockPassword($request->current_lock_password)) {
+            return back()->withErrors(['current_lock_password' => 'That lock password is not correct.']);
+        }
+
+        if ($user->lockPasswordMatchesLogin($request->lock_password)) {
+            return back()->withErrors([
+                'lock_password' => 'Your lock password must be different from your login password.',
+            ]);
+        }
+
+        $user->setLockPassword($request->lock_password);
+
+        AuditService::log('update', 'users', $user->id, null, ['lock_password_changed' => true]);
+
+        return back()->with('success', 'Lock password updated.');
     }
 }

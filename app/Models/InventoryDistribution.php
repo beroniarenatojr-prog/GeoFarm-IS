@@ -9,12 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class InventoryDistribution extends Model
 {
     protected $fillable = [
-        'inventory_item_id', 'farmer_id', 'assistance_id', 'quantity',
+        'inventory_item_id', 'farmer_id', 'assistance_id', 'assistance_distribution_id', 'quantity', 'balance_after',
         'distribution_date', 'status', 'notes', 'issued_by',
     ];
 
     protected $casts = [
         'quantity'          => 'decimal:2',
+        'balance_after'     => 'decimal:2',
         'distribution_date' => 'date',
     ];
 

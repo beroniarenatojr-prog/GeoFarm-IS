@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AssistanceDistribution extends Model
 {
@@ -14,6 +15,8 @@ class AssistanceDistribution extends Model
         'quantity_given',
         'amount_given',
         'status',
+        'is_customized',
+        'customization_reason',
         'notes',
     ];
 
@@ -21,6 +24,7 @@ class AssistanceDistribution extends Model
         'distribution_date' => 'date',
         'quantity_given' => 'decimal:2',
         'amount_given' => 'decimal:2',
+        'is_customized' => 'boolean',
     ];
 
     public $timestamps = false;
@@ -47,5 +51,15 @@ class AssistanceDistribution extends Model
     public function farmer(): BelongsTo
     {
         return $this->belongsTo(Farmer::class);
+    }
+
+    /**
+     * The goods issued as part of this payout. Empty for cash-only assistance.
+     * These rows are the actual stock movements — deleting this payout takes
+     * them with it, which is why returning the stock has to happen first.
+     */
+    public function itemIssues(): HasMany
+    {
+        return $this->hasMany(InventoryDistribution::class, 'assistance_distribution_id');
     }
 }

@@ -1,13 +1,14 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router, useForm } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
-    Package, Plus, Minus, Send, Trash2, X, Search, CalendarClock,
+    Package, Plus, Minus, Send, Trash2, CalendarClock,
     ArrowUpRight, ArrowDownRight, Users, Wallet, Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '@/Components/ui/Card';
 import ModalShell from '@/Components/ui/ModalShell';
+import FarmerPicker from '@/Components/ui/FarmerPicker';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
 
@@ -358,24 +359,7 @@ function IssuePanel({ item, programs, onClose }) {
         distribution_date: new Date().toISOString().slice(0, 10), status: 'pending', notes: '',
     });
 
-    const [term, setTerm] = useState('');
-    const [matches, setMatches] = useState([]);
-    const [chosen, setChosen] = useState(null);
-
-    // The registry is far too large for a dropdown, so the farmer is searched.
-    useEffect(() => {
-        if (term.trim().length < 2) { setMatches([]); return; }
-        const t = setTimeout(async () => {
-            try {
-                const res = await fetch(`/admin/inventory/farmer-options?q=${encodeURIComponent(term)}`, {
-                    headers: { Accept: 'application/json' }, credentials: 'same-origin',
-                });
-                if (res.ok) setMatches(await res.json());
-            } catch { /* leave the previous matches in place */ }
-        }, 250);
-        return () => clearTimeout(t);
-    }, [term]);
-
+    // Farmer search now lives in FarmerPicker, shared with the assistance form.
     const remaining = Number(item.quantity) - Number(form.data.quantity || 0);
 
     const submit = e => {
@@ -395,41 +379,13 @@ function IssuePanel({ item, programs, onClose }) {
                     <b className="text-[#006400] tabular-nums">{num(item.quantity)} {item.unit}</b>
                 </div>
 
-                <div>
-                    <label className={label}>Farmer *</label>
-                    {chosen ? (
-                        <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-green-200 bg-green-50">
-                            <span className="min-w-0">
-                                <span className="block text-sm font-semibold text-gray-900 truncate">{chosen.label}</span>
-                                <span className="block text-xs text-gray-500">{chosen.meta}</span>
-                            </span>
-                            <button type="button"
-                                onClick={() => { setChosen(null); form.setData('farmer_id', ''); setTerm(''); }}
-                                className="p-1 text-gray-400 hover:text-gray-700"><X className="h-4 w-4" /></button>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <input className={`${field} pl-10`} value={term} onChange={e => setTerm(e.target.value)}
-                                    placeholder="Search surname or RSBSA number…" />
-                            </div>
-                            {matches.length > 0 && (
-                                <div className="mt-1 max-h-40 overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
-                                    {matches.map(m => (
-                                        <button key={m.id} type="button"
-                                            onClick={() => { setChosen(m); form.setData('farmer_id', m.id); }}
-                                            className="w-full px-3 py-2 text-left hover:bg-green-50">
-                                            <span className="block text-sm font-medium text-gray-900">{m.label}</span>
-                                            <span className="block text-xs text-gray-500">{m.meta}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </>
-                    )}
-                    {form.errors.farmer_id && <p className="text-xs text-red-600 mt-1">{form.errors.farmer_id}</p>}
-                </div>
+                <FarmerPicker
+                    label="Farmer"
+                    required
+                    value={form.data.farmer_id}
+                    onChange={id => form.setData('farmer_id', id)}
+                    error={form.errors.farmer_id}
+                />
 
                 <div>
                     <label className={label}>Quantity ({item.unit}) *</label>

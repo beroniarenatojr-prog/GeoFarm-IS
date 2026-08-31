@@ -65,7 +65,6 @@ class ParcelController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Parcels/Form', [
-            'farmers'   => Farmer::select('id', 'first_name', 'last_name')->orderBy('last_name')->get(),
             'farmTypes' => FarmType::all(),
         ]);
     }
@@ -109,8 +108,27 @@ class ParcelController extends Controller
         return Inertia::render('Admin/Parcels/Form', [
             'parcel'    => $parcel->load('farmer'),
             'geojson'   => $geo?->geojson,
-            'farmers'   => Farmer::select('id', 'first_name', 'last_name')->orderBy('last_name')->get(),
             'farmTypes' => FarmType::all(),
+        ]);
+    }
+
+    /**
+     * The parcel plus its boundary, as JSON, for the edit modal on the list.
+     *
+     * The boundary is not a column — it is derived with ST_AsGeoJSON from the
+     * spatial geom. Shipping it for every row of the list would send a polygon
+     * per parcel to draw a table, so the modal asks for one on demand.
+     */
+    public function editData(FarmParcel $parcel)
+    {
+        $geo = DB::selectOne(
+            'SELECT ST_AsGeoJSON(geom) as geojson FROM farm_parcels WHERE id = ?',
+            [$parcel->id]
+        );
+
+        return response()->json([
+            'parcel'  => $parcel->load('farmer:id,first_name,middle_name,last_name,suffix,rsbsa_no'),
+            'geojson' => $geo?->geojson,
         ]);
     }
 

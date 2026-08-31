@@ -5,7 +5,7 @@ import { ProgramFormFields, useProgramForm } from '@/Components/Assistance/Progr
  * Full-page form. The index opens the same fields in a modal; this route stays
  * for direct links and for anyone who lands on it from a bookmark.
  */
-export default function AssistanceForm({ program, assistanceTypes = [], barangays = [] }) {
+export default function AssistanceForm({ program, assistanceTypes = [], barangays = [], stockItems = [] }) {
     const isEdit = !!program;
     const form = useProgramForm(program);
 
@@ -24,6 +24,7 @@ export default function AssistanceForm({ program, assistanceTypes = [], barangay
                         form={form}
                         assistanceTypes={assistanceTypes}
                         barangays={barangays}
+                        stockItems={stockItems}
                     />
                     <div className="flex gap-3 pt-2">
                         <button type="submit" disabled={form.processing}

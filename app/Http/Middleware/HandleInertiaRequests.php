@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Farmer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -34,10 +35,21 @@ class HandleInertiaRequests extends Middleware
                     ? $user->getAllPermissions()->pluck('name')->toArray()
                     : [],
             ],
-            'flash' => [
-                'success' => $request->session()->get('success'),
-                'error'   => $request->session()->get('error'),
-            ],
+            'flash' => (function () use ($request) {
+                $success = $request->session()->get('success');
+                $error   = $request->session()->get('error');
+
+                return [
+                    'success' => $success,
+                    'error'   => $error,
+                    // A one-shot id so the client can tell a genuinely new
+                    // message from a stale one. Partial reloads (`only: [...]`)
+                    // keep whatever props they did not request, so without this
+                    // the previous message would be announced again every time
+                    // someone typed in a search box.
+                    'id' => ($success || $error) ? (string) Str::uuid() : null,
+                ];
+            })(),
             'notifications' => [
                 'pendingFarmers' => $this->pendingFarmers($user),
             ],

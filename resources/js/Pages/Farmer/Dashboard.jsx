@@ -52,18 +52,22 @@ const FALLBACK_STATUS = {
 
 function StatCard({ icon: Icon, tile, glow, value, label, detail }) {
     return (
-        <div className="group relative bg-white rounded-2xl border border-gray-200/80 p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden">
+        <div className="group relative bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-6 shadow-sm hover:shadow-xl sm:hover:-translate-y-1 transition-all duration-300 overflow-hidden">
             {/* soft colour wash that intensifies on hover */}
-            <div className={`absolute -top-10 -right-10 h-32 w-32 rounded-full blur-2xl ${glow} opacity-60 group-hover:opacity-100 transition-opacity`} />
+            <div className={`absolute -top-10 -right-10 h-24 w-24 sm:h-32 sm:w-32 rounded-full blur-2xl ${glow} opacity-60 group-hover:opacity-100 transition-opacity`} />
 
-            <div className="relative">
-                <div className={`inline-flex items-center justify-center h-12 w-12 rounded-xl bg-gradient-to-br ${tile} shadow-lg mb-5`}>
-                    <Icon className="h-6 w-6 text-white" />
+            {/* Icon beside the figure on phones, above it from sm up: stacking
+                four of these full-width made the page scroll for ages. */}
+            <div className="relative flex items-center gap-3 sm:block">
+                <div className={`inline-flex flex-shrink-0 items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gradient-to-br ${tile} shadow-lg sm:mb-5`}>
+                    <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                 </div>
 
-                <p className="text-3xl font-bold text-gray-900 tracking-tight leading-none mb-2">{value}</p>
-                <p className="text-sm font-semibold text-gray-700">{label}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{detail}</p>
+                <div className="min-w-0">
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight leading-none mb-1 sm:mb-2">{value}</p>
+                    <p className="text-xs sm:text-sm font-semibold text-gray-700 leading-tight">{label}</p>
+                    <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 leading-tight">{detail}</p>
+                </div>
             </div>
         </div>
     );
@@ -71,14 +75,16 @@ function StatCard({ icon: Icon, tile, glow, value, label, detail }) {
 
 function SectionHeading({ icon: Icon, title, aside }) {
     return (
-        <div className="flex items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-[#006400]/10">
-                    <Icon className="h-5 w-5 text-[#006400]" />
+        // The aside ("12.00 ha across 2 parcels") does not fit beside the title
+        // on a phone, so it drops to its own line instead of squeezing both.
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4 mb-4 sm:mb-5">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="flex flex-shrink-0 items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-[#006400]/10">
+                    <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-[#006400]" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-900 tracking-tight">{title}</h2>
+                <h2 className="text-base sm:text-xl font-bold text-gray-900 tracking-tight truncate">{title}</h2>
             </div>
-            {aside && <span className="text-sm font-medium text-gray-500">{aside}</span>}
+            {aside && <span className="text-xs sm:text-sm font-medium text-gray-500 pl-10 sm:pl-0">{aside}</span>}
         </div>
     );
 }
@@ -163,7 +169,7 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                 </div>
             </nav>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
                 {/* --------------------------------------------------------- hero */}
                 <div
                     className="relative rounded-3xl overflow-hidden mb-8 shadow-xl"
@@ -177,7 +183,7 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                 >
                     {/* decorative rings */}
                     <svg
-                        className="absolute -right-16 -top-20 h-80 w-80 text-white/[0.07] pointer-events-none"
+                        className="absolute -right-12 -top-16 h-48 w-48 sm:-right-16 sm:-top-20 sm:h-80 sm:w-80 text-white/[0.07] pointer-events-none"
                         viewBox="0 0 200 200" fill="none" aria-hidden="true"
                     >
                         <circle cx="100" cy="100" r="90" stroke="currentColor" strokeWidth="1.5" />
@@ -186,10 +192,12 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                         <circle cx="100" cy="100" r="18" stroke="currentColor" strokeWidth="1.5" />
                     </svg>
 
-                    <div className="relative p-6 sm:p-9">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                    <div className="relative p-5 sm:p-9">
+                        {/* Avatar beside the name on phones rather than above it;
+                            stacked, the two claimed most of the first screen. */}
+                        <div className="flex flex-row items-center gap-4 sm:gap-6">
                             {/* avatar */}
-                            <div className={`flex-shrink-0 h-24 w-24 rounded-2xl ring-4 ${status.ring} overflow-hidden bg-white/15 backdrop-blur-sm flex items-center justify-center shadow-lg`}>
+                            <div className={`flex-shrink-0 h-16 w-16 sm:h-24 sm:w-24 rounded-2xl ring-4 ${status.ring} overflow-hidden bg-white/15 backdrop-blur-sm flex items-center justify-center shadow-lg`}>
                                 {farmer.photo_path ? (
                                     <img
                                         src={`/storage/${farmer.photo_path}`}
@@ -197,26 +205,26 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                                         className="h-full w-full object-cover"
                                     />
                                 ) : (
-                                    <span className="text-3xl font-bold text-white tracking-tight">{initials || '—'}</span>
+                                    <span className="text-xl sm:text-3xl font-bold text-white tracking-tight">{initials || '—'}</span>
                                 )}
                             </div>
 
                             <div className="min-w-0 flex-1">
-                                <p className="text-white/70 text-sm font-medium mb-1">Welcome back,</p>
-                                <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4 break-words">
+                                <p className="text-white/70 text-xs sm:text-sm font-medium mb-0.5 sm:mb-1">Welcome back,</p>
+                                <h1 className="text-xl sm:text-4xl font-bold text-white tracking-tight mb-3 sm:mb-4 break-words leading-tight">
                                     {farmer.full_name || farmer.first_name}
                                 </h1>
 
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium">
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs sm:text-sm font-medium">
                                         <BadgeCheck className="h-4 w-4" />
                                         RSBSA {farmer.rsbsa_no || 'not yet assigned'}
                                     </span>
-                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs sm:text-sm font-medium">
                                         <MapPin className="h-4 w-4" />
                                         {farmer.barangay || 'No barangay'}
                                     </span>
-                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-semibold ${status.chip}`}>
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border text-xs sm:text-sm font-semibold ${status.chip}`}>
                                         <StatusIcon className="h-4 w-4" />
                                         {status.label}
                                     </span>
@@ -243,7 +251,9 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                 )}
 
                 {/* -------------------------------------------------------- stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                {/* Two up even on the narrowest phone — four stacked cards was
+                    most of a screen each, and the page read as endless. */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
                     <StatCard
                         icon={MapPin}
                         tile="from-green-500 to-green-600"
@@ -279,8 +289,8 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                 </div>
 
                 {/* ------------------------------------------------------ profile */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6">
                         <SectionHeading icon={User} title="Personal Information" />
                         <div className="divide-y divide-gray-100">
                             <InfoRow icon={User} label="Full Name" value={farmer.full_name || '—'} />
@@ -292,14 +302,14 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
                                     ? new Date(farmer.birthdate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
                                     : 'Not provided'}
                             />
-                            <div className="grid grid-cols-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2">
                                 <InfoRow icon={User} label="Sex" value={farmer.sex || 'N/A'} />
                                 <InfoRow icon={User} label="Civil Status" value={farmer.civil_status || 'N/A'} />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6">
                         <SectionHeading icon={MapPin} title="Contact & Location" />
                         <div className="divide-y divide-gray-100">
                             <InfoRow icon={Mail} label="Email" value={farmer.email || 'Not provided'} />
@@ -311,7 +321,7 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
 
                 {/* ------------------------------------------------------ parcels */}
                 {farmer.parcels?.length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 mb-8">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
                         <SectionHeading
                             icon={Ruler}
                             title="My Farm Parcels"
@@ -393,7 +403,7 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
 
                 {/* ------------------------------------------------------- assets */}
                 {assetGroups.length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6 mb-8">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
                         <SectionHeading
                             icon={Sprout}
                             title="My Livestock & Assets"
@@ -432,7 +442,7 @@ export default function FarmerDashboard({ auth, farmer, stats }) {
 
                 {/* --------------------------------------------------- assistance */}
                 {farmer.distributions?.length > 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-6">
+                    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6">
                         <SectionHeading
                             icon={FileText}
                             title="Assistance Received"

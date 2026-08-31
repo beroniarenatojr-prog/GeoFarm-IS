@@ -5,6 +5,8 @@ use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CropEstimatorController;
 use App\Http\Controllers\Admin\CropSeasonController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\FarmAssetController;
+use App\Http\Controllers\Admin\FarmerLookupController;
 use App\Http\Controllers\Admin\FarmInventoryController;
 use App\Http\Controllers\Admin\FarmerController;
 use App\Http\Controllers\Admin\FishpondController;
@@ -55,12 +57,16 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // Header search: no extra permission, but each result type is gated
     // inside the controller by the caller's own view permissions.
     Route::get('search', GlobalSearchController::class)->name('search');
+    // Shared type-ahead used by every form that has to name a farmer.
+    Route::get('farmer-options', FarmerLookupController::class)
+        ->middleware('permission:view farmers')->name('farmer-options');
 
     // The signed-in user's own account. No extra permission: every staff role
     // may view and edit their own details, and only their own.
     Route::get('profile', [ProfileController::class, 'show'])->name('profile.show');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+    Route::put('profile/lock-password', [ProfileController::class, 'updateLockPassword'])->name('profile.lock-password');
 
     // Farmers
     Route::get('farmers', [FarmerController::class, 'index'])->middleware('permission:view farmers')->name('farmers.index');
@@ -114,6 +120,8 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     Route::post('parcels', [ParcelController::class, 'store'])->middleware('permission:create parcels')->name('parcels.store');
     Route::get('parcels/{parcel}', [ParcelController::class, 'show'])->middleware('permission:view parcels')->name('parcels.show');
     Route::get('parcels/{parcel}/edit', [ParcelController::class, 'edit'])->middleware('permission:edit parcels')->name('parcels.edit');
+    // JSON for the edit modal on the list, including the derived boundary.
+    Route::get('parcels/{parcel}/edit-data', [ParcelController::class, 'editData'])->middleware('permission:edit parcels')->name('parcels.edit-data');
     Route::put('parcels/{parcel}', [ParcelController::class, 'update'])->middleware('permission:edit parcels')->name('parcels.update');
     Route::delete('parcels/{parcel}', [ParcelController::class, 'destroy'])->middleware('permission:delete parcels')->name('parcels.destroy');
     Route::get('parcels-geojson', [ParcelController::class, 'geojson'])->middleware('permission:view maps')->name('parcels.geojson');
@@ -211,6 +219,16 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // Farm Inventory
     Route::get('farm-inventory', [FarmInventoryController::class, 'index'])->middleware('permission:view inventory')->name('farm-inventory.index');
     Route::get('farm-inventory/{farmer}/export', [FarmInventoryController::class, 'export'])->middleware('permission:export reports')->name('farm-inventory.export');
+
+    // Write side: one set of routes for all eight asset categories. The
+    // category segment is resolved against FarmAssetController's registry,
+    // which 404s anything it does not recognise.
+    Route::post('farm-assets/{category}', [FarmAssetController::class, 'store'])
+        ->middleware('permission:create inventory')->name('farm-assets.store');
+    Route::put('farm-assets/{category}/{id}', [FarmAssetController::class, 'update'])
+        ->middleware('permission:edit inventory')->name('farm-assets.update');
+    Route::delete('farm-assets/{category}/{id}', [FarmAssetController::class, 'destroy'])
+        ->middleware('permission:delete inventory')->name('farm-assets.destroy');
 
     // GIS Mapping
     Route::get('gis/map', [GISController::class, 'index'])->middleware('permission:view maps')->name('gis.map');

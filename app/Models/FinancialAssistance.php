@@ -37,6 +37,8 @@ class FinancialAssistance extends Model
         'assistance_type_id',
         'description',
         'total_budget',
+        // Per beneficiary, unlike total_budget which is the whole programme.
+        'standard_cash_amount',
         'start_date',
         'end_date',
         'status',
@@ -48,6 +50,7 @@ class FinancialAssistance extends Model
 
     protected $casts = [
         'total_budget' => 'decimal:2',
+        'standard_cash_amount' => 'decimal:2',
         'start_date' => 'date',
         'end_date' => 'date',
         'is_locked' => 'boolean',
@@ -62,6 +65,29 @@ class FinancialAssistance extends Model
     public function distributions(): HasMany
     {
         return $this->hasMany(AssistanceDistribution::class, 'assistance_id');
+    }
+
+    /** What this programme hands out, for material and mixed programmes. */
+    public function programItems(): HasMany
+    {
+        return $this->hasMany(AssistanceProgramItem::class, 'assistance_id');
+    }
+
+    /** Every stock movement this programme has caused. */
+    public function itemIssues(): HasMany
+    {
+        return $this->hasMany(InventoryDistribution::class, 'assistance_id');
+    }
+
+    /**
+     * Whether the programme hands out goods. Driven by the assistance type's
+     * distribution_type, with the item list as the override: a "financial"
+     * type that has items attached is a mixed programme.
+     */
+    public function isMaterial(): bool
+    {
+        return $this->assistanceType?->distribution_type === 'material'
+            || $this->programItems()->exists();
     }
 
     public function creator(): BelongsTo

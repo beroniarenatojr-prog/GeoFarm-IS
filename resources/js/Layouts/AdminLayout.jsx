@@ -76,7 +76,7 @@ const nav = [
 
 export default function AdminLayout({ children, title, showBack = true }) {
     const page = usePage();
-    const { auth, flash } = page.props;
+    const { auth } = page.props;
     const { can } = usePermissions();
     const [hovering, setHovering] = useState(false);
 
@@ -327,17 +327,11 @@ export default function AdminLayout({ children, title, showBack = true }) {
                         </div>
                     </div>
                 </header>
+                {/* Flash messages are announced globally from app.jsx, for every
+                    page and every role. Repeating them as a banner here meant
+                    admin screens notified twice while the farmer portal and the
+                    login page said nothing at all. */}
                 <main className="flex-1 p-6 relative z-10">
-                    {flash?.success && (
-                        <div className="mb-4 bg-green-100 text-green-800 px-4 py-2 rounded text-sm">
-                            {flash.success}
-                        </div>
-                    )}
-                    {flash?.error && (
-                        <div className="mb-4 bg-red-100 text-red-800 px-4 py-2 rounded text-sm">
-                            {flash.error}
-                        </div>
-                    )}
                     {children}
                 </main>
             </div>
