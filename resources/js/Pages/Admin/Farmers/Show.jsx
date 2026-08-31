@@ -474,11 +474,11 @@ export default function FarmerShow({ farmer }) {
                   <DataTable
                     columns={[
                       { header: 'Crop Type', accessorKey: 'crop_type' },
-                      { header: 'Quantity/Trees', accessorKey: 'quantity', cell: (row) => row.quantity || '—' },
-                      { header: 'Area (ha)', accessorKey: 'area_hectares', cell: (row) => row.area_hectares || '—' },
+                      { header: 'Quantity/Trees', accessorKey: 'quantity', cell: ({ row: { original: row } }) => row.quantity || '—' },
+                      { header: 'Area (ha)', accessorKey: 'area_hectares', cell: ({ row: { original: row } }) => row.area_hectares || '—' },
                       ...(can('edit inventory') || can('delete inventory') ? [{
                         header: 'Actions',
-                        cell: (row) => (
+                        cell: ({ row: { original: row } }) => (
                           <div className="flex gap-2">
                             {can('edit inventory') && (
                               <button
@@ -538,7 +538,7 @@ export default function FarmerShow({ farmer }) {
                       { header: 'Area (ha)', accessorKey: 'area_hectares' },
                       ...(can('edit inventory') || can('delete inventory') ? [{
                         header: 'Actions',
-                        cell: (row) => (
+                        cell: ({ row: { original: row } }) => (
                           <div className="flex gap-2">
                             {can('edit inventory') && (
                               <button
@@ -599,10 +599,10 @@ export default function FarmerShow({ farmer }) {
                         { header: 'Male', accessorKey: 'male_count' },
                         { header: 'Female', accessorKey: 'female_count' },
                         { header: 'Total', accessorKey: 'total_heads' },
-                        { header: 'Large Raiser', cell: (row) => row.is_large_raiser ? '✓' : '—' },
+                        { header: 'Large Raiser', cell: ({ row: { original: row } }) => row.is_large_raiser ? '✓' : '—' },
                         ...(can('edit inventory') || can('delete inventory') ? [{
                           header: 'Actions',
-                          cell: (row) => (
+                          cell: ({ row: { original: row } }) => (
                             <div className="flex gap-2">
                               {can('edit inventory') && (
                                 <button
@@ -651,10 +651,10 @@ export default function FarmerShow({ farmer }) {
                         { header: 'Male', accessorKey: 'male_count' },
                         { header: 'Female', accessorKey: 'female_count' },
                         { header: 'Total', accessorKey: 'total_heads' },
-                        { header: 'Large Raiser', cell: (row) => row.is_large_raiser ? '✓' : '—' },
+                        { header: 'Large Raiser', cell: ({ row: { original: row } }) => row.is_large_raiser ? '✓' : '—' },
                         ...(can('edit inventory') || can('delete inventory') ? [{
                           header: 'Actions',
-                          cell: (row) => (
+                          cell: ({ row: { original: row } }) => (
                             <div className="flex gap-2">
                               {can('edit inventory') && (
                                 <button
@@ -714,10 +714,10 @@ export default function FarmerShow({ farmer }) {
                         { header: 'Male', accessorKey: 'male_count' },
                         { header: 'Female', accessorKey: 'female_count' },
                         { header: 'Total', accessorKey: 'total_heads' },
-                        { header: 'Large Raiser', cell: (row) => row.is_large_raiser ? '✓' : '—' },
+                        { header: 'Large Raiser', cell: ({ row: { original: row } }) => row.is_large_raiser ? '✓' : '—' },
                         ...(can('edit inventory') || can('delete inventory') ? [{
                           header: 'Actions',
-                          cell: (row) => (
+                          cell: ({ row: { original: row } }) => (
                             <div className="flex gap-2">
                               {can('edit inventory') && (
                                 <button
@@ -766,10 +766,10 @@ export default function FarmerShow({ farmer }) {
                         { header: 'Male', accessorKey: 'male_count' },
                         { header: 'Female', accessorKey: 'female_count' },
                         { header: 'Total', accessorKey: 'total_heads' },
-                        { header: 'Large Raiser', cell: (row) => row.is_large_raiser ? '✓' : '—' },
+                        { header: 'Large Raiser', cell: ({ row: { original: row } }) => row.is_large_raiser ? '✓' : '—' },
                         ...(can('edit inventory') || can('delete inventory') ? [{
                           header: 'Actions',
-                          cell: (row) => (
+                          cell: ({ row: { original: row } }) => (
                             <div className="flex gap-2">
                               {can('edit inventory') && (
                                 <button
@@ -818,10 +818,10 @@ export default function FarmerShow({ farmer }) {
                         { header: 'Male', accessorKey: 'male_count' },
                         { header: 'Female', accessorKey: 'female_count' },
                         { header: 'Total', accessorKey: 'total_heads' },
-                        { header: 'Large Raiser', cell: (row) => row.is_large_raiser ? '✓' : '—' },
+                        { header: 'Large Raiser', cell: ({ row: { original: row } }) => row.is_large_raiser ? '✓' : '—' },
                         ...(can('edit inventory') || can('delete inventory') ? [{
                           header: 'Actions',
-                          cell: (row) => (
+                          cell: ({ row: { original: row } }) => (
                             <div className="flex gap-2">
                               {can('edit inventory') && (
                                 <button

@@ -42,18 +42,27 @@ class FarmInventoryController extends Controller
 
         $farmers = Farmer::query()
             ->verified()
-            ->select('id', 'first_name', 'last_name', 'rsbsa_no')
+            ->select('id', 'first_name', 'last_name', 'rsbsa_no', 'barangay', 'mobile_no')
+            // Staff rarely have the RSBSA number to hand. They do know the
+            // barangay a farmer walked in from, or the number they just rang,
+            // so both have to be searchable alongside the name.
             ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
                 ->where('first_name', 'like', "%$search%")
                 ->orWhere('last_name', 'like', "%$search%")
-                ->orWhere('rsbsa_no', 'like', "%$search%")))
+                ->orWhere('rsbsa_no', 'like', "%$search%")
+                ->orWhere('barangay', 'like', "%$search%")
+                ->orWhere('mobile_no', 'like', "%$search%")))
             ->orderBy('last_name')
             ->limit(50)
             ->get()
             ->map(fn ($f) => [
                 'id'    => $f->id,
                 'label' => trim("{$f->last_name}, {$f->first_name}"),
-                'meta'  => $f->rsbsa_no ? "RSBSA {$f->rsbsa_no}" : 'No RSBSA number',
+                'meta'  => collect([
+                    $f->rsbsa_no ? "RSBSA {$f->rsbsa_no}" : 'No RSBSA number',
+                    $f->barangay,
+                    $f->mobile_no,
+                ])->filter()->implode(' · '),
             ]);
 
         $inventory = null;
@@ -76,33 +85,80 @@ class FarmInventoryController extends Controller
             'inventory'        => $inventory,
             'selectedFarmerId' => $farmerId ?? 'all',
             // Headline totals for whatever is currently in scope.
-            'summary'          => [
-                'crop_area'   => round((float) collect($inventory['crops'] ?? [])->sum('total_area'), 2),
-                'crop_types'  => collect($inventory['crops'] ?? [])->pluck('crop_id')->filter()->unique()->count(),
-                'trees'       => (int) collect($inventory['tree_crops'] ?? [])->sum('total_quantity'),
-                'pond_area'   => round((float) collect($inventory['fishponds'] ?? [])->sum('total_area'), 2),
-                'animals'     => (int) collect($inventory['livestock'] ?? [])->sum('total'),
-                'machinery'   => (int) collect($inventory['machinery'] ?? [])
-                    ->sum(fn ($m) => (int) (is_array($m) ? 1 : ($m->total_units ?? 1))),
-            ],
-            // The tree-crop form can tie a stand of trees to a specific parcel.
+            'summary'          => $this->summarise($inventory),
+            // The tree-crop and cropping-season forms tie a record to a parcel.
             'parcels' => $selectedFarmer
                 ? $selectedFarmer->parcels()->orderBy('parcel_number')->get(['id', 'parcel_number', 'barangay'])
                 : [],
+            // Crop list for the cropping-season form.
+            'cropOptions' => \App\Models\Crop::orderBy('crop_name')->get(['id', 'crop_name'])
+                ->map(fn ($c) => [$c->id, $c->crop_name]),
+        ]);
+    }
+
+    /**
+     * Headline totals for whatever is in scope.
+     *
+     * Shared by the screen and the printable record so the two can never
+     * disagree — a printed sheet that contradicts the screen is worse than
+     * no printed sheet at all.
+     */
+    private function summarise(array $inventory): array
+    {
+        return [
+            'crop_area'  => round((float) collect($inventory['crops'] ?? [])->sum('total_area'), 2),
+            'crop_types' => collect($inventory['crops'] ?? [])->pluck('crop_id')->filter()->unique()->count(),
+            'trees'      => (int) collect($inventory['tree_crops'] ?? [])->sum('total_quantity'),
+            'pond_area'  => round((float) collect($inventory['fishponds'] ?? [])->sum('total_area'), 2),
+            'animals'    => (int) collect($inventory['livestock'] ?? [])->sum('total'),
+            'machinery'  => (int) collect($inventory['machinery'] ?? [])
+                ->sum(fn ($m) => (int) (is_array($m) ? 1 : ($m->total_units ?? 1))),
+        ];
+    }
+
+    /**
+     * The printable record for one farmer — every category on one sheet,
+     * unlike the screen which shows a tab at a time.
+     *
+     * Served as HTML rather than a generated PDF so the browser's own print
+     * dialog handles both paper and "Save as PDF", which is what the office
+     * actually does with it.
+     */
+    public function print($farmerId)
+    {
+        $farmer = Farmer::findOrFail($farmerId);
+        $inventory = $this->getInventory($farmerId);
+
+        return response()->view('reports.farm-inventory', [
+            'farmer'    => $farmer,
+            'inventory' => $inventory,
+            'summary'   => $this->summarise($inventory),
         ]);
     }
 
     private function getAllFarmersInventory()
     {
-        // Crops (aggregated by crop, season, year across all farmers)
+        // Crops, rolled up by crop/season/year across every farmer. Shaped as
+        // plain arrays so the screen, the printout and the CSV can read the
+        // combined and the single-farmer views through the same keys.
         $crops = CropSeason::with('crop')
             ->select('crop_id', 'season', 'cropping_year')
             ->selectRaw('SUM(area_planted_ha) as total_area')
+            ->selectRaw('SUM(yield_kg) as total_yield')
             ->selectRaw('COUNT(DISTINCT parcel_id) as parcel_count')
             ->groupBy('crop_id', 'season', 'cropping_year')
             ->orderByDesc('cropping_year')
             ->orderBy('season')
-            ->get();
+            ->get()
+            ->map(fn ($s) => [
+                'crop_id'       => $s->crop_id,
+                'crop_name'     => $s->crop?->crop_name,
+                'season'        => $s->season,
+                'cropping_year' => $s->cropping_year,
+                'parcel_count'  => (int) $s->parcel_count,
+                'total_area'    => (float) $s->total_area,
+                'yield_kg'      => $s->total_yield !== null ? (float) $s->total_yield : null,
+            ]);
 
         // Tree crops aggregated
         $treeCrops = DB::table('tree_crops')
@@ -251,14 +307,29 @@ class FarmInventoryController extends Controller
      */
     private function getInventory($farmerId)
     {
+        // One row per season here, not a roll-up: for a single farmer the
+        // office needs the parcel and the yield behind each figure, and a
+        // grouped row cannot be edited or deleted.
         $crops = CropSeason::whereHas('parcel', fn ($q) => $q->where('farmer_id', $farmerId))
-            ->with('crop')
-            ->select('crop_id', 'season', 'cropping_year')
-            ->selectRaw('SUM(area_planted_ha) as total_area')
-            ->groupBy('crop_id', 'season', 'cropping_year')
+            ->with(['crop', 'parcel'])
             ->orderByDesc('cropping_year')
             ->orderBy('season')
-            ->get();
+            ->get()
+            ->map(fn ($s) => [
+                'id'              => $s->id,
+                'route'           => 'crops',
+                'crop_id'         => $s->crop_id,
+                'crop_name'       => $s->crop?->crop_name,
+                'season'          => $s->season,
+                'cropping_year'   => $s->cropping_year,
+                'parcel_id'       => $s->parcel_id,
+                'parcel_number'   => $s->parcel?->parcel_number,
+                'total_area'      => (float) $s->area_planted_ha,
+                'area_planted_ha' => $s->area_planted_ha,
+                'planting_date'   => $s->planting_date?->format('Y-m-d'),
+                'harvest_date'    => $s->harvest_date?->format('Y-m-d'),
+                'yield_kg'        => $s->yield_kg,
+            ]);
 
         $treeCrops = TreeCrop::where('farmer_id', $farmerId)
             ->orderBy('crop_type')
@@ -385,13 +456,15 @@ class FarmInventoryController extends Controller
             
             // Crops
             fputcsv($file, ['CROPS']);
-            fputcsv($file, ['Crop', 'Season', 'Year', 'Area (ha)']);
+            fputcsv($file, ['Crop', 'Season', 'Year', 'Parcel', 'Area (ha)', 'Yield (kg)']);
             foreach ($inventory['crops'] as $crop) {
                 fputcsv($file, [
-                    $crop->crop->crop_name ?? '',
-                    $crop->season,
-                    $crop->cropping_year,
-                    $crop->total_area
+                    $crop['crop_name'] ?? '',
+                    $crop['season'] ?? '',
+                    $crop['cropping_year'] ?? '',
+                    $crop['parcel_number'] ?? '',
+                    $crop['total_area'] ?? '',
+                    $crop['yield_kg'] ?? '',
                 ]);
             }
             fputcsv($file, ['Total Area', '', '', $inventory['total_crop_area']]);

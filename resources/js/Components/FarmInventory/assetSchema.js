@@ -1,12 +1,15 @@
 /**
- * Declarative field definitions for the eight Farm Inventory asset categories.
+ * Declarative field definitions for the Farm Assets categories.
  *
  * Keys match FarmAssetController's registry, and the field names match its
  * validation rules — those two lists have to agree, so keeping this one table
- * is easier to check than eight separate forms.
+ * is easier to check than nine separate forms.
  *
- * Seasonal crops are absent on purpose: they live in crop_seasons and are
- * edited through Seasonal Tracking, which also handles yield and input costs.
+ * Cropping seasons are the exception: they live in crop_seasons, which has no
+ * farmer_id of its own — a season belongs to a parcel, and the parcel to the
+ * farmer. So that category declares its own `endpoint` (Seasonal Tracking's
+ * routes, which already validate yields and input costs) and an `ownerField`,
+ * telling the modal to send parcel_id rather than farmer_id.
  */
 
 const HEALTH = [
@@ -32,6 +35,32 @@ const animalDefaults = {
 };
 
 export const ASSET_FORMS = {
+    // Handled by CropSeasonController, not FarmAssetController — see the note
+    // at the top of this file.
+    crops: {
+        label: 'cropping season',
+        title: 'Cropping season',
+        endpoint: '/admin/seasonal',
+        ownerField: 'parcel_id',
+        fields: [
+            { name: 'parcel_id', label: 'Parcel', type: 'parcel', required: true,
+              hint: 'A season is planted on a parcel; that is how it reaches the farmer.' },
+            { name: 'crop_id', label: 'Crop', type: 'select', required: true, options: [] },
+            { name: 'season', label: 'Season', type: 'select', required: true,
+              options: [['dry', 'Dry'], ['wet', 'Wet']] },
+            { name: 'cropping_year', label: 'Year', type: 'number', min: 2000, max: 2100, required: true },
+            { name: 'area_planted_ha', label: 'Area planted (ha)', type: 'number', step: '0.01', min: 0 },
+            { name: 'planting_date', label: 'Planting date', type: 'date' },
+            { name: 'harvest_date', label: 'Harvest date', type: 'date' },
+            { name: 'yield_kg', label: 'Yield (kg)', type: 'number', step: '0.01', min: 0,
+              hint: 'Leave blank until the crop is actually harvested.' },
+        ],
+        defaults: {
+            parcel_id: '', crop_id: '', season: 'dry', cropping_year: new Date().getFullYear(),
+            area_planted_ha: '', planting_date: '', harvest_date: '', yield_kg: '',
+        },
+    },
+
     'tree-crops': {
         label: 'tree crop',
         title: 'Tree crop',

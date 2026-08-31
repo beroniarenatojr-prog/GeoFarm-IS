@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Farmer extends Model
 {
@@ -85,6 +86,16 @@ class Farmer extends Model
     public function nativePigs(): HasMany     { return $this->hasMany(NativePig::class); }
     public function swineHybrid(): HasMany    { return $this->hasMany(SwineHybrid::class); }
     public function poultry(): HasMany        { return $this->hasMany(Poultry::class); }
+    public function machinery(): HasMany      { return $this->hasMany(FarmMachinery::class); }
+
+    /**
+     * Crop seasons reach a farmer through their parcels — crop_seasons has no
+     * farmer_id of its own, because a season is always planted on a parcel.
+     */
+    public function cropSeasons(): HasManyThrough
+    {
+        return $this->hasManyThrough(CropSeason::class, FarmParcel::class, 'farmer_id', 'parcel_id');
+    }
 
     public function getFullNameAttribute(): string
     {

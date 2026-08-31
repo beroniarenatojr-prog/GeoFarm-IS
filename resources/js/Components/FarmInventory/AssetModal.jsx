@@ -14,9 +14,18 @@ const labelCls = 'block text-xs font-medium text-gray-600 mb-1';
  * controller's validation rules; here the field list and the rules are checked
  * against each other in one place.
  */
-export default function AssetModal({ category, record, farmerId, parcels = [], onClose }) {
+export default function AssetModal({ category, record, farmerId, parcels = [], cropOptions = [], onClose }) {
     const schema = ASSET_FORMS[category];
     const isEdit = !!record;
+
+    // Most categories post to the shared farm-assets routes; a category may
+    // name its own instead (cropping seasons go to Seasonal Tracking).
+    const base = schema.endpoint ?? `/admin/farm-assets/${category}`;
+
+    // The crop list is looked up from the database rather than hard-coded, so
+    // it is injected here instead of living in the schema.
+    const fields = schema.fields.map(f =>
+        f.name === 'crop_id' ? { ...f, options: cropOptions } : f);
 
     // Seed from the record, falling back to the declared default. Nulls become
     // '' so React keeps the inputs controlled.
@@ -36,10 +45,16 @@ export default function AssetModal({ category, record, farmerId, parcels = [], o
             onError: errs => toast.error(Object.values(errs)[0] ?? 'Could not save this record.'),
         };
 
-        isEdit
-            ? form.put(`/admin/farm-assets/${category}/${record.id}`, options)
-            : form.transform(d => ({ ...d, farmer_id: farmerId }))
-                  .post(`/admin/farm-assets/${category}`, options);
+        if (isEdit) {
+            form.put(`${base}/${record.id}`, options);
+            return;
+        }
+
+        // Categories owned through another record (a cropping season belongs to
+        // a parcel) carry that link in a field of their own, so they must not
+        // also be stamped with a farmer_id the table has no column for.
+        form.transform(d => (schema.ownerField ? d : { ...d, farmer_id: farmerId }))
+            .post(base, options);
     };
 
     return (
@@ -64,7 +79,7 @@ export default function AssetModal({ category, record, farmerId, parcels = [], o
             }
         >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                {schema.fields.map(f => (
+                {fields.map(f => (
                     <FieldRow key={f.name} field={f} form={form} parcels={parcels} />
                 ))}
             </div>
@@ -92,8 +107,9 @@ function FieldRow({ field: f, form, parcels }) {
         );
     } else if (f.type === 'parcel') {
         control = (
-            <select className={input} value={value} onChange={e => set(e.target.value)}>
-                <option value="">Not tied to a parcel</option>
+            <select className={input} value={value} onChange={e => set(e.target.value)} required={f.required}>
+                {/* A cropping season must name its parcel; a stand of trees need not. */}
+                <option value="">{f.required ? 'Choose a parcel…' : 'Not tied to a parcel'}</option>
                 {parcels.map(p => (
                     <option key={p.id} value={p.id}>
                         {p.parcel_number || `Parcel #${p.id}`}{p.barangay ? ` · ${p.barangay}` : ''}

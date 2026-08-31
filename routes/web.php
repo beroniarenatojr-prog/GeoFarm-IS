@@ -222,6 +222,8 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // Farm Inventory
     Route::get('farm-inventory', [FarmInventoryController::class, 'index'])->middleware('permission:view inventory')->name('farm-inventory.index');
     Route::get('farm-inventory/{farmer}/export', [FarmInventoryController::class, 'export'])->middleware('permission:export reports')->name('farm-inventory.export');
+    // Printing is a viewing act, not an export, so it follows "view inventory".
+    Route::get('farm-inventory/{farmer}/print', [FarmInventoryController::class, 'print'])->middleware('permission:view inventory')->name('farm-inventory.print');
 
     // Write side: one set of routes for all eight asset categories. The
     // category segment is resolved against FarmAssetController's registry,
