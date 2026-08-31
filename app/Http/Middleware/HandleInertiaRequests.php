@@ -48,6 +48,10 @@ class HandleInertiaRequests extends Middleware
                     // the previous message would be announced again every time
                     // someone typed in a search box.
                     'id' => ($success || $error) ? (string) Str::uuid() : null,
+                    // Boundary imports that clash with a neighbouring parcel.
+                    // Not an error — the office decides whether two claims on
+                    // the same land is a mistake or a dispute they know about.
+                    'overlapWarning' => $request->session()->get('overlapWarning'),
                 ];
             })(),
             'notifications' => [

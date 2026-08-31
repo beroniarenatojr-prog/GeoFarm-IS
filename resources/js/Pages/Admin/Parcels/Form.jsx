@@ -3,6 +3,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm } from '@inertiajs/react';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
+import BoundaryImport from '@/Components/Parcels/BoundaryImport';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import bbox from '@turf/bbox';
@@ -210,6 +211,23 @@ export default function ParcelForm({ parcel, farmTypes, geojson, onClose = null 
     mapRef.current?.fitBounds(TUMAUINI_BOUNDS, { padding: 48, maxZoom: 13, duration: 700 });
   };
 
+  /**
+   * Put an imported boundary on the map and zoom to it, replacing whatever was
+   * drawn before — a parcel has one outline, and seeing it against the imagery
+   * is the whole point of importing rather than trusting the file blindly.
+   */
+  const showImported = ({ geometry, bounds }) => {
+    setData('geojson', JSON.stringify(geometry));
+
+    if (mapUnavailable || !drawRef.current || !mapRef.current) return;
+
+    drawRef.current.deleteAll();
+    drawRef.current.add({ type: 'Feature', properties: {}, geometry });
+
+    // maxZoom keeps a very small parcel from zooming past the imagery's limit.
+    mapRef.current.fitBounds(bounds, { padding: 60, maxZoom: 18, duration: 800 });
+  };
+
   const submit = (event) => {
     event.preventDefault();
 
@@ -306,11 +324,21 @@ export default function ParcelForm({ parcel, farmTypes, geojson, onClose = null 
           </div>
         </div>
 
+        {/* Importing needs a saved parcel to attach the boundary to, so it is
+            offered on edit rather than while creating one. */}
+        {isEdit && (
+          <BoundaryImport parcelId={parcel.id} onImported={showImported} />
+        )}
+
         <div className="rounded-lg border border-slate-200 bg-white p-5">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h3 className="font-semibold text-slate-800">Parcel Boundary</h3>
-              <p className="text-sm text-slate-500">Draw one farm polygon inside the Tumauini focus boundary.</p>
+              <p className="text-sm text-slate-500">
+                {isEdit
+                  ? 'Import a surveyed file above, or draw the outline by hand on the imagery.'
+                  : 'Draw one farm polygon inside the Tumauini focus boundary.'}
+              </p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <button

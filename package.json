@@ -14,15 +14,19 @@
         "@inertiajs/react": "^2.0.0",
         "@mapbox/mapbox-gl-draw": "^1.5.1",
         "@tanstack/react-table": "^8.21.3",
+        "@tmcw/togeojson": "^7.1.2",
         "@turf/area": "^7.4.0",
         "@turf/bbox": "^7.4.0",
+        "@turf/boolean-intersects": "^7.4.0",
         "@turf/center": "^7.4.0",
+        "@turf/centroid": "^7.4.0",
         "lucide-react": "^1.7.0",
         "maplibre-gl": "^6.4.1",
         "react": "^18.3.0",
         "react-dom": "^18.3.0",
         "react-hot-toast": "^2.6.0",
-        "recharts": "^2.12.0"
+        "recharts": "^2.12.0",
+        "shpjs": "^6.2.0"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

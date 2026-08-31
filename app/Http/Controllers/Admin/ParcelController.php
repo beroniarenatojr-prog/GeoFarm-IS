@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\FarmParcel;
 use App\Models\Farmer;
 use App\Models\FarmType;
+use App\Services\ParcelBoundaryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use RuntimeException;
 
 class ParcelController extends Controller
 {
@@ -130,6 +132,64 @@ class ParcelController extends Controller
             'parcel'  => $parcel->load('farmer:id,first_name,middle_name,last_name,suffix,rsbsa_no'),
             'geojson' => $geo?->geojson,
         ]);
+    }
+
+    /**
+     * Save an imported boundary against a parcel.
+     *
+     * The browser does the file parsing — shpjs and togeojson read shapefiles
+     * and KML far more easily than PHP would — but the geometry that arrives is
+     * treated as untrusted input: re-parsed by the database, re-measured here,
+     * and checked against neighbouring parcels before it is kept.
+     *
+     * An overlap is reported back rather than saved over. The staff member is
+     * the one who knows whether two claims on the same land is a mistake or a
+     * boundary dispute the office already knows about, so they confirm.
+     */
+    public function importBoundary(Request $request, FarmParcel $parcel, ParcelBoundaryService $boundaries)
+    {
+        $data = $request->validate([
+            'geometry' => 'required|array',
+            'source'   => 'required|in:shapefile,kml,geojson',
+            'file'     => 'nullable|string|max:255',
+            // Set once the user has seen the conflict and chosen to continue.
+            'confirm_overlap' => 'nullable|boolean',
+        ]);
+
+        try {
+            $boundaries->validateGeometry($data['geometry']);
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        $area     = $boundaries->areaHectares($data['geometry']);
+        $overlaps = $boundaries->findOverlaps($data['geometry'], $parcel->id);
+        $oversize = $area > ParcelBoundaryService::IMPLAUSIBLE_PARCEL_HA;
+
+        // Both checks are warnings, not refusals: only the office knows whether
+        // a large holding is real or whether a barangay outline has been
+        // imported into the wrong screen.
+        if (($overlaps || $oversize) && !$request->boolean('confirm_overlap')) {
+            return back()->with('overlapWarning', [
+                'parcel_id' => $parcel->id,
+                'overlaps'  => $overlaps,
+                'oversize'  => $oversize ? [
+                    'area_ha' => $area,
+                    'limit'   => ParcelBoundaryService::IMPLAUSIBLE_PARCEL_HA,
+                ] : null,
+            ]);
+        }
+
+        $boundaries->store($parcel, $data['geometry'], [
+            'source' => $data['source'],
+            'file'   => $data['file'] ?? null,
+        ], $request->user()?->id);
+
+        return back()->with(
+            'success',
+            "Boundary imported — {$area} ha recorded for parcel "
+            . ($parcel->parcel_number ?: "#{$parcel->id}") . '.'
+        );
     }
 
     public function update(Request $request, FarmParcel $parcel)

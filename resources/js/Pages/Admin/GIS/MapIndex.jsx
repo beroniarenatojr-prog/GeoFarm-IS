@@ -3,6 +3,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { router } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
+import BoundaryImport from '@/Components/Parcels/BoundaryImport';
 import toast from 'react-hot-toast';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -56,6 +57,11 @@ function formatArea(squareMeters) {
   if (!Number.isFinite(squareMeters)) return '0 ha';
   return `${(squareMeters / 10000).toLocaleString(undefined, { maximumFractionDigits: 2 })} ha`;
 }
+
+/** Escape values before they reach setHTML — names are user input. */
+const esc = (v) => (v == null ? '' : String(v).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c]
+)));
 
 export default function MapIndex({ parcels }) {
   const { can } = usePermissions();
@@ -131,6 +137,33 @@ export default function MapIndex({ parcels }) {
   useEffect(() => {
     loadParcels();
   }, [loadParcels]);
+
+  /**
+   * Show a freshly imported boundary before it is saved, so it can be judged
+   * against the imagery. It is added to the draw layer rather than the parcel
+   * source because it is not part of the stored set yet — a successful save
+   * reloads the layers and it arrives properly.
+   */
+  const showImportedBoundary = useCallback(({ geometry, bounds }) => {
+    const map = mapRef.current;
+    const draw = drawRef.current;
+    if (!map || !draw) return;
+
+    draw.add({ type: 'Feature', properties: { imported: true }, geometry });
+    map.fitBounds(bounds, { padding: 60, maxZoom: 18, duration: 800 });
+
+    // maxBounds keeps navigation inside Tumauini, so a parcel surveyed outside
+    // the focus extent would be fitted to the edge and look wrong rather than
+    // missing. Say so plainly instead of leaving the user to wonder.
+    const [w, s, e, n] = bounds;
+    const [[bw, bs], [be, bn]] = TUMAUINI_BOUNDS;
+
+    if (w < bw || e > be || s < bs || n > bn) {
+      toast.error('That boundary falls outside the Tumauini focus area — check the file is the right parcel.', {
+        duration: 7000,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -321,12 +354,18 @@ export default function MapIndex({ parcels }) {
       popupRef.current?.remove();
       popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
         .setLngLat(event.lngLat)
+        // Properties arrive from the database, so they are escaped before
+        // going anywhere near setHTML — a farmer's name is user input.
         .setHTML(`
           <div class="text-sm">
-            <strong>${props.parcel_number || 'Farm parcel'}</strong>
-            <div>Farmer: ${props.farmer_name || 'Unknown'}</div>
-            <div>Barangay: ${props.barangay || 'Unspecified'}</div>
-            <div>Recorded area: ${props.area_ha || 'N/A'} ha</div>
+            <strong>${esc(props.parcel_number) || 'Farm parcel'}</strong>
+            <div>Farmer: ${esc(props.farmer_name) || 'Unknown'}</div>
+            <div>Barangay: ${esc(props.barangay) || 'Unspecified'}</div>
+            <div>Area: ${esc(props.area_ha) || 'N/A'} ha</div>
+            ${props.commodity || props.farm_type ? `<div>Crop: ${esc(props.commodity || props.farm_type)}</div>` : ''}
+            ${props.boundary_source ? `<div class="mt-1 text-xs text-slate-500">Boundary: ${
+              props.boundary_source === 'drawn' ? 'drawn by hand' : `imported from ${esc(props.boundary_source)}`
+            }</div>` : ''}
           </div>
         `)
         .addTo(map);
@@ -534,6 +573,25 @@ export default function MapIndex({ parcels }) {
                   </button>
                 </div>
               </div>
+
+              {/* Import needs a parcel to attach the boundary to, so it stays
+                  out of the way until one is chosen. */}
+              {canEdit && (
+                selectedParcel ? (
+                  <BoundaryImport
+                    key={selectedParcel}
+                    parcelId={selectedParcel}
+                    onImported={showImportedBoundary}
+                  />
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-300 p-4">
+                    <h3 className="text-sm font-semibold text-slate-800">Import a surveyed boundary</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Choose a target parcel above, then upload its Shapefile, KML or GeoJSON.
+                    </p>
+                  </div>
+                )
+              )}
 
               <div className="rounded-lg border border-slate-200 p-4">
                 <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">

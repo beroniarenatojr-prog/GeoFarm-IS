@@ -120,6 +120,9 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     Route::post('parcels', [ParcelController::class, 'store'])->middleware('permission:create parcels')->name('parcels.store');
     Route::get('parcels/{parcel}', [ParcelController::class, 'show'])->middleware('permission:view parcels')->name('parcels.show');
     Route::get('parcels/{parcel}/edit', [ParcelController::class, 'edit'])->middleware('permission:edit parcels')->name('parcels.edit');
+    // Imported boundary (shapefile / KML / GeoJSON), parsed in the browser.
+    Route::post('parcels/{parcel}/boundary', [ParcelController::class, 'importBoundary'])
+        ->middleware('permission:edit parcels')->name('parcels.boundary');
     // JSON for the edit modal on the list, including the derived boundary.
     Route::get('parcels/{parcel}/edit-data', [ParcelController::class, 'editData'])->middleware('permission:edit parcels')->name('parcels.edit-data');
     Route::put('parcels/{parcel}', [ParcelController::class, 'update'])->middleware('permission:edit parcels')->name('parcels.update');
