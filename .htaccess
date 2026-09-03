@@ -1,0 +1,37 @@
+# Routes all traffic into Laravel's public/ directory.
+#
+# This is a stopgap for shared hosting where the domain's document root points
+# at the project root instead of public/. The proper fix is repointing the
+# document root at public/ in the hosting panel; once that is done this file
+# becomes a no-op and can be deleted.
+#
+# Side benefit: because every request is forced through public/, the project
+# files sitting in the web root (app/, vendor/, storage/, artisan, .env) stop
+# being directly reachable.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Already inside public/ - leave it alone, so the rewrite cannot loop.
+    # Matching on the path relative to this file keeps it independent of how
+    # deep the document root sits.
+    RewriteRule ^public/ - [L]
+
+    # Everything else gets served from public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Belt and braces: if mod_rewrite is ever unavailable, still refuse to hand out
+# the sensitive files that live alongside this one.
+# Deliberately matches exact filenames rather than extensions: a blanket
+# "*.txt" here would also block public/robots.txt, because FilesMatch in a
+# root .htaccess applies to subdirectories too.
+<FilesMatch "^(\.env.*|\.git.*|composer\.(json|lock)|package(-lock)?\.json|artisan|phpunit\.xml|vite\.config\.js|tailwind\.config\.js|README\.md|TODO\.md|HOW_TO_START\.txt|STARTUP_FLOWCHART\.txt|RSBSADATA\.csv)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
