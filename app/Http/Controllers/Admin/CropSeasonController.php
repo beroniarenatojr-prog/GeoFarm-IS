@@ -66,8 +66,87 @@ class CropSeasonController extends Controller
                 'hectares'  => round((float) $scoped()->sum('area_planted_ha'), 2),
                 'yield_kg'  => round((float) $scoped()->sum('yield_kg'), 2),
                 'harvested' => $scoped()->whereNotNull('harvest_date')->count(),
+                'cost'      => round((float) $scoped()->sum('production_cost'), 2),
+                // Averaged over the whole scope rather than by averaging each
+                // row's own cost per kilo: a season that produced 5 t and one
+                // that produced 50 kg must not count equally.
+                'cost_per_kg' => $this->blendedCostPerKg($scoped()),
+                'costed'    => $scoped()->whereNotNull('production_cost')->count(),
             ],
+            // Cost of production by year, split wet and dry.
+            'costByYear'     => $this->costByYear($scoped()),
         ]);
+    }
+
+    /**
+     * Cost per kilo across a set of seasons.
+     *
+     * Total cost over total yield, not the mean of each row's ratio — a season
+     * that produced five tonnes and one that produced fifty kilos would
+     * otherwise carry equal weight and the answer would be meaningless.
+     *
+     * Only rows carrying BOTH a cost and a yield are counted; a costed season
+     * still in the ground would otherwise inflate the price of everything
+     * already harvested.
+     */
+    private function blendedCostPerKg($query): ?float
+    {
+        $row = (clone $query)
+            ->whereNotNull('production_cost')
+            ->where('yield_kg', '>', 0)
+            ->selectRaw('SUM(production_cost) AS cost, SUM(yield_kg) AS kg')
+            ->first();
+
+        if (!$row || !$row->kg) {
+            return null;
+        }
+
+        return round((float) $row->cost / (float) $row->kg, 2);
+    }
+
+    /**
+     * Cost of production per year, wet against dry.
+     *
+     * Nothing here is stored — a season row already IS a year and a season, so
+     * the split is a grouping rather than four more columns to keep in step.
+     */
+    private function costByYear($query): array
+    {
+        $rows = (clone $query)
+            ->whereNotNull('production_cost')
+            ->selectRaw('cropping_year, season')
+            ->selectRaw('SUM(production_cost) AS cost')
+            ->selectRaw('SUM(yield_kg) AS kg')
+            ->selectRaw('SUM(area_planted_ha) AS ha')
+            ->selectRaw('COUNT(*) AS seasons')
+            ->groupBy('cropping_year', 'season')
+            ->orderByDesc('cropping_year')
+            ->get();
+
+        $years = [];
+
+        foreach ($rows as $row) {
+            $year = (int) $row->cropping_year;
+
+            $years[$year] ??= [
+                'year' => $year,
+                'dry'  => null,
+                'wet'  => null,
+                'total_cost' => 0.0,
+            ];
+
+            $years[$year][$row->season] = [
+                'cost'        => round((float) $row->cost, 2),
+                'kg'          => round((float) $row->kg, 2),
+                'hectares'    => round((float) $row->ha, 2),
+                'seasons'     => (int) $row->seasons,
+                'cost_per_kg' => $row->kg > 0 ? round((float) $row->cost / (float) $row->kg, 2) : null,
+            ];
+
+            $years[$year]['total_cost'] += (float) $row->cost;
+        }
+
+        return array_values($years);
     }
 
     public function store(Request $request)
@@ -81,6 +160,10 @@ class CropSeasonController extends Controller
             'planting_date'   => 'nullable|date',
             'harvest_date'    => 'nullable|date|after_or_equal:planting_date',
             'yield_kg'        => 'nullable|numeric|min:0',
+            'production_cost'   => 'nullable|numeric|min:0|max:99999999.99',
+            'fertilizer_type'   => 'nullable|string|max:100',
+            'fertilizer_qty_kg' => 'nullable|numeric|min:0|max:99999999.99',
+            'fertilizer_class'  => 'nullable|in:organic,inorganic,mixed',
             'inputs_used'     => 'nullable|array',
             'inputs_used.*.type'     => 'required|string',
             'inputs_used.*.name'     => 'required|string',
@@ -104,6 +187,10 @@ class CropSeasonController extends Controller
             'planting_date'   => 'nullable|date',
             'harvest_date'    => 'nullable|date|after_or_equal:planting_date',
             'yield_kg'        => 'nullable|numeric|min:0',
+            'production_cost'   => 'nullable|numeric|min:0|max:99999999.99',
+            'fertilizer_type'   => 'nullable|string|max:100',
+            'fertilizer_qty_kg' => 'nullable|numeric|min:0|max:99999999.99',
+            'fertilizer_class'  => 'nullable|in:organic,inorganic,mixed',
             'inputs_used'     => 'nullable|array',
             'inputs_used.*.type'     => 'required|string',
             'inputs_used.*.name'     => 'required|string',

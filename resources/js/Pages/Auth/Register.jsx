@@ -1,5 +1,5 @@
 import { useForm, Link } from '@inertiajs/react';
-import { Leaf, Lock, Mail, ArrowLeft, Eye, EyeOff, User, IdCard, Calendar } from 'lucide-react';
+import { Lock, Mail, ArrowLeft, Eye, EyeOff, User, IdCard, Calendar } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Register() {
@@ -32,9 +32,11 @@ export default function Register() {
                 <div className="relative z-10 flex flex-col justify-between p-12 text-white w-full">
                     <div>
                         <div className="flex items-center space-x-3 mb-8">
-                            <div className="bg-white/20 backdrop-blur-md p-3 rounded-2xl">
-                                <Leaf className="h-8 w-8 text-white" />
-                            </div>
+                            <img
+                                src="/images/Logo.jpeg"
+                                alt="Seal of the Municipality of Tumauini, Isabela"
+                                className="h-14 w-14 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/30"
+                            />
                             <div>
                                 <h1 className="text-2xl font-bold">GeoFarm-IS</h1>
                                 <p className="text-white/80 text-sm">Farmer Registration</p>
@@ -82,8 +84,12 @@ export default function Register() {
                 <div className="w-full max-w-md">
                     {/* Mobile Logo */}
                     <div className="lg:hidden text-center mb-8">
-                        <div className="inline-flex items-center space-x-3 bg-[#006400] text-white px-6 py-3 rounded-2xl mb-4">
-                            <Leaf className="h-6 w-6" />
+                        <div className="inline-flex items-center space-x-3 bg-[#006400] text-white pl-2 pr-6 py-2 rounded-2xl mb-4">
+                            <img
+                                src="/images/Logo.jpeg"
+                                alt="Seal of the Municipality of Tumauini, Isabela"
+                                className="h-9 w-9 flex-shrink-0 rounded-full bg-white object-contain p-0.5"
+                            />
                             <span className="text-xl font-bold">GeoFarm-IS</span>
                         </div>
                     </div>

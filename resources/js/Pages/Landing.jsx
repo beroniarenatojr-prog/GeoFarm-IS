@@ -178,7 +178,11 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                         <div className="flex justify-between items-center h-16">
                             <div className="flex items-center gap-3">
-                                <img src="/images/VTB.jpg" alt="" className="h-10 w-10 object-cover rounded-lg ring-2 ring-white/30" />
+                                <img
+                                    src="/images/Logo.jpeg"
+                                    alt="Seal of the Municipality of Tumauini, Isabela"
+                                    className="h-10 w-10 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/40"
+                                />
                                 <div>
                                     <h1 className="text-xl font-bold text-white drop-shadow-md leading-tight">GeoFarm-IS</h1>
                                     <p className="text-xs text-white/80">Geographic Farm Information System</p>
@@ -520,9 +524,13 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                         <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-[#006400] to-[#228B22] p-2.5 rounded-xl">
-                                <Leaf className="h-5 w-5 text-white" />
-                            </div>
+                            {/* The footer carried a generic leaf while the nav
+                                above it showed the LGU mark; both are the seal now. */}
+                            <img
+                                src="/images/Logo.jpeg"
+                                alt="Seal of the Municipality of Tumauini, Isabela"
+                                className="h-11 w-11 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/25"
+                            />
                             <div>
                                 <h3 className="font-bold text-white">GeoFarm-IS</h3>
                                 <p className="text-xs text-white/60">LGU Agriculture Office, Tumauini, Isabela</p>

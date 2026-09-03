@@ -1,0 +1,37 @@
+{
+  "node_modules/@tmcw/togeojson/dist/togeojson.es.mjs": {
+    "file": "assets/togeojson.es-Bmet8L7i.js",
+    "name": "togeojson.es",
+    "src": "node_modules/@tmcw/togeojson/dist/togeojson.es.mjs",
+    "isDynamicEntry": true
+  },
+  "node_modules/shpjs/lib/index.js": {
+    "file": "assets/index-4UINrHII.js",
+    "name": "index",
+    "src": "node_modules/shpjs/lib/index.js",
+    "isDynamicEntry": true
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-dJqE1EDK.css",
+    "src": "resources/css/app.css",
+    "isEntry": true,
+    "name": "app",
+    "names": [
+      "app.css"
+    ]
+  },
+  "resources/js/app.jsx": {
+    "file": "assets/app-CMg1i9Lu.js",
+    "name": "app",
+    "src": "resources/js/app.jsx",
+    "isEntry": true,
+    "dynamicImports": [
+      "node_modules/shpjs/lib/index.js",
+      "node_modules/@tmcw/togeojson/dist/togeojson.es.mjs"
+    ],
+    "css": [
+      "assets/app-voBrSrcx.css",
+      "assets/app-dJqE1EDK.css"
+    ]
+  }
+}

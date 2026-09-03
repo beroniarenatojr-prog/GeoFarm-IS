@@ -60,7 +60,12 @@ const nav = [
             // reach them — this only removes them from view.
             // { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
             // { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
-            { label: 'Inventory', href: '/admin/inventory', icon: Boxes, permission: 'view supplies' },
+            //
+            // Inventory is the LGU's own supply store, and it still runs behind
+            // Assistance: confirming a distribution deducts stock from it. Only
+            // the menu entry is gone — the module, its routes and that deduction
+            // are untouched.
+            // { label: 'Inventory', href: '/admin/inventory', icon: Boxes, permission: 'view supplies' },
             { label: 'Farm Assets', href: '/admin/farm-inventory', icon: Package, permission: 'view inventory' },
             { label: 'Assistance', href: '/admin/assistance', icon: Layers, permission: 'view assistance' },
         ]
@@ -177,10 +182,14 @@ export default function AdminLayout({
             >
                 {/* Logo */}
                 <div className="flex items-center gap-3 h-16 border-b border-white/10 px-3 overflow-hidden relative z-10">
-                    <img 
-                        src="/images/VTB.jpg" 
-                        alt="VTB Logo" 
-                        className="w-10 h-10 flex-shrink-0 rounded-lg object-cover"
+                    {/* The municipal seal. It is a dark emblem on white, so it
+                        sits in a white roundel against the green sidebar and is
+                        contained rather than cropped — object-cover would shave
+                        the lettering that runs around its rim. */}
+                    <img
+                        src="/images/Logo.jpeg"
+                        alt="Seal of the Municipality of Tumauini, Isabela"
+                        className="w-10 h-10 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/30"
                     />
                     {expanded && (
                         <span className="text-base font-bold whitespace-nowrap transition-opacity duration-200 text-white">
@@ -278,49 +287,38 @@ export default function AdminLayout({
                 </div>
             </aside>
 
-            {/* LAYER 2 & 3: Main Content - Digital Parchment + Topographic Maps */}
+            {/* Main content, over plain paper and the seal */}
             <div className="flex-1 flex flex-col min-w-0 relative overflow-hidden ml-16">
-                {/* Spacer for sidebar */}
-                {/* Layer 2: Digital Parchment Background */}
-                <div 
-                    className="absolute inset-0 pointer-events-none" 
-                    style={{ 
-                        background: '#F7FBF7',
-                        backgroundImage: `
-                            radial-gradient(circle at 20% 50%, rgba(0, 100, 0, 0.03) 0%, transparent 50%),
-                            radial-gradient(circle at 80% 80%, rgba(0, 100, 0, 0.03) 0%, transparent 50%)
-                        `
-                    }}
+                {/* The paper. Flat now — the contour lines and the two green
+                    washes that used to sit here have gone, so the seal is the
+                    only thing behind the content. */}
+                <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ background: '#F7FBF7' }}
                 />
                 
-                {/* Layer 3: Topographic Map Lines - Soft Olive Green */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
-                    <defs>
-                        <pattern id="topoMap" x="0" y="0" width="100%" height="200" patternUnits="userSpaceOnUse">
-                            {/* Elegant horizontal contour lines */}
-                            <path d="M 0,30 Q 150,25 300,30 T 600,30 T 900,30 T 1200,30 T 1500,30 T 1800,30 T 2100,30" 
-                                  fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.25"/>
-                            <path d="M 0,45 Q 150,40 300,45 T 600,45 T 900,45 T 1200,45 T 1500,45 T 1800,45 T 2100,45" 
-                                  fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.25"/>
-                            <path d="M 0,60 Q 150,55 300,60 T 600,60 T 900,60 T 1200,60 T 1500,60 T 1800,60 T 2100,60" 
-                                  fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.25"/>
-                            <path d="M 0,75 Q 150,72 300,75 T 600,75 T 900,75 T 1200,75 T 1500,75 T 1800,75 T 2100,75" 
-                                  fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.25"/>
-                            <path d="M 0,90 Q 150,87 300,90 T 600,90 T 900,90 T 1200,90 T 1500,90 T 1800,90 T 2100,90" 
-                                  fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.25"/>
-                            
-                            {/* Elevation circles - representing hills/terrain */}
-                            <ellipse cx="350" cy="100" rx="70" ry="50" fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.2"/>
-                            <ellipse cx="350" cy="100" rx="50" ry="35" fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.2"/>
-                            <ellipse cx="350" cy="100" rx="30" ry="22" fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.2"/>
-                            
-                            <ellipse cx="750" cy="100" rx="60" ry="45" fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.18"/>
-                            <ellipse cx="750" cy="100" rx="40" ry="30" fill="none" stroke="#8B9D83" strokeWidth="1" opacity="0.18"/>
-                        </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#topoMap)"/>
-                </svg>
-                
+                {/*
+                    The municipal seal — now the only thing behind the content.
+
+                    Held at its own square aspect and centred rather than
+                    stretched to fill: an official seal distorted across a
+                    widescreen reads as a mistake, and its white surround would
+                    put a bright block behind the cards. Multiply blending drops
+                    that white into the paper so only the emblem tints.
+
+                    Raised to 7% and enlarged now that it stands alone — at the
+                    5% that suited it layered over contour lines it all but
+                    vanished on a plain ground.
+                */}
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none fixed inset-0 bg-center bg-no-repeat opacity-[0.07] mix-blend-multiply"
+                    style={{
+                        backgroundImage: "url('/images/Logo.jpeg')",
+                        backgroundSize: 'min(70vw, 680px)',
+                    }}
+                />
+
                 {/* z-30 keeps the header above <main> (z-10) so the notification
                     dropdown is not painted over by page content. */}
                 <header className="bg-white/90 backdrop-blur-sm shadow-sm px-4 sm:px-6 py-3 relative z-30 border-b-2 border-[#006400]/70">

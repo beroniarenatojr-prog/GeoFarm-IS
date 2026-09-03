@@ -1,5 +1,5 @@
 import { useForm, Link, usePage } from '@inertiajs/react';
-import { Mail, Lock, Eye, EyeOff, ArrowLeft, Leaf, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Login() {
@@ -31,10 +31,10 @@ export default function Login() {
                     {/* Logo and Branding */}
                     <div className="relative z-10">
                         <div className="flex items-center space-x-3 mb-8">
-                            <img 
-                                src="/images/VTB.jpg" 
-                                alt="VTB Logo" 
-                                className="h-14 w-14 object-cover rounded-xl"
+                            <img
+                                src="/images/Logo.jpeg"
+                                alt="Seal of the Municipality of Tumauini, Isabela"
+                                className="h-14 w-14 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/30"
                             />
                             <div>
                                 <h1 className="text-2xl font-bold text-white">GeoFarm-IS</h1>

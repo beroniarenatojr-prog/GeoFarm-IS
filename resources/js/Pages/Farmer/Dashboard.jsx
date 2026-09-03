@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import {
-    Leaf, MapPin, LogOut, FileText, Sprout, ShieldCheck, ShieldAlert, ShieldX,
+    MapPin, LogOut, FileText, Sprout, ShieldCheck, ShieldAlert, ShieldX,
     Beef, Bird, Fish, TreePine, PiggyBank, Mail, Phone, User, Calendar,
     BadgeCheck, Ruler, Banknote, Map as MapIcon, Tractor, Eye, Info,
 } from 'lucide-react';
@@ -146,15 +146,40 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
     const seasons = farmer.crop_seasons ?? [];
 
     return (
-        <div className="min-h-screen bg-[#FAF8F3]">
+        <div className="relative min-h-screen bg-[#FAF8F3]">
+            {/*
+                The municipal seal, as a watermark behind the page.
+
+                It is a square emblem on a white ground, so it is not stretched
+                to fill the screen: that would distort an official seal and put
+                a hard white edge behind the content. Held at its own aspect
+                ratio, centred and fixed, with multiply blending so the white
+                surround disappears into the page and only the seal itself
+                tints — which keeps every figure on top readable.
+            */}
+            <div
+                aria-hidden="true"
+                className="pointer-events-none fixed inset-0 z-0 bg-center bg-no-repeat opacity-[0.07] mix-blend-multiply"
+                style={{
+                    backgroundImage: "url('/images/Logo.jpeg')",
+                    backgroundSize: 'min(78vw, 640px)',
+                }}
+            />
             {/* ------------------------------------------------------------ nav */}
             <nav className="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-[#006400] to-[#228B22] p-2 rounded-xl shadow-md">
-                                <Leaf className="h-6 w-6 text-white" />
-                            </div>
+                            {/* The municipal seal, not a generic leaf: this is an
+                                LGU service, and the seal is what a farmer
+                                recognises from the office itself. Shown on white
+                                and contained rather than cropped — the emblem is
+                                circular and object-cover would shave its rim. */}
+                            <img
+                                src="/images/Logo.jpeg"
+                                alt="Seal of the Municipality of Tumauini, Isabela"
+                                className="h-11 w-11 flex-shrink-0 rounded-full bg-white object-contain ring-2 ring-[#006400]/20 shadow-sm"
+                            />
                             <div>
                                 <h1 className="text-lg font-bold text-[#006400] leading-tight">GeoFarm-IS</h1>
                                 <p className="text-xs text-gray-500">Farmer Portal</p>
@@ -178,7 +203,8 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                 </div>
             </nav>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
+            {/* z-10 keeps the cards above the watermark layer. */}
+            <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
                 {/* --------------------------------------------------------- hero */}
                 <div
                     className="relative rounded-3xl overflow-hidden mb-8 shadow-xl"

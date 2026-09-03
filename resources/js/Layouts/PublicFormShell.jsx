@@ -14,7 +14,11 @@ export default function PublicFormShell({ title = 'Farmer Registration', childre
             <header className="bg-[#006400] shadow-lg">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src="/images/VTB.jpg" alt="LGU Tumauini" className="h-11 w-11 rounded-full object-cover" />
+                        <img
+                            src="/images/Logo.jpeg"
+                            alt="Seal of the Municipality of Tumauini, Isabela"
+                            className="h-11 w-11 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/30"
+                        />
                         <div>
                             <p className="text-lg font-bold text-white leading-tight">GeoFarm-IS</p>
                             <p className="text-xs text-white/90">RSBSA Farmer Registration</p>

@@ -25,6 +25,19 @@ class User extends Authenticatable
         'lock_password_set_at' => 'datetime',
     ];
 
+    /**
+     * The farmer record this login belongs to, for Farmer accounts.
+     *
+     * farmers.user_id is ON DELETE SET NULL, so removing the account unlinks
+     * the farmer rather than deleting them — their registry entry, parcels and
+     * assistance history all survive, but they lose portal access. User
+     * Management shows that before anyone presses Delete.
+     */
+    public function farmer()
+    {
+        return $this->hasOne(Farmer::class);
+    }
+
     public function hasLockPassword(): bool
     {
         return filled($this->lock_password);

@@ -11,18 +11,45 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $currentUser = auth()->user();
-        
+
         // Get available roles based on current user's permissions
         $availableRoles = $this->getAvailableRoles($currentUser);
-        
+
+        $users = User::query()
+            ->with('roles:id,name')
+            // Whether the account is attached to a farmer record decides what
+            // deleting it actually costs, so the list has to know.
+            ->withExists(['farmer as has_farmer'])
+            ->when($request->search, fn ($q, $s) => $q->where(
+                fn ($w) => $w->where('name', 'like', "%$s%")->orWhere('email', 'like', "%$s%")
+            ))
+            ->when($request->role, fn ($q, $r) => $q->whereHas('roles', fn ($x) => $x->where('name', $r)))
+            ->when($request->status, fn ($q, $v) => $q->where('is_active', $v === 'active'))
+            ->orderBy('name')
+            ->paginate(20)
+            ->withQueryString();
+
         return Inertia::render('Admin/Users/Index', [
-            'users' => User::with('roles')->orderBy('name')->paginate(20),
+            'users' => $users,
             'roles' => $availableRoles,
             'canCreateAdmin' => $currentUser->can('create admin users'),
             'canDeleteAdmin' => $currentUser->can('delete admin users'),
+            'canCreate'      => $currentUser->can('create staff users') || $currentUser->can('create admin users'),
+            'currentUserId'  => $currentUser->id,
+            'filters'        => $request->only(['search', 'role', 'status']),
+            // Counts describe the whole registry, not the filtered page — they
+            // are there to answer "how many staff do we have", which a filter
+            // would otherwise keep changing the answer to.
+            'stats' => [
+                'total'    => User::count(),
+                'active'   => User::where('is_active', true)->count(),
+                'inactive' => User::where('is_active', false)->count(),
+                'byRole'   => Role::withCount('users')->orderBy('name')->get()
+                    ->map(fn ($r) => ['name' => $r->name, 'count' => $r->users_count]),
+            ],
         ]);
     }
 
