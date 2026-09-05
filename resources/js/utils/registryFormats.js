@@ -6,15 +6,15 @@
  * hand and then told off for getting it wrong.
  */
 
-export const RSBSA_MASK = '00-00-00-000-00000';
+export const RSBSA_MASK = '00-00-00-000-000000';
 export const MOBILE_MASK = '09000000000';
 
 /** Digits per group: region, province, municipality, barangay, sequence. */
-const RSBSA_GROUPS = [2, 2, 2, 3, 5];
-const RSBSA_DIGITS = RSBSA_GROUPS.reduce((a, b) => a + b, 0);   // 14
+const RSBSA_GROUPS = [2, 2, 2, 3, 6];
+const RSBSA_DIGITS = RSBSA_GROUPS.reduce((a, b) => a + b, 0);   // 15
 
 /**
- * Digit counts a hyphen follows: 2, 4, 6, 9. The 14th is the end of the
+ * Digit counts a hyphen follows: 2, 4, 6, 9. The 15th is the end of the
  * number, so nothing trails it.
  */
 const RSBSA_BREAKS = RSBSA_GROUPS.reduce(
@@ -24,11 +24,11 @@ const RSBSA_BREAKS = RSBSA_GROUPS.reduce(
 
 const atBreak = (count) => count > 0 && RSBSA_BREAKS.includes(count);
 
-export const isValidRsbsa = (value) => /^\d{2}-\d{2}-\d{2}-\d{3}-\d{5}$/.test(value ?? '');
+export const isValidRsbsa = (value) => /^\d{2}-\d{2}-\d{2}-\d{3}-\d{6}$/.test(value ?? '');
 export const isValidMobile = (value) => /^09\d{9}$/.test(value ?? '');
 
 /**
- * Reshapes whatever was typed into 00-00-00-000-00000.
+ * Reshapes whatever was typed into 00-00-00-000-000000.
  *
  * Everything that is not a digit is dropped first, so pasting a number that
  * already carries hyphens, spaces or stray dots still lands correctly. The

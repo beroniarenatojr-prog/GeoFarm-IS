@@ -19,12 +19,12 @@ class Farmer extends Model
 
     /**
      * The RSBSA reference number, exactly as the registry writes it:
-     * 00-00-00-000-00000 — region, province, municipality, barangay, then the
-     * farmer's sequence. Fourteen digits, four hyphens, nothing else.
+     * 00-00-00-000-000000 — region, province, municipality, barangay, then the
+     * farmer's sequence. Fifteen digits, four hyphens, nothing else.
      */
-    public const RSBSA_REGEX = '/^\d{2}-\d{2}-\d{2}-\d{3}-\d{5}$/';
+    public const RSBSA_REGEX = '/^\d{2}-\d{2}-\d{2}-\d{3}-\d{6}$/';
     public const RSBSA_RULE = 'regex:' . self::RSBSA_REGEX;
-    public const RSBSA_MASK = '00-00-00-000-00000';
+    public const RSBSA_MASK = '00-00-00-000-000000';
 
     /** Philippine mobile number as dialled locally: 09 then nine more digits. */
     public const MOBILE_REGEX = '/^09\d{9}$/';
@@ -37,7 +37,7 @@ class Farmer extends Model
      */
     public const FORMAT_MESSAGES = [
         'rsbsa_no.regex'  => 'The RSBSA number must be written as ' . self::RSBSA_MASK
-            . ' — 14 digits with the hyphens.',
+            . ' — 15 digits with the hyphens.',
         'mobile_no.regex' => 'The mobile number must be 11 digits starting with 09, like '
             . self::MOBILE_MASK . '.',
     ];
