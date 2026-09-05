@@ -60,6 +60,16 @@ class LoginController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        // Order matters: clearHistory() writes a session flag, so calling it
+        // before invalidate() would throw the flag away and silently do nothing.
+        //
+        // This is the part that actually stops Back returning to the dashboard.
+        // Inertia replays pages straight out of window.history.state without
+        // issuing a request, so no Cache-Control header can reach it - the
+        // client has to be told to drop that state.
+        Inertia::clearHistory();
+
         return redirect()->route('login');
     }
 }

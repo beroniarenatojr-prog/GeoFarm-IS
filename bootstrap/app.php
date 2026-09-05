@@ -16,6 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \App\Http\Middleware\PreventBackHistory::class,
+            // Inertia keeps each visited page in window.history.state so Back
+            // can restore it without a round trip. That state holds whatever
+            // the page was showing - farmer records, assistance lists - in
+            // plain text. Encrypting it means the entries left behind after
+            // logout cannot be read, and clearHistory() on logout rotates the
+            // key so they cannot be decrypted again.
+            \Inertia\EncryptHistoryMiddleware::class,
         ]);
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
