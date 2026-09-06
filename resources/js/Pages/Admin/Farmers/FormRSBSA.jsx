@@ -1265,7 +1265,9 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                     {[
                                         { value: 'Farmer', label: 'FARMER', tagalog: '(MAGSASAKA)', icon: '🌾', note: 'If you are a FARMER, proceed to PART 3', nextStep: 'Step 5: Farm Parcels', color: 'green' },
                                         { value: 'Farm Worker', label: 'FARM WORKER', tagalog: '(MANGGAGAWA SA SAKAHAN)', icon: '👨‍🌾', note: 'If you are a FARM WORKER or FISHER, kindly request a CERTIFICATION', nextStep: 'Skip to Step 7', color: 'blue' },
-                                        { value: 'Fisher', label: 'FISHER', tagalog: '(MANGINGISDA)', icon: '🎣', note: 'If you are a FARM WORKER or FISHER, kindly request a CERTIFICATION', nextStep: 'Skip to Step 7', color: 'blue' },
+                                        // The label is display only. `value` stays 'Fisher' because it is
+                                        // the stored column, the validation rule and the PDF mapper's key.
+                                        { value: 'Fisher', label: 'FISHER/FISHERFOLK', tagalog: '(MANGINGISDA)', icon: '🎣', note: 'If you are a FARM WORKER or FISHER, kindly request a CERTIFICATION', nextStep: 'Skip to Step 7', color: 'blue' },
                                         { value: 'Agri-Youth', label: 'AGRI-YOUTH', tagalog: '', icon: '👨‍🎓', note: 'If you are an AGRI-YOUTH proceed to PART 4', nextStep: 'Skip to Step 7', color: 'purple' },
                                     ].map(livelihood => (
                                         <div
