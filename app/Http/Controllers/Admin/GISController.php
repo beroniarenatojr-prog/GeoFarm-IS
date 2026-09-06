@@ -25,7 +25,7 @@ class GISController extends Controller
     /**
      * Everything worth knowing about one parcel, fetched when it is clicked.
      *
-     * Deliberately not folded into the parcels GeoJSON: that collection is
+     * Deliberately not folded into the parcels GeoJSON: that col6ction is
      * loaded in full on every map open, and carrying each farmer's crops,
      * livestock and assistance history in it would grow the payload with the
      * registry while almost none of it is ever looked at.
@@ -167,6 +167,13 @@ class GISController extends Controller
                 
                 $features[] = [
                     'type' => 'Feature',
+                    // Top-level id as well as the one in properties: this is
+                    // what setFeatureState addresses a feature by, and giving
+                    // it here is the plain GeoJSON way. The alternative,
+                    // promoteId on the source, lifts the property instead but
+                    // is one more thing that has to be right for a parcel to
+                    // draw at all.
+                    'id' => $parcel->id,
                     'geometry' => $geometry,
                     'properties' => [
                         'id' => $parcel->id,

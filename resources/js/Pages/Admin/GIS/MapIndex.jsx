@@ -59,6 +59,9 @@ function colouriseParcels(collection) {
 /** Saved parcels are clicked on their own fill layer. */
 const PARCEL_HIT_LAYERS = ['parcels-fill'];
 
+/** A filter no parcel can satisfy, so the highlight layer draws nothing. */
+const NO_SELECTION = ['==', ['get', 'id'], -1];
+
 function supportsWebGL() {
   try {
     const canvas = document.createElement('canvas');
@@ -155,23 +158,22 @@ export default function MapIndex({ parcels }) {
   /**
    * Move the highlight. Passing null clears it.
    *
-   * feature-state rather than a filtered extra layer: the styling already
-   * reads it in `parcels-casing`, and only the state of the one feature
-   * changes, so nothing re-uploads the whole collection to the GPU.
+   * Retargets a filter on its own layer rather than touching the layers that
+   * draw every parcel - a highlight that can fail should not be able to take
+   * the boundaries down with it.
    */
   const highlightParcel = useCallback((parcelId) => {
     const map = mapRef.current;
-    if (!map || !map.getSource('parcels')) return;
-
-    if (highlightedRef.current !== null) {
-      map.setFeatureState({ source: 'parcels', id: highlightedRef.current }, { selected: false });
-    }
+    if (!map || !map.getLayer('parcels-selected')) return;
 
     highlightedRef.current = parcelId ?? null;
 
-    if (parcelId !== null && parcelId !== undefined) {
-      map.setFeatureState({ source: 'parcels', id: parcelId }, { selected: true });
-    }
+    map.setFilter(
+      'parcels-selected',
+      parcelId === null || parcelId === undefined
+        ? NO_SELECTION
+        : ['==', ['get', 'id'], Number(parcelId)],
+    );
   }, []);
 
   /**
@@ -507,10 +509,6 @@ export default function MapIndex({ parcels }) {
         type: 'geojson',
         // Paint whatever has arrived; the setData effect keeps it current.
         data: geoJsonRef.current,
-        // setFeatureState addresses features by id, and the feed carries the
-        // parcel id inside properties rather than on the feature. promoteId
-        // lifts it, which avoids changing the endpoint's payload shape.
-        promoteId: 'id',
       });
 
       map.addLayer({
@@ -528,14 +526,10 @@ export default function MapIndex({ parcels }) {
         type: 'line',
         source: 'parcels',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        // The selected parcel's casing thickens and darkens rather than
-        // gaining a fourth layer: one outline that changes weight reads as
-        // "this one", where a second line drawn over it reads as two parcels.
-        paint: {
-          'line-color': '#0f172a',
-          'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 11, 6],
-          'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.85, 0.55],
-        },
+        // Left exactly as it was. This layer draws every parcel, so it is the
+        // wrong place to put an expression whose support is uncertain -
+        // selection is handled by its own layer below instead.
+        paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.55 },
       });
 
       map.addLayer({
@@ -546,6 +540,28 @@ export default function MapIndex({ parcels }) {
         paint: {
           'line-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
           'line-width': 3.5,
+        },
+      });
+
+      /**
+       * The selected parcel, drawn over its own outline.
+       *
+       * A filter on the id property rather than feature-state: a filter is
+       * plain expression support that every version has, where feature-state
+       * on line-width is not something to bet the whole parcel layer on.
+       * Starts matching nothing - NO_SELECTION - so it draws only once a
+       * parcel has actually been chosen.
+       */
+      map.addLayer({
+        id: 'parcels-selected',
+        type: 'line',
+        source: 'parcels',
+        filter: NO_SELECTION,
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#ffffff',
+          'line-width': 3,
+          'line-dasharray': [1.5, 1.2],
         },
       });
 
