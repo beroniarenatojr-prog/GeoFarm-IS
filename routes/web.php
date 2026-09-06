@@ -241,6 +241,9 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // GIS Mapping
     Route::get('gis/map', [GISController::class, 'index'])->middleware('permission:view maps')->name('gis.map');
     Route::get('gis/parcels-geojson', [GISController::class, 'getParcelsGeoJSON'])->middleware('permission:view maps')->name('gis.parcels-geojson');
+    // Detail for one parcel, fetched when it is clicked. Kept out of the
+    // GeoJSON collection so the map's initial payload stays small.
+    Route::get('gis/parcels/{parcel}', [GISController::class, 'show'])->middleware('permission:view maps')->name('gis.parcel-detail');
     Route::post('gis/parcels/{id}/geometry', [GISController::class, 'saveGeometry'])->middleware('permission:edit parcels')->name('gis.save-geometry');
     Route::delete('gis/parcels/{id}/geometry', [GISController::class, 'deleteGeometry'])->middleware('permission:delete parcels')->name('gis.delete-geometry');
 });

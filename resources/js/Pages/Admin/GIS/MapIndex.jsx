@@ -91,6 +91,26 @@ const esc = (v) => (v == null ? '' : String(v).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[c]
 )));
 
+/** A heading plus its rows in the parcel panel. Rendered only when it has content. */
+function PanelSection({ title, children }) {
+  return (
+    <div>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
+      <div className="mt-1 space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+/** One line: what it is on the left, how much of it on the right. */
+function PanelRow({ label, value }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <span className="text-slate-800">{label}</span>
+      {value ? <span className="text-slate-500">{value}</span> : null}
+    </div>
+  );
+}
+
 export default function MapIndex({ parcels }) {
   const { can } = usePermissions();
   const mapContainerRef = useRef(null);
@@ -122,6 +142,63 @@ export default function MapIndex({ parcels }) {
    * a 1000-line component that often would make tracing stutter.
    */
   const cursorRef = useRef(null);
+
+  /** Ground area of the outline being traced, in square metres. */
+  const [draftArea, setDraftArea] = useState(0);
+
+  /** Which parcel currently carries feature-state `selected`, so it can be cleared. */
+  const highlightedRef = useRef(null);
+
+  const [parcelDetail, setParcelDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  /**
+   * Move the highlight. Passing null clears it.
+   *
+   * feature-state rather than a filtered extra layer: the styling already
+   * reads it in `parcels-casing`, and only the state of the one feature
+   * changes, so nothing re-uploads the whole collection to the GPU.
+   */
+  const highlightParcel = useCallback((parcelId) => {
+    const map = mapRef.current;
+    if (!map || !map.getSource('parcels')) return;
+
+    if (highlightedRef.current !== null) {
+      map.setFeatureState({ source: 'parcels', id: highlightedRef.current }, { selected: false });
+    }
+
+    highlightedRef.current = parcelId ?? null;
+
+    if (parcelId !== null && parcelId !== undefined) {
+      map.setFeatureState({ source: 'parcels', id: parcelId }, { selected: true });
+    }
+  }, []);
+
+  /**
+   * Everything about the clicked parcel, fetched on demand.
+   *
+   * The GeoJSON feed stays lightweight - it loads in full on every map open -
+   * so crops, livestock and assistance are asked for only when a parcel is
+   * actually opened.
+   */
+  const loadParcelDetail = useCallback((parcelId) => {
+    if (parcelId === null || parcelId === undefined) {
+      setParcelDetail(null);
+      return;
+    }
+
+    setDetailLoading(true);
+    setParcelDetail(null);
+
+    fetch(`/admin/gis/parcels/${parcelId}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+      .then((response) => (response.ok ? response.json() : Promise.reject(response.status)))
+      .then(setParcelDetail)
+      .catch(() => toast.error('Could not load that parcel’s details.'))
+      .finally(() => setDetailLoading(false));
+  }, []);
   const [selectedParcel, setSelectedParcel] = useState('');
   const [geoJsonData, setGeoJsonData] = useState(EMPTY_FEATURE_COLLECTION);
   const [selectedFeature, setSelectedFeature] = useState(null);
@@ -248,8 +325,21 @@ export default function MapIndex({ parcels }) {
     // The rubber band is only meaningful mid-trace; once drawing stops the
     // cursor position is stale and would leave a line hanging off the shape.
     const cursor = drawingRef.current ? cursorRef.current : null;
+    const pts = draftRef.current;
 
-    src.setData(buildDraftFeatures(draftRef.current, cursor));
+    src.setData(buildDraftFeatures(pts, cursor));
+
+    /*
+     * Area of the outline as it stands. @turf/area is spherical, so this is
+     * real ground area rather than the planar degree arithmetic that would
+     * read badly wrong at this latitude.
+     *
+     * Measured on the placed vertices only - not the cursor - so the number
+     * settles when you stop clicking instead of flickering with the mouse.
+     */
+    setDraftArea(pts.length >= 3
+      ? area({ type: 'Polygon', coordinates: [[...pts, pts[0]]] })
+      : 0);
   }, []);
 
   /** Build centroid Point features for each mapped parcel, for the pin layer. */
@@ -417,6 +507,10 @@ export default function MapIndex({ parcels }) {
         type: 'geojson',
         // Paint whatever has arrived; the setData effect keeps it current.
         data: geoJsonRef.current,
+        // setFeatureState addresses features by id, and the feed carries the
+        // parcel id inside properties rather than on the feature. promoteId
+        // lifts it, which avoids changing the endpoint's payload shape.
+        promoteId: 'id',
       });
 
       map.addLayer({
@@ -434,7 +528,14 @@ export default function MapIndex({ parcels }) {
         type: 'line',
         source: 'parcels',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.55 },
+        // The selected parcel's casing thickens and darkens rather than
+        // gaining a fourth layer: one outline that changes weight reads as
+        // "this one", where a second line drawn over it reads as two parcels.
+        paint: {
+          'line-color': '#0f172a',
+          'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 11, 6],
+          'line-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.85, 0.55],
+        },
       });
 
       map.addLayer({
@@ -641,12 +742,16 @@ export default function MapIndex({ parcels }) {
         // Clicking bare ground clears the panel rather than leaving the last
         // parcel selected, which reads as though it is still highlighted.
         setSelectedFeature(null);
+        highlightParcel(null);
+        setParcelDetail(null);
         popupRef.current?.remove();
         return;
       }
 
       const props = feature.properties || {};
       setSelectedFeature(props);
+      highlightParcel(props.id);
+      loadParcelDetail(props.id);
       popupRef.current?.remove();
       popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
         .setLngLat(event.lngLat)
@@ -738,6 +843,8 @@ export default function MapIndex({ parcels }) {
     if (target) {
       setSelectedParcel(String(wanted));
       setSelectedFeature(target.properties);
+      highlightParcel(target.properties.id);
+      loadParcelDetail(target.properties.id);
       map.fitBounds(bbox(target), { padding: 80, maxZoom: 17, duration: 900 });
       return;
     }
@@ -772,6 +879,8 @@ export default function MapIndex({ parcels }) {
     const bounds = bbox(feature);
     mapRef.current?.fitBounds(bounds, { padding: 72, maxZoom: 17, duration: 900 });
     setSelectedFeature(feature.properties);
+    highlightParcel(feature.properties.id);
+    loadParcelDetail(feature.properties.id);
   };
 
   const beginDrawing = () => {
@@ -819,6 +928,8 @@ export default function MapIndex({ parcels }) {
       onSuccess: () => {
         toast.success('Boundary deleted');
         setSelectedFeature(null);
+        highlightParcel(null);
+        setParcelDetail(null);
         loadParcels();
       },
       onError: () => toast.error('Failed to delete boundary'),
@@ -875,9 +986,20 @@ export default function MapIndex({ parcels }) {
                   <div className="text-xs font-medium uppercase text-slate-500">Mapped Parcels</div>
                   <div className="mt-1 text-2xl font-semibold text-slate-900">{mappedCount}</div>
                 </div>
-                <div className="rounded-lg border border-slate-200 p-3">
-                  <div className="text-xs font-medium uppercase text-slate-500">Drawn Area</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">{formatArea(totalMappedArea)}</div>
+                {/* While tracing this shows the outline in progress; the rest
+                    of the time it is the total across every mapped parcel.
+                    Same label, because in both cases it is the area that has
+                    actually been drawn. */}
+                <div className={`rounded-lg border p-3 ${drawing ? 'border-blue-300 bg-blue-50' : 'border-slate-200'}`}>
+                  <div className="text-xs font-medium uppercase text-slate-500">
+                    {drawing ? 'Drawing Area' : 'Drawn Area'}
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold text-slate-900">
+                    {formatArea(drawing ? draftArea : totalMappedArea)}
+                  </div>
+                  {drawing && draftArea === 0 && (
+                    <div className="mt-1 text-xs text-slate-500">Place three corners</div>
+                  )}
                 </div>
               </div>
 
@@ -888,6 +1010,8 @@ export default function MapIndex({ parcels }) {
                   onChange={(event) => {
                     setSelectedParcel(event.target.value);
                     setSelectedFeature(null);
+        highlightParcel(null);
+        setParcelDetail(null);
                   }}
                   className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
                 >
@@ -996,6 +1120,7 @@ export default function MapIndex({ parcels }) {
               <div className="rounded-lg border border-slate-200 p-4">
                 <h3 className="text-sm font-semibold text-slate-800">Selected Feature</h3>
                 {selectedFeature ? (
+                  <>
                   <dl className="mt-3 space-y-2 text-sm text-slate-600">
                     <div>
                       <dt className="font-medium text-slate-800">Parcel</dt>
@@ -1065,6 +1190,94 @@ export default function MapIndex({ parcels }) {
                       </div>
                     )}
                   </dl>
+
+                  {/* Fetched when the parcel is clicked, so the map's initial
+                      payload stays small. Every section is conditional: a
+                      farmer with no fishpond gets no Fishpond heading, rather
+                      than an empty one. */}
+                  {detailLoading && (
+                    <p className="mt-4 text-xs text-slate-500">Loading farm records…</p>
+                  )}
+
+                  {parcelDetail && (
+                    <div className="mt-4 space-y-4 border-t border-slate-200 pt-4">
+                      {parcelDetail.crop_seasons?.length > 0 && (
+                        <PanelSection title="Crops">
+                          {parcelDetail.crop_seasons.map((season, i) => (
+                            <PanelRow
+                              key={i}
+                              label={season.crop || 'Unnamed crop'}
+                              value={[
+                                season.area_planted ? `${season.area_planted} ha` : null,
+                                season.season,
+                                season.year,
+                              ].filter(Boolean).join(' · ')}
+                            />
+                          ))}
+                        </PanelSection>
+                      )}
+
+                      {parcelDetail.livestock?.length > 0 && (
+                        <PanelSection title="Livestock">
+                          {parcelDetail.livestock.map((animal, i) => (
+                            <PanelRow
+                              key={i}
+                              label={animal.type || animal.breed || 'Livestock'}
+                              value={animal.count ? `${animal.count} head` : ''}
+                            />
+                          ))}
+                        </PanelSection>
+                      )}
+
+                      {parcelDetail.tree_crops?.length > 0 && (
+                        <PanelSection title="Tree Crops">
+                          {parcelDetail.tree_crops.map((tree, i) => (
+                            <PanelRow
+                              key={i}
+                              label={tree.crop || 'Tree crop'}
+                              value={[
+                                tree.quantity ? `${tree.quantity} trees` : null,
+                                tree.area ? `${tree.area} ha` : null,
+                              ].filter(Boolean).join(' · ')}
+                            />
+                          ))}
+                        </PanelSection>
+                      )}
+
+                      {parcelDetail.fishponds?.length > 0 && (
+                        <PanelSection title="Fishponds">
+                          {parcelDetail.fishponds.map((pond, i) => (
+                            <PanelRow
+                              key={i}
+                              label={pond.species || 'Fishpond'}
+                              value={pond.area ? `${pond.area} ha` : ''}
+                            />
+                          ))}
+                        </PanelSection>
+                      )}
+
+                      {parcelDetail.assistance?.length > 0 && (
+                        <PanelSection title="Assistance">
+                          {parcelDetail.assistance.map((given, i) => (
+                            <PanelRow
+                              key={i}
+                              label={given.program || 'Assistance'}
+                              value={[given.status, given.quantity].filter(Boolean).join(' · ')}
+                            />
+                          ))}
+                        </PanelSection>
+                      )}
+
+                      {parcelDetail.associations?.length > 0 && (
+                        <PanelSection title="Associations">
+                          {parcelDetail.associations.map((name, i) => (
+                            <PanelRow key={i} label={name} value="" />
+                          ))}
+                        </PanelSection>
+                      )}
+                    </div>
+                  )}
+                  </>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">Click a mapped parcel or locate a selected parcel to inspect it.</p>
                 )}

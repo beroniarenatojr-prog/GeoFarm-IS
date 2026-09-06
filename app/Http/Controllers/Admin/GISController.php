@@ -23,6 +23,94 @@ class GISController extends Controller
     }
 
     /**
+     * Everything worth knowing about one parcel, fetched when it is clicked.
+     *
+     * Deliberately not folded into the parcels GeoJSON: that collection is
+     * loaded in full on every map open, and carrying each farmer's crops,
+     * livestock and assistance history in it would grow the payload with the
+     * registry while almost none of it is ever looked at.
+     *
+     * Sections come back only when they hold something. The panel renders what
+     * it is given, so an empty array is simply a section that does not appear -
+     * a farmer with no fishpond should not see an empty Fishpond heading.
+     */
+    public function show(FarmParcel $parcel)
+    {
+        // One query per relationship rather than one per row. Crop seasons hang
+        // off the parcel; the livestock and asset records hang off the farmer.
+        $parcel->load([
+            'farmType',
+            'seasons.crop',
+            'farmer.livestock.livestockType',
+            'farmer.treeCrops',
+            'farmer.fishponds',
+            'farmer.associations',
+            'farmer.distributions.program',
+        ]);
+
+        $farmer = $parcel->farmer;
+
+        return response()->json([
+            'parcel' => [
+                'id'            => $parcel->id,
+                'parcel_number' => $parcel->parcel_number,
+                'barangay'      => $parcel->barangay,
+                'recorded_area' => $parcel->total_area_ha,
+                'farm_type'     => $parcel->farmType?->type_name,
+                'commodity'     => $parcel->commodity,
+                'ownership'     => $parcel->ownership_type,
+            ],
+
+            'farmer' => $farmer ? [
+                'id'       => $farmer->id,
+                'name'     => $farmer->full_name,
+                'sex'      => $farmer->sex,
+                'contact'  => $farmer->mobile_no,
+                'barangay' => $farmer->barangay,
+                'rsbsa_no' => $farmer->rsbsa_no,
+                // A web path, never a filesystem one: the column stores the
+                // path relative to the public disk, which is served through
+                // the storage symlink.
+                'photo_url' => $farmer->photo_path ? '/storage/' . $farmer->photo_path : null,
+            ] : null,
+
+            'crop_seasons' => $parcel->seasons->map(fn ($season) => [
+                'crop'          => $season->crop?->crop_name,
+                'season'        => $season->season,
+                'year'          => $season->cropping_year,
+                'area_planted'  => $season->area_planted_ha,
+                'yield_kg'      => $season->yield_kg,
+            ])->values(),
+
+            'livestock' => $farmer?->livestock->map(fn ($animal) => [
+                'type'   => $animal->livestockType?->type_name,
+                'breed'  => $animal->breed,
+                'count'  => $animal->count,
+            ])->values() ?? [],
+
+            'tree_crops' => $farmer?->treeCrops->map(fn ($tree) => [
+                'crop'     => $tree->crop_type,
+                'quantity' => $tree->quantity,
+                'area'     => $tree->area_hectares,
+            ])->values() ?? [],
+
+            'fishponds' => $farmer?->fishponds->map(fn ($pond) => [
+                'species' => $pond->species,
+                'area'    => $pond->area_hectares,
+            ])->values() ?? [],
+
+            'associations' => $farmer?->associations->pluck('association_name')->values() ?? [],
+
+            'assistance' => $farmer?->distributions->map(fn ($given) => [
+                'program'  => $given->program?->program_name,
+                'status'   => $given->status,
+                'quantity' => $given->quantity_given,
+                'date'     => $given->distribution_date,
+            ])->values() ?? [],
+        ]);
+    }
+
+    /**
      * Save a boundary drawn by hand on the map.
      *
      * Goes through ParcelBoundaryService so a drawn outline lands in exactly
