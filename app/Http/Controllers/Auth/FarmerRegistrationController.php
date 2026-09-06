@@ -131,7 +131,7 @@ class FarmerRegistrationController extends Controller
         $data['submitted_online_at'] = now();
         $data['email']               = $email;
 
-        $farmer = DB::transaction(function () use ($data, $parcels, $email, $password) {
+        $farmer = DB::transaction(function () use ($data, $parcels, $children, $email, $password) {
             // Account exists but stays locked until staff approves.
             $user = User::create([
                 'name'      => trim("{$data['first_name']} {$data['last_name']}"),
