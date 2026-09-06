@@ -1400,12 +1400,19 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Cropping Schedule <span className="text-gray-500">(Iskedyul ng Tanim)</span>
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    {/* A parcel is worked in the wet season, the dry season, or
+                                                        both. Typed free-hand this arrived as "wet", "Wet season",
+                                                        "WET/DRY" and so on, which cannot be grouped in a report. */}
+                                                    <select
                                                         value={parcel.cropping_schedule}
                                                         onChange={e => updateParcel(index, 'cropping_schedule', e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                                    />
+                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                                    >
+                                                        <option value="">Select / Pumili</option>
+                                                        <option value="Wet">Wet (Tag-ulan)</option>
+                                                        <option value="Dry">Dry (Tag-araw)</option>
+                                                        <option value="Wet/Dry">Both — Wet/Dry (Pareho)</option>
+                                                    </select>
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
