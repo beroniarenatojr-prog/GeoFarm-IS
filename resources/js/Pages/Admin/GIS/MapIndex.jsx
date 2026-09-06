@@ -6,6 +6,7 @@ import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import BoundaryImport from '@/Components/Parcels/BoundaryImport';
 import toast from 'react-hot-toast';
 import * as maplibregl from 'maplibre-gl';
+import { buildDraftFeatures } from '@/utils/draftGeometry';
 import area from '@turf/area';
 import bbox from '@turf/bbox';
 import center from '@turf/center';
@@ -114,6 +115,13 @@ export default function MapIndex({ parcels }) {
   const draftRef = useRef([]);        // vertices placed so far, [lng, lat]
   const drawingRef = useRef(false);
   const [drawing, setDrawing] = useState(false);
+
+  /**
+   * Live pointer position while tracing, so an edge can follow the cursor.
+   * A ref rather than state: mousemove fires on every frame, and re-rendering
+   * a 1000-line component that often would make tracing stutter.
+   */
+  const cursorRef = useRef(null);
   const [selectedParcel, setSelectedParcel] = useState('');
   const [geoJsonData, setGeoJsonData] = useState(EMPTY_FEATURE_COLLECTION);
   const [selectedFeature, setSelectedFeature] = useState(null);
@@ -237,28 +245,11 @@ export default function MapIndex({ parcels }) {
     const src = map?.getSource('parcel-draft');
     if (!src) return;
 
-    const pts = draftRef.current;
-    const features = [];
+    // The rubber band is only meaningful mid-trace; once drawing stops the
+    // cursor position is stale and would leave a line hanging off the shape.
+    const cursor = drawingRef.current ? cursorRef.current : null;
 
-    if (pts.length >= 2) {
-      // Closed once there are enough points, so the shape being made is
-      // obvious before it is committed.
-      features.push({
-        type: 'Feature',
-        properties: {},
-        geometry: pts.length >= 3
-          ? { type: 'Polygon', coordinates: [[...pts, pts[0]]] }
-          : { type: 'LineString', coordinates: pts },
-      });
-    }
-
-    pts.forEach((p, i) => features.push({
-      type: 'Feature',
-      properties: { first: i === 0 },
-      geometry: { type: 'Point', coordinates: p },
-    }));
-
-    src.setData({ type: 'FeatureCollection', features });
+    src.setData(buildDraftFeatures(draftRef.current, cursor));
   }, []);
 
   /** Build centroid Point features for each mapped parcel, for the pin layer. */
@@ -281,6 +272,7 @@ export default function MapIndex({ parcels }) {
   const resetDraft = useCallback(() => {
     draftRef.current = [];
     drawingRef.current = false;
+    cursorRef.current = null;
     setDrawing(false);
 
     const map = mapRef.current;
@@ -533,11 +525,32 @@ export default function MapIndex({ parcels }) {
         paint: { 'fill-color': '#2563eb', 'fill-opacity': 0.25 },
       });
 
+      /**
+       * The edge that follows the cursor. Dashed and translucent so it reads
+       * as "where the next side would go" rather than one already placed, and
+       * added before the committed line so a placed edge draws over it.
+       */
+      map.addLayer({
+        id: 'parcel-draft-cursor',
+        type: 'line',
+        source: 'parcel-draft',
+        filter: ['==', ['get', 'draft'], 'cursor'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': '#1d4ed8',
+          'line-width': 2,
+          'line-opacity': 0.7,
+          'line-dasharray': [2, 2],
+        },
+      });
+
       map.addLayer({
         id: 'parcel-draft-line',
         type: 'line',
         source: 'parcel-draft',
-        filter: ['!=', ['geometry-type'], 'Point'],
+        // Matched on the property, not the geometry type: the rubber band is
+        // also a LineString, and a geometry-type filter would draw it solid.
+        filter: ['==', ['get', 'draft'], 'shape'],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': '#1d4ed8', 'line-width': 3 },
       });
@@ -663,13 +676,27 @@ export default function MapIndex({ parcels }) {
       // lives on the draw control — so it never fired, and every mouse move
       // reset the cursor back to the grab hand. That is why tracing showed no
       // crosshair and looked as though drawing had not started.
-      if (drawingRef.current) return;
+      if (drawingRef.current) {
+        // Track the pointer so the next edge is visible before it is placed.
+        cursorRef.current = [event.lngLat.lng, event.lngLat.lat];
+        paintDraft();
+        return;
+      }
 
       const over = PARCEL_HIT_LAYERS.filter((id) => map.getLayer(id));
       if (!over.length) return;
 
       const hit = map.queryRenderedFeatures(event.point, { layers: over });
       map.getCanvas().style.cursor = hit.length ? 'pointer' : '';
+    });
+
+    // Pointer off the canvas: drop the rubber band rather than leaving it
+    // frozen at the edge, pointing at nothing.
+    map.on('mouseout', () => {
+      if (!drawingRef.current || !cursorRef.current) return;
+
+      cursorRef.current = null;
+      paintDraft();
     });
 
     // Double-click also closes the ring, which is the habit most mapping tools
