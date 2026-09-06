@@ -74,9 +74,14 @@ class Farmer extends Model
             }
 
             $birthdate = trim((string) ($row['birthdate'] ?? ''));
+            $sex       = trim((string) ($row['sex'] ?? ''));
 
             $children[] = [
-                'name'      => $name,
+                'name' => $name,
+                // Anything other than the two the column accepts becomes null
+                // rather than reaching MySQL, where an unknown enum value is a
+                // truncation error that takes the whole save down with it.
+                'sex'       => in_array($sex, ['Male', 'Female'], true) ? $sex : null,
                 'birthdate' => $birthdate !== '' ? $birthdate : null,
             ];
         }

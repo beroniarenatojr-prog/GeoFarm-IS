@@ -22,6 +22,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('farmer_id')->constrained('farmers')->cascadeOnDelete();
             $table->string('name', 150);
+            $table->enum('sex', ['Male', 'Female'])->nullable();
             $table->date('birthdate')->nullable();
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();

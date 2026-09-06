@@ -14,7 +14,7 @@ class FarmerChild extends Model
      */
     protected $table = 'farmer_children';
 
-    protected $fillable = ['farmer_id', 'name', 'birthdate'];
+    protected $fillable = ['farmer_id', 'name', 'sex', 'birthdate'];
 
     protected $casts = ['birthdate' => 'date'];
 

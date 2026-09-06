@@ -45,6 +45,15 @@ class FarmerFamilyTest extends TestCase
         $this->assertSame('2015-04-02', $children[0]->birthdate->toDateString());
     }
 
+    public function test_a_child_keeps_their_sex(): void
+    {
+        $farmer = $this->farmer();
+
+        $farmer->children()->create(['name' => 'Ana Beronia', 'sex' => 'Female']);
+
+        $this->assertSame('Female', $farmer->fresh()->children->first()->sex);
+    }
+
     public function test_a_child_may_be_recorded_without_a_birthdate(): void
     {
         // Parents registering at the office do not always have the birth

@@ -33,6 +33,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         // blank row inviting them to invent an entry.
         children: farmer?.children?.map(c => ({
             name: c.name || '',
+            sex: c.sex || '',
             birthdate: c.birthdate ? String(c.birthdate).slice(0, 10) : '',
         })) || [],
         religion: farmer?.religion || '',
@@ -148,7 +149,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
     };
 
     const addChild = () => {
-        setData('children', [...data.children, { name: '', birthdate: '' }]);
+        setData('children', [...data.children, { name: '', sex: '', birthdate: '' }]);
     };
 
     const removeChild = (index) => {
@@ -746,6 +747,20 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                                 placeholder="Full name"
                                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                                             />
+                                                        </div>
+                                                        <div className="w-36">
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                Sex <span className="text-gray-400">(Kasarian)</span>
+                                                            </label>
+                                                            <select
+                                                                value={child.sex}
+                                                                onChange={e => updateChild(index, 'sex', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                            >
+                                                                <option value="">—</option>
+                                                                <option value="Male">Male (Lalaki)</option>
+                                                                <option value="Female">Female (Babae)</option>
+                                                            </select>
                                                         </div>
                                                         <div className="w-48">
                                                             <label className="block text-xs font-medium text-gray-600 mb-1">

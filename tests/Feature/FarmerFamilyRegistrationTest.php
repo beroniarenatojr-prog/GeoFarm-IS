@@ -72,6 +72,26 @@ class FarmerFamilyRegistrationTest extends TestCase
         $this->assertNull($children[1]->birthdate);
     }
 
+    public function test_a_sex_the_column_does_not_accept_is_discarded_not_stored(): void
+    {
+        // sex is an enum. Handing MySQL a value outside it is a truncation
+        // error that fails the whole save, so anything unexpected - a blank
+        // select, a hand-crafted request - has to become null before it lands.
+        $this->submit([
+            'children' => json_encode([
+                ['name' => 'Ana Beronia',  'sex' => 'Female'],
+                ['name' => 'Jose Beronia', 'sex' => ''],
+                ['name' => 'Pia Beronia',  'sex' => 'Nonsense'],
+            ]),
+        ]);
+
+        $children = Farmer::firstOrFail()->children;
+
+        $this->assertSame('Female', $children[0]->sex);
+        $this->assertNull($children[1]->sex);
+        $this->assertNull($children[2]->sex);
+    }
+
     public function test_blank_rows_left_behind_in_the_repeater_are_discarded(): void
     {
         // Clicking "Add Another Child" and then not filling it in should not
