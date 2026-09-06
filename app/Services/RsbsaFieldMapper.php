@@ -152,10 +152,12 @@ class RsbsaFieldMapper
             'mother_mid'   => $this->upper($farmer->mother_middle_name),
             'mother_sur'   => $this->upper($farmer->mother_last_name ?: $farmer->mother_maiden_name),
 
-            // No spouse columns exist yet, so these print blank for hand-filling.
-            'spouse_first' => null,
-            'spouse_mid'   => null,
-            'spouse_sur'   => null,
+            // Printed only for a married farmer. The row stays blank otherwise
+            // even if a name lingers in the columns, because the form asks for
+            // it "if married" and a spouse against Single reads as an error.
+            'spouse_first' => $status === 'Married' ? $this->upper($farmer->spouse_first_name) : null,
+            'spouse_mid'   => $status === 'Married' ? $this->upper($farmer->spouse_middle_name) : null,
+            'spouse_sur'   => $status === 'Married' ? $this->upper($farmer->spouse_last_name) : null,
 
             'civil_single'    => $status === 'Single',
             'civil_married'   => $status === 'Married',

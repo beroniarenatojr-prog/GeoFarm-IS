@@ -49,10 +49,14 @@ class FarmerFamilyRegistrationTest extends TestCase
     {
         $this->submit([
             'civil_status' => 'Married',
-            'spouse_name'  => 'Maria Santos Beronia',
+            'spouse_first_name' => 'Maria',
+            'spouse_last_name'  => 'Beronia',
         ]);
 
-        $this->assertSame('Maria Santos Beronia', Farmer::firstOrFail()->spouse_name);
+        $farmer = Farmer::firstOrFail();
+
+        $this->assertSame('Maria', $farmer->spouse_first_name);
+        $this->assertSame('Beronia', $farmer->spouse_last_name);
     }
 
     public function test_children_posted_as_json_are_saved_as_rows(): void

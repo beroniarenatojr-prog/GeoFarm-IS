@@ -28,7 +28,10 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         mother_middle_name: farmer?.mother_middle_name || '',
         mother_last_name: farmer?.mother_last_name || '',
         civil_status: farmer?.civil_status || '',
-        spouse_name: farmer?.spouse_name || '',
+        spouse_first_name: farmer?.spouse_first_name || '',
+        spouse_middle_name: farmer?.spouse_middle_name || '',
+        spouse_last_name: farmer?.spouse_last_name || '',
+        spouse_ext_name: farmer?.spouse_ext_name || '',
         // Starts empty: a farmer with no children should see no rows, not one
         // blank row inviting them to invent an entry.
         children: farmer?.children?.map(c => ({
@@ -171,7 +174,12 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         setData(prev => ({
             ...prev,
             civil_status: status,
-            spouse_name: status === 'Married' ? prev.spouse_name : '',
+            ...(status === 'Married' ? {} : {
+                spouse_first_name: '',
+                spouse_middle_name: '',
+                spouse_last_name: '',
+                spouse_ext_name: '',
+            }),
         }));
     };
 
@@ -679,19 +687,34 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
 
                                                 {data.civil_status === 'Married' && (
                                                     <div className="mt-4">
-                                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
                                                             Name of Spouse <span className="text-gray-500">(Pangalan ng Asawa)</span>
                                                         </label>
-                                                        <input
-                                                            type="text"
-                                                            value={data.spouse_name}
-                                                            onChange={e => setData('spouse_name', e.target.value)}
-                                                            placeholder="Full name"
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                                                        />
-                                                        {errors.spouse_name && (
-                                                            <p className="text-red-500 text-xs mt-1">{errors.spouse_name}</p>
-                                                        )}
+                                                        {/* Four columns, matching the captions ruled across the
+                                                            printed form: FIRST NAME / MIDDLE NAME / SURNAME / EXT NAME. */}
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            {[
+                                                                ['spouse_first_name',  'First Name',  'Pangalan'],
+                                                                ['spouse_middle_name', 'Middle Name', 'Gitnang Pangalan'],
+                                                                ['spouse_last_name',   'Surname',     'Apelyido'],
+                                                                ['spouse_ext_name',    'Ext. Name',   'Jr., Sr., III'],
+                                                            ].map(([field, label, hint]) => (
+                                                                <div key={field}>
+                                                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                        {label} <span className="text-gray-400">({hint})</span>
+                                                                    </label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={data[field]}
+                                                                        onChange={e => setData(field, e.target.value)}
+                                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                    />
+                                                                    {errors[field] && (
+                                                                        <p className="text-red-500 text-xs mt-1">{errors[field]}</p>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>

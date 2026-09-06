@@ -102,7 +102,7 @@ class Farmer extends Model
 
     protected $fillable = [
         'rsbsa_no','first_name','last_name','middle_name','suffix','birthdate','birthplace',
-        'sex','civil_status','spouse_name','mobile_no','email','religion','pwd','is_4ps','is_indigenous',
+        'sex','civil_status','spouse_first_name','spouse_middle_name','spouse_last_name','spouse_ext_name','mobile_no','email','religion','pwd','is_4ps','is_indigenous',
         'mother_maiden_name','highest_education','photo_path','qr_code_path',
         'barangay','city_municipality','province','risk_status','risk_updated_at',
         'user_id',

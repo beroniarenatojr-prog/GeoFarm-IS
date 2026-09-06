@@ -21,14 +21,26 @@ class FarmerFamilyTest extends TestCase
         ], $attributes));
     }
 
-    public function test_a_married_farmer_keeps_the_spouse_name(): void
+    public function test_a_married_farmer_keeps_the_spouse_name_in_parts(): void
     {
+        // The RSBSA form rules the spouse row into four captioned columns -
+        // FIRST NAME, MIDDLE NAME, SURNAME, EXT NAME - the same shape as the
+        // farmer's own name and their mother's. One free-text field could not
+        // be printed back into them.
         $farmer = $this->farmer([
-            'civil_status' => 'Married',
-            'spouse_name'  => 'Maria Santos Beronia',
+            'civil_status'        => 'Married',
+            'spouse_first_name'   => 'Maria',
+            'spouse_middle_name'  => 'Santos',
+            'spouse_last_name'    => 'Beronia',
+            'spouse_ext_name'     => 'Jr',
         ]);
 
-        $this->assertSame('Maria Santos Beronia', $farmer->fresh()->spouse_name);
+        $fresh = $farmer->fresh();
+
+        $this->assertSame('Maria', $fresh->spouse_first_name);
+        $this->assertSame('Santos', $fresh->spouse_middle_name);
+        $this->assertSame('Beronia', $fresh->spouse_last_name);
+        $this->assertSame('Jr', $fresh->spouse_ext_name);
     }
 
     public function test_a_farmer_keeps_each_child_with_a_birthdate(): void
