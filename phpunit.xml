@@ -23,8 +23,21 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+            MySQL, not SQLite. Some migrations use raw MODIFY statements, which
+            SQLite rejects outright, so the schema simply cannot be built there.
+
+            This points at a database of its own: RefreshDatabase truncates
+            whatever it is aimed at, and aiming it at geofarm_is would wipe the
+            local development data. Create it once with:
+                CREATE DATABASE geofarm_is_test;
+        -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="geofarm_is_test"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

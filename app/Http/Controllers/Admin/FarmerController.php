@@ -86,6 +86,7 @@ class FarmerController extends Controller
             'mother_middle_name'=> 'nullable|string|max:50',
             'mother_last_name'  => 'nullable|string|max:50',
             'civil_status'      => 'nullable|in:Single,Married,Widowed,Separated',
+            'spouse_name'       => 'nullable|string|max:150',
             'religion'          => 'nullable|string|max:50',
             'highest_education' => 'nullable|string|max:50',
             'mobile_no'         => ['nullable', 'string', Farmer::MOBILE_RULE],
@@ -127,6 +128,9 @@ class FarmerController extends Controller
             
             // Parcels (as JSON) - Optional
             'parcels'           => 'nullable|json',
+
+            // Children (as JSON) - Optional
+            'children'          => 'nullable|json',
         ], Farmer::FORMAT_MESSAGES);
 
         // Handle file uploads
@@ -143,10 +147,17 @@ class FarmerController extends Controller
         $parcels = $this->parcelsFor($data);
         unset($data['parcels']);
 
+        $children = Farmer::childrenFrom($data['children'] ?? null);
+        unset($data['children']);
+
         $farmer = Farmer::create($data);
 
         foreach ($parcels as $parcelData) {
             $farmer->parcels()->create($parcelData);
+        }
+
+        foreach ($children as $childData) {
+            $farmer->children()->create($childData);
         }
 
         // Generate QR code
@@ -195,7 +206,7 @@ class FarmerController extends Controller
             $farmer->update(['qr_code_path' => $qrPath]);
         }
 
-        $farmer->load('parcels.farmType');
+        $farmer->load(['parcels.farmType', 'children']);
 
         // What this farmer actually produces, for the "Farmer Type" line.
         $commodities = $farmer->parcels->pluck('commodity')->filter()->unique();
@@ -259,6 +270,7 @@ class FarmerController extends Controller
         return Inertia::render('Admin/Farmers/Show', [
             'farmer' => $farmer->load([
                 'parcels.farmType',
+                'children',
                 'livestock.livestockType',
                 'distributions.program',
                 // Cropping seasons hang off the parcels, not the farmer, which
@@ -295,7 +307,7 @@ class FarmerController extends Controller
      */
     public function print(Request $request, Farmer $farmer, RsbsaFieldMapper $mapper)
     {
-        $farmer->load('parcels.farmType');
+        $farmer->load(['parcels.farmType', 'children']);
         $slug = Str::slug($farmer->full_name) ?: "farmer-{$farmer->id}";
 
         if ($request->query('review') === 'html') {
@@ -363,6 +375,7 @@ class FarmerController extends Controller
             'mother_middle_name'=> 'nullable|string|max:50',
             'mother_last_name'  => 'nullable|string|max:50',
             'civil_status'      => 'nullable|in:Single,Married,Widowed,Separated',
+            'spouse_name'       => 'nullable|string|max:150',
             'religion'          => 'nullable|string|max:50',
             'highest_education' => 'nullable|string|max:50',
             'mobile_no'         => ['nullable', 'string', Farmer::MOBILE_RULE],
@@ -404,6 +417,9 @@ class FarmerController extends Controller
             
             // Parcels (as JSON) - Optional
             'parcels'           => 'nullable|json',
+
+            // Children (as JSON) - Optional
+            'children'          => 'nullable|json',
         ], Farmer::FORMAT_MESSAGES);
 
         $old = $farmer->toArray();
@@ -426,6 +442,10 @@ class FarmerController extends Controller
         $parcels = $this->parcelsFor($data);
         unset($data['parcels']);
 
+        $childrenSubmitted = array_key_exists('children', $data);
+        $children = Farmer::childrenFrom($data['children'] ?? null);
+        unset($data['children']);
+
         $farmer->update($data);
 
         if (!$isFarmer) {
@@ -435,6 +455,18 @@ class FarmerController extends Controller
 
             foreach ($parcels as $parcelData) {
                 $farmer->parcels()->create($parcelData);
+            }
+        }
+
+        // Replaced wholesale rather than merged: the form posts the whole list
+        // every time, so a child missing from it is one the user removed.
+        // Guarded on the field being present at all, so a partial update that
+        // never touches the repeater does not wipe the existing rows.
+        if ($childrenSubmitted) {
+            $farmer->children()->delete();
+
+            foreach ($children as $childData) {
+                $farmer->children()->create($childData);
             }
         }
 
@@ -499,6 +531,7 @@ class FarmerController extends Controller
         $user = auth()->user();
         $farmer = Farmer::where('user_id', $user->id)->with([
             'parcels.farmType',
+            'children',
             'livestock.livestockType',
             'distributions.program',
             // Seasons hang off the parcels, not the farmer — without this the

@@ -42,6 +42,48 @@ class Farmer extends Model
             . self::MOBILE_MASK . '.',
     ];
 
+    /**
+     * Turn the children repeater's JSON into rows worth storing.
+     *
+     * Nameless rows are dropped rather than saved empty: the repeater leaves
+     * one behind whenever someone clicks "Add Another Child" and then thinks
+     * better of it, and a child record with no name is not a record.
+     *
+     * An empty birthdate becomes null, not "", so the date column stays
+     * genuinely absent instead of holding a zero date.
+     */
+    public static function childrenFrom(?string $json): array
+    {
+        $rows = $json ? json_decode($json, true) : [];
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $children = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $name = trim((string) ($row['name'] ?? ''));
+
+            if ($name === '') {
+                continue;
+            }
+
+            $birthdate = trim((string) ($row['birthdate'] ?? ''));
+
+            $children[] = [
+                'name'      => $name,
+                'birthdate' => $birthdate !== '' ? $birthdate : null,
+            ];
+        }
+
+        return $children;
+    }
+
     /** Whether a value already matches the registry format. */
     public static function isValidRsbsa(?string $value): bool
     {
@@ -55,7 +97,7 @@ class Farmer extends Model
 
     protected $fillable = [
         'rsbsa_no','first_name','last_name','middle_name','suffix','birthdate','birthplace',
-        'sex','civil_status','mobile_no','email','religion','pwd','is_4ps','is_indigenous',
+        'sex','civil_status','spouse_name','mobile_no','email','religion','pwd','is_4ps','is_indigenous',
         'mother_maiden_name','highest_education','photo_path','qr_code_path',
         'barangay','city_municipality','province','risk_status','risk_updated_at',
         'user_id',
@@ -110,6 +152,7 @@ class Farmer extends Model
     public function verifier()                { return $this->belongsTo(User::class, 'verified_by'); }
 
     public function parcels(): HasMany        { return $this->hasMany(FarmParcel::class); }
+    public function children(): HasMany       { return $this->hasMany(FarmerChild::class); }
     public function livestock(): HasMany      { return $this->hasMany(Livestock::class); }
     public function distributions(): HasMany  { return $this->hasMany(AssistanceDistribution::class); }
     public function associations()            { return $this->belongsToMany(Association::class, 'farmer_associations'); }

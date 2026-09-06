@@ -54,6 +54,7 @@ class FarmerRegistrationController extends Controller
             'mother_middle_name'=> 'nullable|string|max:50',
             'mother_last_name'  => 'nullable|string|max:50',
             'civil_status'      => 'nullable|in:Single,Married,Widowed,Separated',
+            'spouse_name'       => 'nullable|string|max:150',
             'religion'          => 'nullable|string|max:50',
             'highest_education' => 'nullable|string|max:50',
             'mobile_no'         => ['nullable', 'string', Farmer::MOBILE_RULE],
@@ -92,6 +93,9 @@ class FarmerRegistrationController extends Controller
 
             // Farm parcels (only kept for livelihood_type = Farmer)
             'parcels'           => 'nullable|json',
+
+            // Children (as JSON) - Optional
+            'children'          => 'nullable|json',
         ], Farmer::FORMAT_MESSAGES);
 
         // Guard against an obvious duplicate submission for the same person.
@@ -101,7 +105,9 @@ class FarmerRegistrationController extends Controller
                 ->withInput($request->except('password', 'password_confirmation'));
         }
 
-        $parcels = $this->parcelsFor($data);
+        $parcels  = $this->parcelsFor($data);
+        $children = Farmer::childrenFrom($data['children'] ?? null);
+        unset($data['children']);
 
         // The account credentials are not columns on the farmers table.
         $email    = $data['email'];
@@ -137,6 +143,10 @@ class FarmerRegistrationController extends Controller
 
             foreach ($parcels as $parcel) {
                 $farmer->parcels()->create($parcel);
+            }
+
+            foreach ($children as $child) {
+                $farmer->children()->create($child);
             }
 
             return $farmer;

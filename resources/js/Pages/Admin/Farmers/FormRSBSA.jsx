@@ -28,6 +28,13 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         mother_middle_name: farmer?.mother_middle_name || '',
         mother_last_name: farmer?.mother_last_name || '',
         civil_status: farmer?.civil_status || '',
+        spouse_name: farmer?.spouse_name || '',
+        // Starts empty: a farmer with no children should see no rows, not one
+        // blank row inviting them to invent an entry.
+        children: farmer?.children?.map(c => ({
+            name: c.name || '',
+            birthdate: c.birthdate ? String(c.birthdate).slice(0, 10) : '',
+        })) || [],
         religion: farmer?.religion || '',
         highest_education: farmer?.highest_education || '',
         mobile_no: farmer?.mobile_no || '',
@@ -138,6 +145,33 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
             land_owner_name: '',
             proof_of_ownership: '',
         }]);
+    };
+
+    const addChild = () => {
+        setData('children', [...data.children, { name: '', birthdate: '' }]);
+    };
+
+    const removeChild = (index) => {
+        setData('children', data.children.filter((_, i) => i !== index));
+    };
+
+    const updateChild = (index, field, value) => {
+        setData('children', data.children.map(
+            (child, i) => (i === index ? { ...child, [field]: value } : child)
+        ));
+    };
+
+    /**
+     * Only a married farmer is asked for a spouse. Switching away clears the
+     * name so a leftover value cannot sit on a record marked Single - the
+     * field is hidden at that point, so nobody would ever see it to correct it.
+     */
+    const setCivilStatus = (status) => {
+        setData(prev => ({
+            ...prev,
+            civil_status: status,
+            spouse_name: status === 'Married' ? prev.spouse_name : '',
+        }));
     };
 
     const removeParcel = (index) => {
@@ -263,7 +297,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
 
         // Add all farmer fields
         Object.keys(data).forEach(key => {
-            if (key === 'parcels' || key === 'photo' || key === 'id_proof') return;
+            if (key === 'parcels' || key === 'children' || key === 'photo' || key === 'id_proof') return;
             if (credentialKeys.includes(key)) return;
             
             if (data[key] !== null && data[key] !== undefined) {
@@ -285,6 +319,10 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
         // Only a FARMER declares farm parcels (Part 3). Other livelihood types
         // skip that step, so nothing is sent for them.
         formData.append('parcels', JSON.stringify(data.livelihood_type === 'Farmer' ? declaredParcels : []));
+
+        // Sent whole every time, including when empty: the server replaces the
+        // stored list with this one, which is how removing a child sticks.
+        formData.append('children', JSON.stringify(data.children.filter(c => c.name?.trim())));
 
         // Add files
         if (data.photo instanceof File) {
@@ -628,7 +666,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                                 type="radio"
                                                                 value={status}
                                                                 checked={data.civil_status === status}
-                                                                onChange={e => setData('civil_status', e.target.value)}
+                                                                onChange={e => setCivilStatus(e.target.value)}
                                                                 className="h-4 w-4 text-green-600 focus:ring-green-500"
                                                             />
                                                             <span className="text-sm">
@@ -637,6 +675,24 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                         </label>
                                                     ))}
                                                 </div>
+
+                                                {data.civil_status === 'Married' && (
+                                                    <div className="mt-4">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                            Name of Spouse <span className="text-gray-500">(Pangalan ng Asawa)</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={data.spouse_name}
+                                                            onChange={e => setData('spouse_name', e.target.value)}
+                                                            placeholder="Full name"
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                        />
+                                                        {errors.spouse_name && (
+                                                            <p className="text-red-500 text-xs mt-1">{errors.spouse_name}</p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div>
@@ -664,6 +720,65 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* Children */}
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                                            Children <span className="text-gray-500 text-base">(Mga Anak)</span>
+                                        </h3>
+                                        <p className="text-sm text-gray-600 mb-4">
+                                            Sons and daughters. Leave blank if none. The birthday is optional if the birth certificate is not on hand.
+                                        </p>
+
+                                        {data.children.length > 0 && (
+                                            <div className="space-y-3 mb-4">
+                                                {data.children.map((child, index) => (
+                                                    <div key={index} className="flex items-end gap-3">
+                                                        <div className="flex-1">
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                Full Name <span className="text-gray-400">(Buong Pangalan)</span>
+                                                            </label>
+                                                            <input
+                                                                type="text"
+                                                                value={child.name}
+                                                                onChange={e => updateChild(index, 'name', e.target.value)}
+                                                                placeholder="Full name"
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                            />
+                                                        </div>
+                                                        <div className="w-48">
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                Birthday <span className="text-gray-400">(Kaarawan)</span>
+                                                            </label>
+                                                            <input
+                                                                type="date"
+                                                                value={child.birthdate}
+                                                                onChange={e => updateChild(index, 'birthdate', e.target.value)}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeChild(index)}
+                                                            aria-label={`Remove child ${index + 1}`}
+                                                            className="p-2 mb-0.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+                                                        >
+                                                            <X className="h-5 w-5" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            onClick={addChild}
+                                            className="flex items-center gap-2 px-4 py-2 text-green-600 border-2 border-dashed border-green-300 rounded-lg hover:bg-green-50 transition font-medium"
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                            Add Child <span className="text-gray-500">(Magdagdag ng Anak)</span>
+                                        </button>
                                     </div>
 
                                     {/* Education */}
