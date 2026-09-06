@@ -189,9 +189,79 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
     };
 
     const updateParcel = (index, field, value) => {
-        const newParcels = [...data.parcels];
-        newParcels[index][field] = value;
-        setData('parcels', newParcels);
+        // Replace the row rather than writing into it. Spreading the array
+        // copies the array but not the objects inside, so assigning to
+        // newParcels[index][field] would write straight into the object still
+        // held as the form's original value - corrupting anything that later
+        // compares against it.
+        setData('parcels', data.parcels.map(
+            (parcel, i) => (i === index ? { ...parcel, [field]: value } : parcel)
+        ));
+    };
+
+    /**
+     * Which step each field lives on, so a server-side rejection can put the
+     * user in front of the offending field.
+     *
+     * validateStep only genuinely checks step 1 - every other step returns
+     * true - so the first time most of these rules are enforced is on the
+     * server, by which point the user is sitting on step 7 and the highlighted
+     * field is three steps behind them.
+     */
+    const FIELD_STEPS = {
+        rsbsa_no: 1, sex: 1, first_name: 1, last_name: 1, middle_name: 1, suffix: 1,
+        birthdate: 1, birth_city_municipality: 1, birth_province: 1,
+        mother_first_name: 1, mother_middle_name: 1, mother_last_name: 1,
+        civil_status: 1, spouse_first_name: 1, spouse_middle_name: 1,
+        spouse_last_name: 1, spouse_ext_name: 1, children: 1,
+        religion: 1, highest_education: 1, mobile_no: 1,
+        email: 1, email_account: 1, password: 1, password_confirmation: 1,
+        house_lot_number: 2, street_sitio: 2, barangay: 2, city_municipality: 2,
+        province: 2, region: 2, provincial_house_lot: 2, provincial_street_sitio: 2,
+        provincial_barangay: 2, provincial_city_municipality: 2,
+        provincial_province: 2, provincial_region: 2,
+        is_indigenous: 3, indigenous_community: 3, pwd: 3, is_4ps: 3,
+        organization_name: 3, organization_name_2: 3, organization_name_3: 3,
+        livelihood_type: 4,
+        parcels: 5,
+        photo: 6, id_proof: 6, valid_id_type: 6, id_number: 6,
+    };
+
+    /** "spouse_first_name" reads as "Spouse first name" in a message. */
+    const humanise = (field) => {
+        const label = field.replace(/_/g, ' ').replace(/\./g, ' ');
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    };
+
+    /**
+     * Says what actually failed, and goes there.
+     *
+     * The previous handler said only "review the highlighted fields", which is
+     * unusable when the highlight is on a step the user cannot see - the two
+     * rules that reject most often, unique email and unique RSBSA number, both
+     * live on step 1.
+     */
+    const reportErrors = (errorBag, fallback) => {
+        const fields = Object.keys(errorBag ?? {});
+
+        if (fields.length === 0) {
+            toast.error(fallback);
+            return;
+        }
+
+        // Nested keys arrive as "parcels.0.commodity"; the step is on the root.
+        const stepOf = (field) => FIELD_STEPS[field.split('.')[0]] ?? 7;
+        const firstStep = Math.min(...fields.map(stepOf));
+
+        // The server's own message names the reason ("has already been taken"),
+        // which is the part the user needs. Show it verbatim for a single
+        // failure, and fall back to naming the fields when several failed.
+        const message = fields.length === 1
+            ? errorBag[fields[0]]
+            : `Please fix: ${fields.map(humanise).join(', ')}`;
+
+        toast.error(message);
+        setCurrentStep(firstStep);
     };
 
     // A parcel row counts as declared once it has a location or an area.
@@ -343,16 +413,16 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
 
         if (publicMode) {
             router.post('/farmer-registration', formData, {
-                onError: () => toast.error('Please review the highlighted fields and try again'),
+                onError: (e) => reportErrors(e, 'Please review the highlighted fields and try again'),
             });
         } else if (isEdit) {
             formData.append('_method', 'PUT');
             router.post(`/admin/farmers/${farmer.id}`, formData, {
-                onError: () => toast.error('Failed to update farmer'),
+                onError: (e) => reportErrors(e, 'Failed to update farmer'),
             });
         } else {
             router.post('/admin/farmers', formData, {
-                onError: () => toast.error('Failed to register farmer'),
+                onError: (e) => reportErrors(e, 'Failed to register farmer'),
             });
         }
     };
@@ -1465,6 +1535,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                         <label className="flex items-center gap-2 cursor-pointer">
                                                             <input
                                                                 type="radio"
+                                                                name={`organic-${index}`}
                                                                 checked={parcel.is_organic === true}
                                                                 onChange={() => updateParcel(index, 'is_organic', true)}
                                                                 className="h-4 w-4 text-green-600 focus:ring-green-500"
@@ -1474,6 +1545,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                         <label className="flex items-center gap-2 cursor-pointer">
                                                             <input
                                                                 type="radio"
+                                                                name={`organic-${index}`}
                                                                 checked={parcel.is_organic === false}
                                                                 onChange={() => updateParcel(index, 'is_organic', false)}
                                                                 className="h-4 w-4 text-green-600 focus:ring-green-500"
