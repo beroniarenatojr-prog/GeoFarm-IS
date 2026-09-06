@@ -4,7 +4,7 @@ import { useForm, router } from '@inertiajs/react';
 import { User, MapPin, Users, Briefcase, Map, Image as ImageIcon, FileCheck, ChevronLeft, ChevronRight, Check, Info, X, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useState } from 'react';
-import { formatRsbsa, formatMobile, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
+import { formatRsbsa, formatMobile, titleCaseName, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
 
 export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
     const isEdit = !!farmer;
@@ -531,7 +531,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.first_name}
-                                                onChange={e => setData('first_name', e.target.value)}
+                                                onChange={e => setData('first_name', titleCaseName(e.target.value))}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -543,7 +543,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.last_name}
-                                                onChange={e => setData('last_name', e.target.value)}
+                                                onChange={e => setData('last_name', titleCaseName(e.target.value))}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -555,7 +555,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.middle_name}
-                                                onChange={e => setData('middle_name', e.target.value)}
+                                                onChange={e => setData('middle_name', titleCaseName(e.target.value))}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -567,7 +567,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.suffix}
-                                                onChange={e => setData('suffix', e.target.value)}
+                                                onChange={e => setData('suffix', titleCaseName(e.target.value))}
                                                 placeholder="Jr., Sr., III"
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
@@ -599,7 +599,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                 <input
                                                     type="text"
                                                     value={data.birth_city_municipality}
-                                                    onChange={e => setData('birth_city_municipality', e.target.value)}
+                                                    onChange={e => setData('birth_city_municipality', titleCaseName(e.target.value))}
                                                     placeholder="Lugar ng Kapanganakan"
                                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                 />
@@ -612,7 +612,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                 <input
                                                     type="text"
                                                     value={data.birth_province}
-                                                    onChange={e => setData('birth_province', e.target.value)}
+                                                    onChange={e => setData('birth_province', titleCaseName(e.target.value))}
                                                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                 />
                                             </div>
@@ -628,7 +628,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.mother_first_name}
-                                                onChange={e => setData('mother_first_name', e.target.value)}
+                                                onChange={e => setData('mother_first_name', titleCaseName(e.target.value))}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -640,7 +640,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.mother_middle_name}
-                                                onChange={e => setData('mother_middle_name', e.target.value)}
+                                                onChange={e => setData('mother_middle_name', titleCaseName(e.target.value))}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -652,7 +652,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.mother_last_name}
-                                                onChange={e => setData('mother_last_name', e.target.value)}
+                                                onChange={e => setData('mother_last_name', titleCaseName(e.target.value))}
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                         </div>
@@ -706,7 +706,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                                     <input
                                                                         type="text"
                                                                         value={data[field]}
-                                                                        onChange={e => setData(field, e.target.value)}
+                                                                        onChange={e => setData(field, titleCaseName(e.target.value))}
                                                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                                                     />
                                                                     {errors[field] && (
@@ -766,7 +766,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                             <input
                                                                 type="text"
                                                                 value={child.name}
-                                                                onChange={e => updateChild(index, 'name', e.target.value)}
+                                                                onChange={e => updateChild(index, 'name', titleCaseName(e.target.value))}
                                                                 placeholder="Full name"
                                                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                                                             />

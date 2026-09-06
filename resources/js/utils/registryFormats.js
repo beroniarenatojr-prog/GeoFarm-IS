@@ -68,6 +68,28 @@ export function formatRsbsa(value, { deleting = false } = {}) {
 }
 
 /**
+ * Capitalises the first letter of each word, for names typed into the form.
+ *
+ * It only ever ADDS a capital - it never lowercases anything already typed.
+ * That one rule is what keeps it safe on the names this registry actually
+ * sees: McDonald stays McDonald, III stays III, and a clerk who types a
+ * surname in full caps is not overruled. Lowercasing the remainder would
+ * quietly corrupt all three.
+ *
+ * Word boundaries include apostrophes and hyphens, so O'Brien and Jose-Maria
+ * capitalise correctly rather than reading as one word.
+ *
+ * The result is always the same length as the input, so the caret does not
+ * jump when this runs on every keystroke.
+ */
+export function titleCaseName(value) {
+    return String(value ?? '').replace(
+        /(^|[\s'’-])([a-z])/g,
+        (_, boundary, letter) => boundary + letter.toUpperCase(),
+    );
+}
+
+/**
  * Keeps a mobile number as 09XXXXXXXXX.
  *
  * Numbers get written locally as 09xx, internationally as +639xx, and pasted
