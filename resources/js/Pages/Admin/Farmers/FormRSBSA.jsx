@@ -939,7 +939,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.house_lot_number}
-                                                        onChange={e => setData('house_lot_number', e.target.value)}
+                                                        onChange={e => setData('house_lot_number', titleCaseName(e.target.value))}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -951,7 +951,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.street_sitio}
-                                                        onChange={e => setData('street_sitio', e.target.value)}
+                                                        onChange={e => setData('street_sitio', titleCaseName(e.target.value))}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -963,7 +963,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.barangay}
-                                                        onChange={e => setData('barangay', e.target.value)}
+                                                        onChange={e => setData('barangay', titleCaseName(e.target.value))}
                                                         placeholder="e.g. San Pablo"
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
@@ -978,7 +978,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.city_municipality}
-                                                        onChange={e => setData('city_municipality', e.target.value)}
+                                                        onChange={e => setData('city_municipality', titleCaseName(e.target.value))}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -990,7 +990,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.province}
-                                                        onChange={e => setData('province', e.target.value)}
+                                                        onChange={e => setData('province', titleCaseName(e.target.value))}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -1035,7 +1035,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.provincial_house_lot}
-                                                        onChange={e => setData('provincial_house_lot', e.target.value)}
+                                                        onChange={e => setData('provincial_house_lot', titleCaseName(e.target.value))}
                                                         disabled={data.region !== 'NCR'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                                                     />
@@ -1048,7 +1048,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.provincial_street_sitio}
-                                                        onChange={e => setData('provincial_street_sitio', e.target.value)}
+                                                        onChange={e => setData('provincial_street_sitio', titleCaseName(e.target.value))}
                                                         disabled={data.region !== 'NCR'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                                                     />
@@ -1061,7 +1061,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.provincial_barangay}
-                                                        onChange={e => setData('provincial_barangay', e.target.value)}
+                                                        onChange={e => setData('provincial_barangay', titleCaseName(e.target.value))}
                                                         disabled={data.region !== 'NCR'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                                                     />
@@ -1076,7 +1076,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.provincial_city_municipality}
-                                                        onChange={e => setData('provincial_city_municipality', e.target.value)}
+                                                        onChange={e => setData('provincial_city_municipality', titleCaseName(e.target.value))}
                                                         disabled={data.region !== 'NCR'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                                                     />
@@ -1089,7 +1089,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.provincial_province}
-                                                        onChange={e => setData('provincial_province', e.target.value)}
+                                                        onChange={e => setData('provincial_province', titleCaseName(e.target.value))}
                                                         disabled={data.region !== 'NCR'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                                                     />
@@ -1157,7 +1157,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={data.indigenous_community}
-                                                        onChange={e => setData('indigenous_community', e.target.value)}
+                                                        onChange={e => setData('indigenous_community', titleCaseName(e.target.value))}
                                                         placeholder="Specify community"
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
@@ -1229,21 +1229,21 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                             <input
                                                 type="text"
                                                 value={data.organization_name}
-                                                onChange={e => setData('organization_name', e.target.value)}
+                                                onChange={e => setData('organization_name', titleCaseName(e.target.value))}
                                                 placeholder="1 optional"
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                             <input
                                                 type="text"
                                                 value={data.organization_name_2}
-                                                onChange={e => setData('organization_name_2', e.target.value)}
+                                                onChange={e => setData('organization_name_2', titleCaseName(e.target.value))}
                                                 placeholder="2 optional"
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
                                             <input
                                                 type="text"
                                                 value={data.organization_name_3}
-                                                onChange={e => setData('organization_name_3', e.target.value)}
+                                                onChange={e => setData('organization_name_3', titleCaseName(e.target.value))}
                                                 placeholder="3 optional"
                                                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                             />
@@ -1353,7 +1353,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={parcel.barangay}
-                                                        onChange={e => updateParcel(index, 'barangay', e.target.value)}
+                                                        onChange={e => updateParcel(index, 'barangay', titleCaseName(e.target.value))}
                                                         placeholder="Lokasyon ng Sakahan"
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
@@ -1365,7 +1365,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={parcel.city_municipality}
-                                                        onChange={e => updateParcel(index, 'city_municipality', e.target.value)}
+                                                        onChange={e => updateParcel(index, 'city_municipality', titleCaseName(e.target.value))}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -1376,7 +1376,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={parcel.province}
-                                                        onChange={e => updateParcel(index, 'province', e.target.value)}
+                                                        onChange={e => updateParcel(index, 'province', titleCaseName(e.target.value))}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -1567,7 +1567,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <input
                                                         type="text"
                                                         value={parcel.land_owner_name}
-                                                        onChange={e => updateParcel(index, 'land_owner_name', e.target.value)}
+                                                        onChange={e => updateParcel(index, 'land_owner_name', titleCaseName(e.target.value))}
                                                         disabled={parcel.ownership_type === 'Registered Owner'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100"
                                                     />
