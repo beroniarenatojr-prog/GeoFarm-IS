@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\FarmType;
 use App\Models\Farmer;
 use App\Models\User;
+use App\Notifications\FarmerRegistrationSubmitted;
 use App\Services\AuditService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -154,6 +156,25 @@ class FarmerRegistrationController extends Controller
 
             return $farmer;
         });
+
+        /*
+         * Tell the office there is something to review.
+         *
+         * Sent after the transaction commits, so an email can never announce a
+         * registration that was rolled back. Addressed by permission rather
+         * than role: `edit farmers` is what approve and reject require, so it
+         * is exactly the set of people who can act on this. Staff who only
+         * hold `view farmers` can see the queue but not clear it, and would be
+         * receiving work they cannot do.
+         *
+         * Nothing guards against a duplicate here because nothing needs to:
+         * alreadySubmitted() above rejects a repeat of the same person before
+         * any record exists, so a refreshed form never reaches this line.
+         */
+        Notification::send(
+            User::permission('edit farmers')->where('is_active', true)->get(),
+            new FarmerRegistrationSubmitted($farmer),
+        );
 
         AuditService::log('create', 'farmer_online_registration', $farmer->id, null, [
             'reference_code' => $farmer->reference_code,

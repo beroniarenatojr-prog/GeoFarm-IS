@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Farmer;
+use App\Notifications\FarmerVerificationDecided;
 use App\Services\AuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
 
 /**
@@ -116,6 +118,8 @@ class FarmerVerificationController extends Controller
             $farmer->user?->update(['is_active' => true]);
         });
 
+        $this->tellFarmer($farmer->fresh(), approved: true);
+
         AuditService::log('approve', 'farmers', $farmer->id, $old, $farmer->fresh()->toArray());
 
         return back()->with('success', "{$farmer->full_name} verified. Their account is now active.");
@@ -145,8 +149,34 @@ class FarmerVerificationController extends Controller
             $farmer->user?->update(['is_active' => false]);
         });
 
+        $this->tellFarmer($farmer->fresh(), approved: false);
+
         AuditService::log('reject', 'farmers', $farmer->id, $old, $farmer->fresh()->toArray());
 
         return back()->with('success', "Submission for {$farmer->full_name} was rejected.");
+    }
+
+    /**
+     * Email the farmer the decision.
+     *
+     * Routed on demand rather than notified through a model, because a farmer
+     * encoded at the office has no login account to notify - and the address
+     * on the farmer record is the one they gave, whether or not it became a
+     * login.
+     *
+     * Called after the transaction commits so an email cannot describe a
+     * decision that was rolled back, and re-approving is impossible anyway:
+     * both actions return early unless the submission is still pending.
+     */
+    private function tellFarmer(Farmer $farmer, bool $approved): void
+    {
+        $address = $farmer->email ?: $farmer->user?->email;
+
+        if (blank($address)) {
+            return;
+        }
+
+        Notification::route('mail', $address)
+            ->notify(new FarmerVerificationDecided($farmer, $approved));
     }
 }
