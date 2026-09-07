@@ -200,10 +200,30 @@ function RiskAssessmentCard({ assessment }) {
                         </p>
                     )}
 
+                    {/* Shown whatever the level. A farmer at lower risk still
+                        gets advice - the assessment exists to say what to do
+                        next, not only to warn. */}
+                    {assessment.recommendations?.length > 0 && (
+                        <div className="mt-4 border-t border-gray-200 pt-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                Recommended actions
+                            </p>
+                            <ul className="mt-1.5 space-y-2">
+                                {assessment.recommendations.map((item) => (
+                                    <li key={item.key} className="flex items-start gap-2 text-sm leading-relaxed text-gray-700">
+                                        <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-[#006400]" />
+                                        {item.text}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
                         This is a preliminary rule-based assessment from your recorded farm data
-                        and questionnaire answers — not a statistical prediction. Discuss it with
-                        the Municipal Agriculture Office.
+                        and questionnaire answers — not a statistical prediction. The suggested
+                        actions are general guidance, not a technical prescription. Discuss both
+                        with the Municipal Agriculture Office.
                     </p>
                 </div>
             )}

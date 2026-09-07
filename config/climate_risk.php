@@ -83,4 +83,61 @@ return [
         // nothing, and would put a factor on a farmer for no reason.
         'minimum_peers' => 3,
     ],
+
+    /*
+    |----------------------------------------------------------------------
+    | Recommended actions
+    |----------------------------------------------------------------------
+    |
+    | DRAFT WORDING — FOR MAO / ADVISER REVIEW.
+    |
+    | Written to the same standard as the weights above: these are neutral
+    | prompts to consult the Municipal Agriculture Office, not agronomic
+    | prescriptions. None of it is drawn from an approved DA or MAO advisory,
+    | and it should be replaced with the office's own guidance before the
+    | system is used to advise real farmers.
+    |
+    | The deliberate limit: nothing here names a variety, a chemical, a rate or
+    | a schedule. Those are decisions for an agriculturist who has seen the
+    | land, and a system that issued them from a questionnaire would be giving
+    | technical advice it has no basis for.
+    |
+    | Keyed by the factor keys ClimateRiskScorer emits, so a recommendation
+    | only ever appears because a specific, stated condition was found true.
+    |
+    */
+    'recommendations' => [
+
+        'previous_season_loss' => 'Review the major expenses from last season against what the harvest earned, and discuss the result with the Municipal Agriculture Office before committing to the same inputs again.',
+
+        'cost_per_kilo_above_peers' => 'Production costs per kilo are higher than nearby farms growing the same crop. Ask the Municipal Agriculture Office to review the main expense items - seed, fertiliser, labour and land preparation - for cost-reducing practices suited to the area.',
+
+        'yield_below_peers' => 'Yield is below other farms growing the same crop nearby. Request a technical assessment of crop management practices from the Municipal Agriculture Office.',
+
+        'declining_yield' => 'Yield on this parcel has fallen across recent seasons. Ask the Municipal Agriculture Office about soil testing and appropriate production interventions.',
+
+        'frequent_flooding' => 'Flooding is a recurring problem on this farm. Consult the Municipal Agriculture Office about drainage and flood-management practices, and about flood-tolerant varieties and planting schedules suitable for the area.',
+
+        'frequent_drought' => 'Dry periods are a recurring problem on this farm. Consult the Municipal Agriculture Office about water-management practices, irrigation options, and drought-tolerant varieties suitable for the area.',
+
+        'severe_climate_damage' => 'Climate events have caused severe losses on this farm. Coordinate with the Municipal Agriculture Office for a technical assessment and to ask what agricultural assistance is available.',
+
+        'no_adaptation' => 'No climate adaptation practices are currently recorded. Ask the Municipal Agriculture Office which practices are appropriate for this farm and what technical assistance is available.',
+
+        'reported_financial_loss' => 'Coordinate with the Municipal Agriculture Office regarding assistance programmes and support available to farmers who have experienced climate-related losses.',
+    ],
+
+    /*
+    | Shown when the assessment raises no factors.
+    |
+    | A farmer at lower risk still gets advice - the point of the assessment is
+    | to say what to do next, not only to warn. Left out, a clean result would
+    | read as the system having nothing to offer.
+    */
+    'baseline_recommendations' => [
+        'Keep recording production costs, harvest weights and selling prices each season, so changes in profitability are visible early.',
+        'Continue the climate adaptation practices already in use.',
+        'Monitor input costs against the price the harvest earns.',
+        'Ask the Municipal Agriculture Office about practices that may further improve productivity.',
+    ],
 ];

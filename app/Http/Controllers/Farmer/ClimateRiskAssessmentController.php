@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClimateRiskAssessment;
 use App\Models\Farmer;
 use App\Services\AuditService;
+use App\Services\ClimateRecommendationEngine;
 use App\Services\ClimateRiskScorer;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -58,8 +59,11 @@ class ClimateRiskAssessmentController extends Controller
         ]);
     }
 
-    public function store(Request $request, ClimateRiskScorer $scorer)
-    {
+    public function store(
+        Request $request,
+        ClimateRiskScorer $scorer,
+        ClimateRecommendationEngine $recommendations,
+    ) {
         $farmer = $this->farmerFor($request);
 
         $data = $request->validate($this->rules($farmer));
@@ -88,6 +92,10 @@ class ClimateRiskAssessmentController extends Controller
             'risk_score'      => $result['score'],
             'risk_factors'    => $result['factors'],
             'scoring_version' => $result['version'],
+            // Kept with the score, not worked out again when the page is
+            // opened: what the farmer was actually advised, on the day they
+            // were advised it, is the part that matters if anyone asks later.
+            'recommendations' => $recommendations->for($result['factors']),
         ]);
 
         AuditService::log('create', 'climate_risk_assessments', $assessment->id, null, [

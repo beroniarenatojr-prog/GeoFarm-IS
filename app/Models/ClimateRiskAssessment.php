@@ -114,7 +114,7 @@ class ClimateRiskAssessment extends Model
         'adaptation_practices', 'adaptation_effectiveness', 'adaptation_barrier',
         'received_assistance', 'assistance_types', 'assistance_helpfulness',
         'perceived_risk', 'anticipated_factors',
-        'risk_level', 'risk_score', 'risk_factors', 'scoring_version',
+        'risk_level', 'risk_score', 'risk_factors', 'scoring_version', 'recommendations',
     ];
 
     protected $casts = [
@@ -125,6 +125,7 @@ class ClimateRiskAssessment extends Model
         'assistance_types'     => 'array',
         'anticipated_factors'  => 'array',
         'risk_factors'         => 'array',
+        'recommendations'      => 'array',
     ];
 
     protected $appends = ['is_stale'];
