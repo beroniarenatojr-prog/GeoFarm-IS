@@ -39,6 +39,7 @@ const emptyForm = (parcel_id = '') => ({
     harvest_date: '',
     yield_kg: '',
     production_cost: '',
+    total_income: '',
     fertilizer_type: '',
     fertilizer_qty_kg: '',
     fertilizer_class: '',
@@ -112,6 +113,33 @@ function Cost({ season, onAdd, mayEdit }) {
                 {season.cost_per_kg != null
                     ? `${peso(season.cost_per_kg)} / kg`
                     : <span className="text-gray-400">awaiting harvest</span>}
+            </p>
+        </div>
+    );
+}
+
+/**
+ * What the season cleared, and whether that was a loss.
+ *
+ * Blank until both figures exist. A season with a cost but no income yet is
+ * still being encoded - showing it as a loss would invent one, and these rows
+ * are what the risk work will later be measured against.
+ */
+function NetIncome({ season }) {
+    if (season.net_farm_income == null) {
+        return <span className="text-gray-300">—</span>;
+    }
+
+    const loss = season.financial_outcome === 'loss';
+    const even = season.financial_outcome === 'break_even';
+
+    return (
+        <div>
+            <p className={`font-semibold tabular-nums ${loss ? 'text-red-600' : 'text-gray-900'}`}>
+                {peso(season.net_farm_income, 0)}
+            </p>
+            <p className={`text-xs font-medium ${loss ? 'text-red-600' : even ? 'text-gray-500' : 'text-[#006400]'}`}>
+                {loss ? 'Palugi' : even ? 'Break-even' : 'Profitable'}
             </p>
         </div>
     );
@@ -252,6 +280,28 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
                             ₱{(data.production_cost / data.yield_kg).toFixed(2)} per kilo
                         </p>
                     )}
+                </div>
+                <div>
+                    <label className={label}>Income from harvest (₱)</label>
+                    <input type="number" step="0.01" min="0" className={field} value={data.total_income}
+                        onChange={e => setData('total_income', e.target.value)}
+                        placeholder="What the harvest sold for" />
+                    {errors.total_income && <p className={err}>{errors.total_income}</p>}
+                    {/* Net income as it is typed, so a season that lost money
+                        is visible while it is being encoded rather than only
+                        once a report is run. Both figures are required: an
+                        empty income is a record still being filled in, not a
+                        harvest that sold for nothing. */}
+                    {data.total_income !== '' && data.production_cost !== '' && (() => {
+                        const net = Number(data.total_income) - Number(data.production_cost);
+                        const label = net > 0 ? 'profit' : net < 0 ? 'loss' : 'break-even';
+
+                        return (
+                            <p className={`mt-1 text-[11px] font-medium ${net < 0 ? 'text-red-600' : 'text-[#006400]'}`}>
+                                ₱{Math.abs(net).toLocaleString(undefined, { maximumFractionDigits: 2 })} {label}
+                            </p>
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -409,6 +459,16 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
             planting_date:   toDateInput(season.planting_date),
             harvest_date:    toDateInput(season.harvest_date),
             yield_kg:        season.yield_kg ?? '',
+            // These were missing, so the cost and fertilizer boxes opened blank
+            // on a season that had them. Nothing was lost - update() only
+            // touches keys the request carries - but a clerk saw an empty cost
+            // for a costed season, and any figure they typed to "fix" it
+            // silently replaced one they could not see.
+            production_cost:    season.production_cost ?? '',
+            total_income:       season.total_income ?? '',
+            fertilizer_type:    season.fertilizer_type ?? '',
+            fertilizer_qty_kg:  season.fertilizer_qty_kg ?? '',
+            fertilizer_class:   season.fertilizer_class ?? '',
             inputs_used:     season.inputs_used ?? [],
         });
         setEditing(season);
@@ -656,6 +716,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                         <th className="px-4 py-3 font-semibold text-right">Area</th>
                                         <th className="px-4 py-3 font-semibold text-right">Yield</th>
                                         <th className="px-4 py-3 font-semibold text-right">Cost</th>
+                                        <th className="px-4 py-3 font-semibold text-right">Net income</th>
                                         <th className="px-4 py-3 font-semibold">Fertilizer</th>
                                         <th className="px-4 py-3 font-semibold text-right">Actions</th>
                                     </tr>
@@ -688,6 +749,9 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 <Cost season={s} onAdd={() => openEdit(s)} mayEdit={can('edit seasonal')} />
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <NetIncome season={s} />
                                             </td>
                                             <td className="px-4 py-3">
                                                 <Fertilizer season={s} />
