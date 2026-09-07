@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClimateRiskAssessment;
 use App\Models\Farmer;
 use App\Services\AuditService;
+use App\Services\ClimateRiskScorer;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -57,7 +58,7 @@ class ClimateRiskAssessmentController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, ClimateRiskScorer $scorer)
     {
         $farmer = $this->farmerFor($request);
 
@@ -69,6 +70,24 @@ class ClimateRiskAssessmentController extends Controller
             'farmer_id'   => $farmer->id,
             'assessed_by' => $request->user()->id,
             'assessed_at' => now(),
+        ]);
+
+        /*
+         * Score it now and keep the result.
+         *
+         * Stored rather than computed on read, because the weights live in
+         * config and the panel is expected to revise them. An assessment that
+         * silently reported a different level in June than it did in March
+         * could not be cited, so each result carries the version of the rules
+         * that produced it.
+         */
+        $result = $scorer->score($assessment->load('season.parcel'));
+
+        $assessment->update([
+            'risk_level'      => $result['level'],
+            'risk_score'      => $result['score'],
+            'risk_factors'    => $result['factors'],
+            'scoring_version' => $result['version'],
         ]);
 
         AuditService::log('create', 'climate_risk_assessments', $assessment->id, null, [

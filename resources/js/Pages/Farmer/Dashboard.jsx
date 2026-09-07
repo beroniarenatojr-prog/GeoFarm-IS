@@ -107,6 +107,12 @@ function InfoRow({ icon: Icon, label, value }) {
 
 /* ------------------------------------------------------------------- page */
 
+const RISK_TONE = {
+    low:      'bg-green-100 text-green-800',
+    moderate: 'bg-amber-100 text-amber-800',
+    high:     'bg-red-100 text-red-700',
+};
+
 /**
  * Climate and financial risk, on the portal.
  *
@@ -154,6 +160,52 @@ function RiskAssessmentCard({ assessment }) {
                 <p className="mt-3 text-sm text-gray-500">
                     No risk assessment completed yet.
                 </p>
+            )}
+
+            {assessment?.risk_level && (
+                <div className="mt-4 rounded-xl border border-gray-200 p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <span className={`rounded-lg px-3 py-1.5 text-sm font-bold uppercase tracking-wide ${RISK_TONE[assessment.risk_level]}`}>
+                            {assessment.risk_level} risk
+                        </span>
+                        {/* Called a score, never a probability. Nothing has been
+                            fitted against outcomes, so a percentage would claim
+                            a precision these rules do not have. */}
+                        <span className="text-sm text-gray-500">
+                            Risk score {assessment.risk_score} of 100
+                        </span>
+                    </div>
+
+                    {assessment.risk_factors?.length > 0 && (
+                        <div className="mt-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                                Main risk factors
+                            </p>
+                            <ul className="mt-1.5 space-y-1">
+                                {assessment.risk_factors.map((factor) => (
+                                    <li key={factor.key} className="flex items-start gap-2 text-sm text-gray-700">
+                                        <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-500" />
+                                        {factor.label}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {assessment.risk_factors?.length === 0 && (
+                        <p className="mt-3 text-sm text-gray-600">
+                            Nothing in your current records points to raised financial risk.
+                            Keep recording your production costs, harvests and selling prices
+                            so this stays accurate.
+                        </p>
+                    )}
+
+                    <p className="mt-3 text-[11px] leading-relaxed text-gray-400">
+                        This is a preliminary rule-based assessment from your recorded farm data
+                        and questionnaire answers — not a statistical prediction. Discuss it with
+                        the Municipal Agriculture Office.
+                    </p>
+                </div>
             )}
 
             <a
