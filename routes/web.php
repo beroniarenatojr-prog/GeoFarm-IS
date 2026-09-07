@@ -27,6 +27,7 @@ use App\Http\Controllers\Admin\PredictiveAnalyticsController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\FarmerRegistrationController;
+use App\Http\Controllers\Farmer\ClimateRiskAssessmentController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\LandingController;
@@ -251,6 +252,14 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
 // Farmer Dashboard (for registered farmers)
 Route::middleware(['auth', 'role:Farmer'])->prefix('farmer')->name('farmer.')->group(function () {
     Route::get('/dashboard', [FarmerController::class, 'dashboard'])->name('dashboard');
+
+    // Climate and financial risk questionnaire. No permission check beyond the
+    // Farmer role: the controller resolves the farmer from the signed-in user,
+    // so there is no id in the request to point at somebody else's holding.
+    Route::get('/risk-assessment', [ClimateRiskAssessmentController::class, 'create'])
+        ->name('risk-assessment.create');
+    Route::post('/risk-assessment', [ClimateRiskAssessmentController::class, 'store'])
+        ->name('risk-assessment.store');
 });
 
 // Landing Page

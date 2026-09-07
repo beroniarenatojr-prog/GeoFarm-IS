@@ -537,6 +537,10 @@ class FarmerController extends Controller
         $user = auth()->user();
         $farmer = Farmer::where('user_id', $user->id)->with([
             'parcels.farmType',
+            // One row, not the whole history: the portal card shows a single
+            // date and status, and a farmer assessed every season would
+            // otherwise drag every past round into the dashboard payload.
+            'latestRiskAssessment',
             'children',
             'livestock.livestockType',
             'distributions.program',

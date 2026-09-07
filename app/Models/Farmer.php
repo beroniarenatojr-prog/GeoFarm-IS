@@ -158,6 +158,24 @@ class Farmer extends Model
 
     public function parcels(): HasMany        { return $this->hasMany(FarmParcel::class); }
     public function children(): HasMany       { return $this->hasMany(FarmerChild::class); }
+
+    /** Every assessment ever taken, newest first - re-assessing adds, never replaces. */
+    public function riskAssessments(): HasMany
+    {
+        return $this->hasMany(ClimateRiskAssessment::class)->latest('assessed_at');
+    }
+
+    /**
+     * The current assessment, which is all the portal card needs.
+     *
+     * A hasOne over the same table rather than loading the whole history: the
+     * card shows one date and one status, and a farmer assessed each season
+     * would otherwise drag every past round into the dashboard payload.
+     */
+    public function latestRiskAssessment()
+    {
+        return $this->hasOne(ClimateRiskAssessment::class)->latestOfMany('assessed_at');
+    }
     public function livestock(): HasMany      { return $this->hasMany(Livestock::class); }
     public function distributions(): HasMany  { return $this->hasMany(AssistanceDistribution::class); }
     public function associations()            { return $this->belongsToMany(Association::class, 'farmer_associations'); }

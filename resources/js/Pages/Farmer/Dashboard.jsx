@@ -107,6 +107,65 @@ function InfoRow({ icon: Icon, label, value }) {
 
 /* ------------------------------------------------------------------- page */
 
+/**
+ * Climate and financial risk, on the portal.
+ *
+ * Three states, and the middle one matters: an assessment more than a year old
+ * still describes a farm, but not necessarily this one any more, so it invites
+ * an update rather than reading as done.
+ *
+ * No risk level is shown yet - the scorer is a later phase, and printing a
+ * level here before one exists would be inventing it.
+ */
+function RiskAssessmentCard({ assessment }) {
+    const stale = assessment?.is_stale;
+
+    const status = !assessment
+        ? { label: 'Not yet assessed', tone: 'bg-gray-100 text-gray-700' }
+        : stale
+            ? { label: 'Assessment needs updating', tone: 'bg-amber-100 text-amber-800' }
+            : { label: 'Assessment completed', tone: 'bg-green-100 text-green-800' };
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
+            <SectionHeading icon={ShieldAlert} title="Climate & Financial Risk Assessment" />
+
+            <p className="mt-1 text-sm text-gray-600">
+                Assess climate-related risks, farming conditions and financial performance to
+                identify potential financial-loss risks and receive appropriate agricultural
+                recommendations.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}>
+                    {status.label}
+                </span>
+                {assessment?.assessed_at && (
+                    <span className="text-sm text-gray-500">
+                        Last assessment:{' '}
+                        {new Date(assessment.assessed_at).toLocaleDateString('en-PH', {
+                            year: 'numeric', month: 'long', day: 'numeric',
+                        })}
+                    </span>
+                )}
+            </div>
+
+            {!assessment && (
+                <p className="mt-3 text-sm text-gray-500">
+                    No risk assessment completed yet.
+                </p>
+            )}
+
+            <a
+                href="/farmer/risk-assessment"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#006400] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800"
+            >
+                {assessment ? 'Update assessment' : 'Start assessment'}
+            </a>
+        </div>
+    );
+}
+
 export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, mapCenter }) {
     const handleLogout = () => {
         router.post('/logout');
@@ -492,6 +551,9 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                         </div>
                     </div>
                 )}
+
+                {/* ------------------------------------------- climate & financial risk */}
+                <RiskAssessmentCard assessment={farmer.latest_risk_assessment} />
 
                 {/* -------------------------------------------------------- crops */}
                 {seasons.length > 0 && (
