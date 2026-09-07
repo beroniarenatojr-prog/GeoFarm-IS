@@ -363,6 +363,20 @@ export default function FarmerShow({ farmer }) {
                       <Field label="Birthdate" value={farmer.birthdate ? formatDate(farmer.birthdate, 'date-only') : null} />
                       <Field label="Place of Birth" value={joined([farmer.birth_city_municipality, farmer.birth_province])} />
                       <Field label="Civil Status" value={farmer.civil_status} />
+                      {/* Asked for on the form only when married, so shown here
+                          on the same condition - a Spouse row against a Single
+                          farmer reads as missing data rather than none. */}
+                      {farmer.civil_status === 'Married' && (
+                        <Field
+                          label="Name of Spouse"
+                          value={joined([
+                            farmer.spouse_first_name,
+                            farmer.spouse_middle_name,
+                            farmer.spouse_last_name,
+                            farmer.spouse_ext_name,
+                          ], ' ')}
+                        />
+                      )}
                       <Field label="Religion" value={farmer.religion} />
                       <Field label="Highest Education" value={farmer.highest_education} />
                       <Field
@@ -370,6 +384,36 @@ export default function FarmerShow({ farmer }) {
                         value={joined([farmer.mother_first_name, farmer.mother_middle_name, farmer.mother_last_name], ' ')
                           || farmer.mother_maiden_name}
                       />
+
+                      {/* One row per child rather than a comma-separated list:
+                          each carries a birthday and sex of its own, which a
+                          single line could not hold legibly. Rendered only when
+                          there are children, so a farmer with none does not get
+                          an empty "Children" row reading "Not provided" - that
+                          would state something the office never recorded. */}
+                      {farmer.children?.length > 0 && (
+                        <Field
+                          label={farmer.children.length === 1 ? 'Child' : 'Children'}
+                          value={
+                            <ul className="space-y-0.5">
+                              {farmer.children.map((child) => (
+                                <li key={child.id}>
+                                  {child.name}
+                                  {(child.sex || child.birthdate) && (
+                                    <span className="text-gray-500 dark:text-gray-400">
+                                      {' — '}
+                                      {[
+                                        child.sex,
+                                        child.birthdate ? formatDate(child.birthdate, 'date-only') : null,
+                                      ].filter(Boolean).join(', ')}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          }
+                        />
+                      )}
                     </Section>
 
                     <Section icon={Phone} title="Contact & Identification">
