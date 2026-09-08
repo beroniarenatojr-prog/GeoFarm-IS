@@ -1155,7 +1155,6 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     <tr>
                                         <th className="px-4 py-3 font-semibold">Farmer &amp; parcel</th>
                                         <th className="px-4 py-3 font-semibold">Crop &amp; season</th>
-                                        <th className="px-4 py-3 font-semibold">Growing period</th>
                                         <th className="px-4 py-3 font-semibold text-right">Area</th>
                                         <th className="px-4 py-3 font-semibold text-right">Yield</th>
                                         <th className="px-4 py-3 font-semibold text-right">Cost</th>
@@ -1178,9 +1177,6 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                                 <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400">
                                                     <Badge value={s.season} /> {s.cropping_year}
                                                 </p>
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-gray-600">
-                                                <Period season={s} />
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-gray-700">
                                                 {s.area_planted_ha != null
@@ -1288,7 +1284,6 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     </dl>
 
                                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                                        <Period season={s} />
                                         <Fertilizer season={s} compact />
                                     </div>
                                 </li>
