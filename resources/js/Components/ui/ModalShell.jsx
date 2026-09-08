@@ -38,12 +38,28 @@ export default function ModalShell({
     const panel = useRef(null);
     const previouslyFocused = useRef(null);
 
+    /*
+     * The close handler, held by reference rather than watched.
+     *
+     * Callers write onClose={() => setThing(false)}, which is a new function on
+     * every render. With onClose in the dependency list below, every keystroke
+     * in a modal form re-ran this effect: the cleanup restored focus to
+     * whatever was focused before the dialog opened, so a typist got one
+     * character per click and had to click back into the field for the next.
+     *
+     * The effect installs key handling and an initial focus — work that
+     * belongs to the dialog being open, not to the identity of a callback. The
+     * ref keeps the newest handler available without making it a trigger.
+     */
+    const closeRef = useRef(onClose);
+    closeRef.current = onClose;
+
     useEffect(() => {
         if (!open) return;
         previouslyFocused.current = document.activeElement;
 
         const onKey = e => {
-            if (e.key === 'Escape') return onClose?.();
+            if (e.key === 'Escape') return closeRef.current?.();
             if (e.key !== 'Tab' || !panel.current) return;
 
             // Keep Tab inside the dialog rather than walking the page behind it.
@@ -79,7 +95,7 @@ export default function ModalShell({
             document.body.style.overflow = previousOverflow;
             previouslyFocused.current?.focus?.();
         };
-    }, [open, onClose]);
+    }, [open]);
 
     if (!open) return null;
 

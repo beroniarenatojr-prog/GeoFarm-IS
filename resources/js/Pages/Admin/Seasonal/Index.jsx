@@ -30,6 +30,27 @@ const CLASS_TONE = {
 const peso = (n, dp = 2) =>
     `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 
+/**
+ * Reads back an amount as it is typed, grouped and to two decimals.
+ *
+ * A number input cannot show thousand separators — browsers refuse, because
+ * the separator differs by locale and the value has to stay parseable. So
+ * "150000" sits in the box as an undifferentiated run of digits, and a clerk
+ * cannot tell it from 15,000 or 1,500,000 without counting. This echoes the
+ * grouped figure underneath, which is the part a person actually reads.
+ */
+function Amount({ value }) {
+    if (value === '' || value === null || value === undefined || isNaN(Number(value))) {
+        return null;
+    }
+
+    return (
+        <p className="mt-1 text-[11px] font-medium tabular-nums text-gray-500">
+            {peso(value)}
+        </p>
+    );
+}
+
 const emptyInput = () => ({ input_type: 'fertilizer', name: '', quantity: '', unit: 'bag', cost: '' });
 
 const emptyForm = (parcel_id = '') => ({
@@ -313,20 +334,30 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
             <div className="grid grid-cols-2 gap-3">
                 <div>
                     <label className={label}>Production quantity</label>
+                    {/* min-w-0 and a fixed basis on the unit: `field` carries
+                        w-full, and on a flex child that fought flex-1 and
+                        squeezed the number box down to nothing. */}
                     <div className="flex gap-2">
-                        <input type="number" step="0.01" min="0" className={`${field} flex-1`} value={data.yield_kg}
+                        <input type="number" step="0.01" min="0" className={`${field} min-w-0 flex-1`} value={data.yield_kg}
                             onChange={e => setData('yield_kg', e.target.value)} />
-                        <select className={`${field} w-24`} value={data.production_unit ?? 'kg'}
+                        <select className="shrink-0 basis-24 rounded-lg border px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            value={data.production_unit ?? 'kg'}
                             onChange={e => setData('production_unit', e.target.value)}>
                             {['kg', 'sacks', 'tons', 'pieces'].map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                     </div>
+                    {data.yield_kg !== '' && !isNaN(Number(data.yield_kg)) && (
+                        <p className="mt-1 text-[11px] font-medium tabular-nums text-gray-500">
+                            {Number(data.yield_kg).toLocaleString('en-PH')} {data.production_unit ?? 'kg'}
+                        </p>
+                    )}
                 </div>
                 <div>
                     <label className={label}>Selling price (₱ per unit)</label>
                     <input type="number" step="0.01" min="0" className={field} value={data.selling_price}
                         onChange={e => setData('selling_price', e.target.value)}
                         placeholder="e.g. 22.00" />
+                    <Amount value={data.selling_price} />
                     {errors.selling_price && <p className={err}>{errors.selling_price}</p>}
                     {/* Gross revenue as it is typed. Saved into the income
                         field below when that is left blank, so there is only
@@ -342,6 +373,7 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
                     <input type="number" step="0.01" min="0" className={field} value={data.production_cost}
                         onChange={e => setData('production_cost', e.target.value)}
                         placeholder="Or itemise below" />
+                    <Amount value={data.production_cost} />
                     {errors.production_cost && <p className={err}>{errors.production_cost}</p>}
                     {(data.inputs ?? []).length > 0 && (
                         <p className="mt-1 text-[11px] text-amber-700">
@@ -361,6 +393,7 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
                     <input type="number" step="0.01" min="0" className={field} value={data.total_income}
                         onChange={e => setData('total_income', e.target.value)}
                         placeholder="What the harvest sold for" />
+                    <Amount value={data.total_income} />
                     {errors.total_income && <p className={err}>{errors.total_income}</p>}
                     {/* Net income as it is typed, so a season that lost money
                         is visible while it is being encoded rather than only
@@ -386,6 +419,7 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
                     <input type="number" step="0.01" min="0" className={field} value={data.labor_cost}
                         onChange={e => setData('labor_cost', e.target.value)}
                         placeholder="Planting, weeding, harvesting" />
+                    <Amount value={data.labor_cost} />
                     {errors.labor_cost && <p className={err}>{errors.labor_cost}</p>}
                 </div>
                 <div>
@@ -393,6 +427,7 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
                     <input type="number" step="0.01" min="0" className={field} value={data.other_cost}
                         onChange={e => setData('other_cost', e.target.value)}
                         placeholder="Hauling, rent, irrigation fees" />
+                    <Amount value={data.other_cost} />
                     {errors.other_cost && <p className={err}>{errors.other_cost}</p>}
                 </div>
                 <div>
@@ -478,13 +513,33 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
                             {/* The figure the old JSON column had no room for,
                                 and the one the office actually needs: these
                                 add up to the season's production cost. */}
-                            <input type="number" step="0.01" placeholder="Cost ₱" className={`${field} col-span-3`} value={inp.cost ?? ''}
-                                onChange={e => updateInput(i, 'cost', e.target.value)} />
+                            <div className="col-span-3">
+                                <input type="number" step="0.01" placeholder="Cost ₱" className={field} value={inp.cost ?? ''}
+                                    onChange={e => updateInput(i, 'cost', e.target.value)} />
+                                <Amount value={inp.cost} />
+                            </div>
                             <button type="button" onClick={() => removeInput(i)}
                                 className="col-span-1 text-red-400 hover:text-red-600 text-lg leading-none text-center">&times;</button>
                         </div>
                     ))}
                 </div>
+
+                {/* What these rows come to, plus labour and other expenses —
+                    the figure that replaces the cost of production on save.
+                    Shown here so the total is checkable before saving rather
+                    than discovered afterwards in the table. */}
+                {(data.inputs ?? []).length > 0 && (
+                    <div className="mt-3 flex items-center justify-between rounded-lg bg-green-50 px-3 py-2 text-sm">
+                        <span className="text-gray-600">Inputs, labour and other expenses</span>
+                        <span className="font-bold tabular-nums text-[#006400]">
+                            {peso(
+                                (data.inputs ?? []).reduce((sum, i) => sum + (Number(i.cost) || 0), 0)
+                                + (Number(data.labor_cost) || 0)
+                                + (Number(data.other_cost) || 0),
+                            )}
+                        </span>
+                    </div>
+                )}
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
