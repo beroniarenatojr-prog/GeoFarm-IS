@@ -34,6 +34,48 @@ class FarmParcel extends Model
         'is_organic' => 'boolean',
     ];
 
+    /**
+     * Clean one parcel row posted by the RSBSA form.
+     *
+     * The form sends its parcels as a JSON blob, so Laravel's validator never
+     * sees the individual fields — which is how the string "N/A" reached
+     * farm_type_id, an integer foreign key, and killed every farmer save that
+     * carried such a parcel with "Incorrect integer value: 'N/A'".
+     *
+     * Shared by the admin controller and the public registration controller
+     * because both held their own copy of this normalising, and that is
+     * precisely why the same bug existed in both flows at once.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    public static function sanitiseInput(array $row): array
+    {
+        /*
+         * A foreign key is an id or it is nothing.
+         *
+         * "N/A" and "" both mean the office did not choose a type, and both
+         * become null. Anything non-numeric is refused for the same reason: a
+         * label is not a key, and letting one through only moves the failure
+         * to the database where it reads as a crash rather than as missing
+         * data.
+         */
+        foreach (['farm_type_id'] as $key) {
+            $value = $row[$key] ?? null;
+
+            $row[$key] = is_numeric($value) ? (int) $value : null;
+        }
+
+        // Empty strings would otherwise reach decimal columns as ''.
+        foreach (['total_area_ha', 'no_of_heads_trees'] as $key) {
+            $value = $row[$key] ?? null;
+
+            $row[$key] = is_numeric($value) ? $value : null;
+        }
+
+        return $row;
+    }
+
     public function farmer()   { return $this->belongsTo(Farmer::class); }
     public function farmType() { return $this->belongsTo(FarmType::class); }
     public function seasons()  { return $this->hasMany(CropSeason::class, 'parcel_id'); }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Farmer;
+use App\Models\FarmParcel;
 use App\Services\AuditService;
 use App\Services\RsbsaFieldMapper;
 use App\Services\RsbsaFormFiller;
@@ -566,7 +567,6 @@ class FarmerController extends Controller
             return [];
         }
 
-        $numericFields = ['total_area_ha', 'no_of_heads_trees', 'farm_type_id'];
         $resolved = [];
 
         foreach ($parcels as $parcel) {
@@ -578,11 +578,7 @@ class FarmerController extends Controller
                 continue;
             }
 
-            foreach ($numericFields as $field) {
-                $parcel[$field] = !empty($parcel[$field]) ? $parcel[$field] : null;
-            }
-
-            $resolved[] = $parcel;
+            $resolved[] = FarmParcel::sanitiseInput($parcel);
         }
 
         return $resolved;

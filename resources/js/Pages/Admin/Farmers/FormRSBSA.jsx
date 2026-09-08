@@ -267,9 +267,26 @@ export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMod
 
     // A parcel row counts as declared once it has a location or an area.
     // Untouched blank rows are ignored so they never reach the database.
-    const declaredParcels = data.parcels.filter(
-        parcel => parcel.barangay?.trim() || String(parcel.total_area_ha ?? '').trim()
-    );
+    const declaredParcels = data.parcels
+        .filter(parcel => parcel.barangay?.trim() || String(parcel.total_area_ha ?? '').trim())
+        /*
+         * "N/A" is a label, not a farm type.
+         *
+         * farm_type_id is an integer foreign key, so the string reached MySQL
+         * as an integer value and every farmer save carrying an N/A parcel
+         * died with "Incorrect integer value: 'N/A'". The option keeps its
+         * value in the form so the box still reads N/A once chosen; what goes
+         * over the wire is the null it actually means.
+         *
+         * The server normalises this too — a browser is never the only thing
+         * standing between a typed value and the database.
+         */
+        .map(parcel => ({
+            ...parcel,
+            farm_type_id: parcel.farm_type_id === 'N/A' || parcel.farm_type_id === ''
+                ? null
+                : parcel.farm_type_id,
+        }));
 
     const validateStep = (step) => {
         switch (step) {

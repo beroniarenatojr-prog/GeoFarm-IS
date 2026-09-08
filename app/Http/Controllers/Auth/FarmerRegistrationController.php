@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Barangay;
+use App\Models\FarmParcel;
 use App\Models\FarmType;
 use App\Models\Farmer;
 use App\Models\User;
@@ -258,11 +259,7 @@ class FarmerRegistrationController extends Controller
                 continue;
             }
 
-            foreach (['total_area_ha', 'no_of_heads_trees', 'farm_type_id'] as $field) {
-                $parcel[$field] = !empty($parcel[$field]) ? $parcel[$field] : null;
-            }
-
-            $resolved[] = $parcel;
+            $resolved[] = FarmParcel::sanitiseInput($parcel);
         }
 
         return $resolved;
