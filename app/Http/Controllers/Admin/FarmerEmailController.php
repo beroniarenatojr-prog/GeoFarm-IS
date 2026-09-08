@@ -9,7 +9,6 @@ use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 /**
@@ -49,7 +48,7 @@ class FarmerEmailController extends Controller
                 ->map(fn (Farmer $farmer) => [
                     'id'       => $farmer->id,
                     'name'     => $farmer->full_name,
-                    'email'    => $this->addressFor($farmer),
+                    'email'    => $farmer->contact_email,
                     'rsbsa_no' => $farmer->rsbsa_no,
                     'barangay' => $farmer->barangay,
                 ])
@@ -57,46 +56,50 @@ class FarmerEmailController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    /**
+     * Send one message to one farmer.
+     *
+     * The farmer arrives through route model binding, so the URL names who is
+     * being written to and the request body carries only what staff typed.
+     */
+    public function send(Request $request, Farmer $farmer)
     {
         $data = $request->validate([
-            'farmer_id' => ['required', 'integer', 'exists:farmers,id'],
-            'subject'   => ['required', 'string', 'max:150'],
-            'message'   => ['required', 'string', 'max:5000'],
+            'subject' => ['required', 'string', 'max:200'],
+            'message' => ['required', 'string', 'max:10000'],
         ]);
 
         /*
          * The recipient comes from here and nowhere else.
          *
-         * Note what is NOT read: $request->input('email'). Accepting an address
-         * from the form would turn an authenticated staff page into an open
-         * relay for the office's mail account.
+         * Note what is NOT read: $request->input('email'), 'to' or 'recipient'.
+         * Accepting an address from the form would turn an authenticated staff
+         * page into an open relay for the office's mail account. Nothing in the
+         * validated set above can influence where this goes.
          */
-        $farmer  = Farmer::with('user:id,email')->findOrFail($data['farmer_id']);
-        $address = $this->addressFor($farmer);
+        $address = $farmer->loadMissing('user:id,email')->contact_email;
 
         if (blank($address)) {
-            // Reported against the farmer field, because the farmer is what
-            // has to change - the message itself is fine.
-            throw ValidationException::withMessages([
-                'farmer_id' => 'This farmer has no email address on record, so there is nowhere to send the message.',
-            ]);
+            return back()->with('error', 'This farmer does not have a valid email address.');
         }
 
+        // Queued, not sent inline: FarmerManualEmail is ShouldQueue, so this
+        // writes a row to the jobs table and returns. The worker cron delivers
+        // it, which keeps a slow SMTP handshake out of the staff request.
         Notification::route('mail', $address)
             ->notify(new FarmerManualEmail($farmer, $data['subject'], $data['message']));
 
         AuditService::log('email', 'farmers', $farmer->id, null, [
-            'to'      => $address,
-            'subject' => $data['subject'],
+            'farmer_name' => $farmer->full_name,
+            'to'          => $address,
+            'subject'     => $data['subject'],
             // The body is deliberately not logged. It is free text that may
             // carry personal detail, and the audit trail only needs to answer
-            // who wrote to whom, when, and about what.
+            // who wrote to whom, when, and about what. AuditService::log()
+            // supplies the staff user id and the timestamp itself.
         ]);
 
-        return redirect()
-            ->route('admin.farmer-email.create')
-            ->with('success', 'Email sent to ' . $farmer->full_name . '.');
+        return back()->with('success', 'Email sent to ' . $farmer->full_name . '.');
     }
 
     /**
@@ -114,17 +117,5 @@ class FarmerEmailController extends Controller
                 ->where(fn (Builder $own) => $own->whereNotNull('email')->where('email', '!=', ''))
                 ->orWhereHas('user', fn (Builder $account) => $account
                     ->whereNotNull('email')->where('email', '!=', '')));
-    }
-
-    /**
-     * The farmer's own address first, their login account second.
-     *
-     * Staff encode farmers at the office who never registered online and so
-     * have no user account; farmers who registered themselves may carry the
-     * address only on the account. Both cases have to work.
-     */
-    private function addressFor(Farmer $farmer): ?string
-    {
-        return $farmer->email ?: $farmer->user?->email;
     }
 }

@@ -1,5 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { User, MapPin, Phone, Mail, Calendar, Map, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import Tabs from '@/Components/ui/Tabs';
 import MapViewer from '@/Components/ui/MapViewer';
 import Badge from '@/Components/ui/Badge';
 import Modal from '@/Components/ui/Modal';
+import ModalShell from '@/Components/ui/ModalShell';
 import Card from '@/Components/ui/Card';
 import Skeleton from '@/Components/ui/Skeleton';
 import TreeCropForm from '@/Components/AgriAssets/TreeCropForm';
@@ -132,6 +133,25 @@ export default function FarmerShow({ farmer }) {
   ].some(Boolean);
   const [loading, setLoading] = useState(false);
   const [assetModal, setAssetModal] = useState({ open: false, type: null, record: null });
+  const [emailOpen, setEmailOpen] = useState(false);
+
+  /* The manual message to this farmer. Note what the form does NOT hold: a
+     recipient. The address is displayed from the record and resolved again on
+     the server, so nothing here can redirect where the mail goes. */
+  const emailForm = useForm({ subject: '', message: '' });
+
+  const sendEmail = (e) => {
+    e.preventDefault();
+
+    emailForm.post(`/admin/farmers/${farmer.id}/send-email`, {
+      preserveScroll: true,
+      onSuccess: () => {
+        // Only cleared on success — a rejected message keeps what was typed.
+        emailForm.reset();
+        setEmailOpen(false);
+      },
+    });
+  };
 
   const parcelsData = (farmer.parcels || []).map(p => ({
     id: p.id,
@@ -300,6 +320,21 @@ export default function FarmerShow({ farmer }) {
                 <Printer className="h-4 w-4" />
                 Print RSBSA Form
               </a>
+              {/* Writing to a farmer is the same level of trust as changing
+                  their record, so it rides on the same permission. Hidden
+                  outright when there is no address to write to — a button that
+                  could only ever fail reads as a fault rather than as missing
+                  data on the record. */}
+              {can('edit farmers') && farmer.contact_email && (
+                <button
+                  onClick={() => setEmailOpen(true)}
+                  title={`Send an email to ${farmer.contact_email}`}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm"
+                >
+                  <Mail className="h-4 w-4" />
+                  Send Email
+                </button>
+              )}
               {can('edit farmers') && (
                 <Link
                   href={`/admin/farmers/${farmer.id}/edit`}
@@ -960,6 +995,84 @@ export default function FarmerShow({ farmer }) {
             },
           ]}
         />
+
+        {/* Send Email */}
+        <ModalShell
+          open={emailOpen}
+          onClose={() => setEmailOpen(false)}
+          title={`Send Email to ${farmer.full_name || `${farmer.first_name} ${farmer.last_name}`}`}
+          size="lg"
+          as="form"
+          onSubmit={sendEmail}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => setEmailOpen(false)}
+                className="px-5 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={emailForm.processing}
+                className="inline-flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-xl shadow-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                <Mail className="h-4 w-4" />
+                {emailForm.processing ? 'Sending...' : 'Send Email'}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                Recipient
+              </label>
+              {/* Read-only by construction: this is a div, not an input, and
+                  the address is never posted back. */}
+              <div className="px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-gray-800 break-all">
+                {farmer.contact_email}
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                Taken from this farmer&apos;s registration record and confirmed again on the server.
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="email-subject" className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                Subject
+              </label>
+              <input
+                id="email-subject"
+                value={emailForm.data.subject}
+                onChange={e => emailForm.setData('subject', e.target.value)}
+                maxLength={200}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm text-sm"
+              />
+              {emailForm.errors.subject && (
+                <p className="mt-1.5 text-sm text-red-600">{emailForm.errors.subject}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="email-message" className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">
+                Message
+              </label>
+              <textarea
+                id="email-message"
+                value={emailForm.data.message}
+                onChange={e => emailForm.setData('message', e.target.value)}
+                rows={9}
+                maxLength={10000}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm text-sm leading-relaxed"
+              />
+              {emailForm.errors.message && (
+                <p className="mt-1.5 text-sm text-red-600">{emailForm.errors.message}</p>
+              )}
+            </div>
+          </div>
+        </ModalShell>
 
         {/* Agricultural Assets Modal */}
         <Modal

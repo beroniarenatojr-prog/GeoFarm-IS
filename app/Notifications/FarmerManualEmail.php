@@ -38,15 +38,24 @@ class FarmerManualEmail extends Notification implements ShouldQueue
 
     public function toMail(?object $notifiable = null): MailMessage
     {
+        $name = trim($this->farmer->full_name);
+
         $mail = (new MailMessage())
             ->subject($this->subject)
-            ->greeting($this->farmer->first_name
-                ? 'Dear ' . $this->farmer->first_name
-                : 'Dear farmer');
+            ->greeting($name !== '' ? 'Dear ' . $name : 'Dear farmer');
 
-        // Each paragraph the sender typed becomes its own line, so a message
-        // written with blank lines between points does not arrive as one wall
-        // of text. Blank entries are dropped rather than rendered as gaps.
+        /*
+         * The staff message, reproduced and not rewritten.
+         *
+         * Each line they typed becomes its own line() call, which is how the
+         * breaks survive - a single string would arrive as one run-on
+         * paragraph. Blank entries are dropped rather than rendered as gaps.
+         *
+         * line() is also what makes this safe to send: Laravel escapes the
+         * value in the Blade template and then parses the result with
+         * html_input => strip, so markup a staff member pastes in arrives as
+         * the text they typed rather than as live HTML.
+         */
         foreach (preg_split('/\R/', trim($this->body)) as $paragraph) {
             if (trim($paragraph) !== '') {
                 $mail->line(trim($paragraph));
@@ -54,7 +63,8 @@ class FarmerManualEmail extends Notification implements ShouldQueue
         }
 
         return $mail
-            ->line('This message was sent by the Municipal Agriculture Office of Tumauini, Isabela.')
-            ->salutation('GeoFarm-IS — Farmer Information & Management System');
+            ->line('---')
+            ->line('This message was sent through ' . config('mail.from.name', 'GeoFarm-IS') . '.')
+            ->salutation('Tumauini Municipal Agriculture Office');
     }
 }

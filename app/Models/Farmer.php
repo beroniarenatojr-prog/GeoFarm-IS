@@ -203,4 +203,21 @@ class Farmer extends Model
     {
         return trim("{$this->first_name} {$this->middle_name} {$this->last_name} {$this->suffix}");
     }
+
+    /**
+     * Where to write to this farmer, or null if there is nowhere.
+     *
+     * The record's own address comes first and the linked login account is the
+     * fallback: staff encode farmers at the office who never registered
+     * online and so have no account, while farmers who registered themselves
+     * may carry the address only on the account.
+     *
+     * Deliberately NOT in $appends. Farmer lists are serialised hundreds of
+     * rows at a time, and appending this would fire a user lookup for every
+     * one of them. Callers that need it load the relation and ask for it.
+     */
+    public function getContactEmailAttribute(): ?string
+    {
+        return $this->email ?: $this->user?->email;
+    }
 }

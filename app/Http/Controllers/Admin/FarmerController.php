@@ -292,7 +292,10 @@ class FarmerController extends Controller
                 'poultry',
                 // Staff who cleared the record, shown on the verification panel.
                 'verifier:id,name',
-            ]),
+                // The login account's address is the fallback recipient for
+                // the Send Email action when the record carries none itself.
+                'user:id,email',
+            ])->append('contact_email'),
         ]);
     }
 

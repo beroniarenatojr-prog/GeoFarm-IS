@@ -89,10 +89,6 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // deliberately holds neither.
     Route::get('farmer-email', [FarmerEmailController::class, 'create'])
         ->middleware('permission:edit farmers')->name('farmer-email.create');
-    // Throttled because this is the one staff screen that can put mail on the
-    // wire, and the office's account is what would get rate-limited upstream.
-    Route::post('farmer-email', [FarmerEmailController::class, 'store'])
-        ->middleware(['permission:edit farmers', 'throttle:20,1'])->name('farmer-email.store');
 
     Route::get('farmers/export', [FarmerController::class, 'export'])->middleware('permission:export reports')->name('farmers.export');
     Route::post('farmers/import', [FarmerController::class, 'import'])->middleware('permission:create farmers')->name('farmers.import');
@@ -105,6 +101,16 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // profile page, plus the farmer's photo.
     Route::get('farmers/{farmer}/id-card', [FarmerController::class, 'idCard'])->middleware('permission:view farmers')->name('farmers.id-card');
     Route::get('farmers/{farmer}/edit', [FarmerController::class, 'edit'])->middleware('permission:edit farmers')->name('farmers.edit');
+    // Staff writing to a farmer directly. Behind "edit farmers" rather than a
+    // new permission: sending an official message on the office's behalf is
+    // the same level of trust as changing the record it is about, and Viewer
+    // deliberately holds neither.
+    //
+    // Throttled because this is the one staff action that can put mail on the
+    // wire, and the office's own Gmail account is what gets rate-limited
+    // upstream if it is used too hard.
+    Route::post('farmers/{farmer}/send-email', [FarmerEmailController::class, 'send'])
+        ->middleware(['permission:edit farmers', 'throttle:20,1'])->name('farmers.send-email');
     Route::put('farmers/{farmer}', [FarmerController::class, 'update'])->middleware('permission:edit farmers')->name('farmers.update');
     Route::delete('farmers/{farmer}', [FarmerController::class, 'destroy'])->middleware('permission:delete farmers')->name('farmers.destroy');
 

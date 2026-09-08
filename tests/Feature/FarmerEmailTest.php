@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AssistanceDistribution;
+use App\Models\AuditLog;
 use App\Models\Farmer;
 use App\Models\FinancialAssistance;
 use App\Models\InventoryItem;
@@ -10,6 +11,7 @@ use App\Models\User;
 use App\Notifications\FarmerAssistanceDistributed;
 use App\Notifications\FarmerManualEmail;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -158,20 +160,20 @@ class FarmerEmailTest extends TestCase
 
     // ------------------------------------------ task 2: the manual message
 
-    private function send(array $payload, ?User $as = null)
+    private function send(Farmer $farmer, array $payload = [], ?User $as = null)
     {
         return $this->actingAs($as ?? $this->staff())
-            ->post(route('admin.farmer-email.store'), $payload);
+            ->from(route('admin.farmers.show', $farmer))
+            ->post(route('admin.farmers.send-email', $farmer), $payload);
     }
 
     public function test_staff_can_send_a_farmer_a_typed_message(): void
     {
         $farmer = $this->farmer();
 
-        $this->send([
-            'farmer_id' => $farmer->id,
-            'subject'   => 'Seed distribution on Monday',
-            'message'   => 'Please bring your RSBSA card to the barangay hall.',
+        $this->send($farmer, [
+            'subject' => 'Seed distribution on Monday',
+            'message' => 'Please bring your RSBSA card to the barangay hall.',
         ])->assertRedirect();
 
         Notification::assertSentOnDemand(FarmerManualEmail::class,
@@ -191,13 +193,13 @@ class FarmerEmailTest extends TestCase
     public function test_an_address_supplied_by_the_browser_is_ignored(): void
     {
         // The form must not become a relay. Whatever the request says, the mail
-        // goes to the address on the selected farmer's record.
+        // goes to the address on the farmer named in the URL.
         $farmer = $this->farmer(['email' => 'real@example.test']);
 
-        $this->send([
-            'farmer_id' => $farmer->id,
+        $this->send($farmer, [
             'email'     => 'attacker@elsewhere.test',
             'to'        => 'attacker@elsewhere.test',
+            'recipient' => 'attacker@elsewhere.test',
             'subject'   => 'Hello',
             'message'   => 'Body text.',
         ]);
@@ -214,11 +216,10 @@ class FarmerEmailTest extends TestCase
     {
         $farmer = $this->farmer(['email' => null]);
 
-        $this->send([
-            'farmer_id' => $farmer->id,
-            'subject'   => 'Hello',
-            'message'   => 'Body text.',
-        ])->assertSessionHasErrors('farmer_id');
+        $this->send($farmer, [
+            'subject' => 'Hello',
+            'message' => 'Body text.',
+        ])->assertSessionHas('error', 'This farmer does not have a valid email address.');
 
         Notification::assertNothingSent();
     }
@@ -227,8 +228,19 @@ class FarmerEmailTest extends TestCase
     {
         $farmer = $this->farmer();
 
-        $this->send(['farmer_id' => $farmer->id])
-            ->assertSessionHasErrors(['subject', 'message']);
+        $this->send($farmer)->assertSessionHasErrors(['subject', 'message']);
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_an_over_long_subject_or_message_is_rejected(): void
+    {
+        $farmer = $this->farmer();
+
+        $this->send($farmer, [
+            'subject' => str_repeat('a', 201),
+            'message' => str_repeat('b', 10001),
+        ])->assertSessionHasErrors(['subject', 'message']);
 
         Notification::assertNothingSent();
     }
@@ -237,13 +249,62 @@ class FarmerEmailTest extends TestCase
     {
         $farmer = $this->farmer();
 
-        $this->send([
-            'farmer_id' => $farmer->id,
-            'subject'   => 'Hello',
-            'message'   => 'Body text.',
+        $this->send($farmer, [
+            'subject' => 'Hello',
+            'message' => 'Body text.',
         ], $this->staff('Viewer'))->assertForbidden();
 
         Notification::assertNothingSent();
+    }
+
+    public function test_a_guest_cannot_send_email(): void
+    {
+        $farmer = $this->farmer();
+
+        $this->post(route('admin.farmers.send-email', $farmer), [
+            'subject' => 'Hello',
+            'message' => 'Body text.',
+        ])->assertRedirect(route('login'));
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_sending_is_recorded_in_the_audit_log(): void
+    {
+        $staff  = $this->staff();
+        $farmer = $this->farmer(['email' => 'audited@example.test']);
+
+        $this->send($farmer, [
+            'subject' => 'Barangay assembly on Friday',
+            'message' => 'The assembly has moved to Friday at 9am.',
+        ], $staff);
+
+        $entry = AuditLog::where('table_name', 'farmers')
+            ->where('action', 'email')
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame($staff->id, $entry->user_id);
+        $this->assertSame($farmer->id, $entry->record_id);
+        $this->assertSame('Barangay assembly on Friday', $entry->new_data['subject']);
+        $this->assertSame('audited@example.test', $entry->new_data['to']);
+
+        // The body is personal correspondence and is deliberately not kept.
+        $this->assertStringNotContainsString(
+            'The assembly has moved',
+            json_encode($entry->new_data),
+        );
+    }
+
+    public function test_the_notification_is_queued_rather_than_sent_inline(): void
+    {
+        // Shared hosting has no always-on worker, so delivery happens on a
+        // cron. A notification that sent inline would hold the staff request
+        // open for the whole SMTP handshake.
+        $this->assertInstanceOf(
+            ShouldQueue::class,
+            new FarmerManualEmail($this->farmer(), 'Subject', 'Body'),
+        );
     }
 
     public function test_a_farmer_cannot_reach_the_form(): void
@@ -266,5 +327,35 @@ class FarmerEmailTest extends TestCase
                 ->component('Admin/Farmers/SendEmail')
                 ->has('farmers', 1)
                 ->where('farmers.0.id', $reachable->id));
+    }
+
+    public function test_the_profile_page_carries_the_address_the_button_needs(): void
+    {
+        // The Send Email button on the profile hides itself when there is no
+        // contact_email, so the prop has to reach the page or the action
+        // silently disappears for every farmer.
+        $farmer = $this->farmer(['email' => 'profile@example.test']);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.farmers.show', $farmer))
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/Farmers/Show')
+                ->where('farmer.contact_email', 'profile@example.test'));
+    }
+
+    public function test_the_profile_falls_back_to_the_login_account_address(): void
+    {
+        $account = User::create([
+            'name'      => 'Maria Bautista',
+            'email'     => 'account@example.test',
+            'password'  => bcrypt('secret-for-test-only'),
+            'is_active' => true,
+        ]);
+        $farmer = $this->farmer(['email' => null, 'user_id' => $account->id]);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.farmers.show', $farmer))
+            ->assertInertia(fn ($page) => $page
+                ->where('farmer.contact_email', 'account@example.test'));
     }
 }

@@ -8,24 +8,29 @@ import Card from '@/Components/ui/Card';
 /**
  * Staff writing to one farmer.
  *
- * The address is shown, never typed. It arrives with the chosen farmer and is
- * rendered read-only, and the form posts only the farmer's id — the server
- * looks the address up again from the record. Letting this field be edited
- * would make the office's mail account reachable by anyone who can open the
- * page.
+ * The per-farmer modal on the profile page is the main way in; this screen is
+ * for the case where staff know who they need to write to but not where that
+ * farmer sits in the register. Both post to the same endpoint.
+ *
+ * The address is shown, never typed. The chosen farmer goes in the URL and the
+ * server resolves the address from that record, so nothing the browser sends
+ * can change where the mail lands.
  */
 export default function SendEmail({ farmers = [], filters = {} }) {
     const [search, setSearch] = useState(filters.search ?? '');
 
+    // farmer_id steers the picker only. It is never posted: the chosen farmer
+    // goes in the URL, and the server resolves the address from that record.
+    const [farmerId, setFarmerId] = useState('');
+
     const { data, setData, post, processing, errors, reset } = useForm({
-        farmer_id: '',
         subject: '',
         message: '',
     });
 
     const selected = useMemo(
-        () => farmers.find(f => String(f.id) === String(data.farmer_id)) ?? null,
-        [farmers, data.farmer_id],
+        () => farmers.find(f => String(f.id) === String(farmerId)) ?? null,
+        [farmers, farmerId],
     );
 
     const runSearch = () => {
@@ -40,7 +45,7 @@ export default function SendEmail({ farmers = [], filters = {} }) {
             return;
         }
 
-        post('/admin/farmer-email', {
+        post(`/admin/farmers/${selected.id}/send-email`, {
             preserveScroll: true,
             // The picker keeps its selection so staff can send a follow-up to
             // the same farmer without hunting for them again.
@@ -49,7 +54,7 @@ export default function SendEmail({ farmers = [], filters = {} }) {
         });
     };
 
-    const remaining = 5000 - data.message.length;
+    const remaining = 10000 - data.message.length;
 
     return (
         <AdminLayout title="Send Email to Farmer">
@@ -75,13 +80,13 @@ export default function SendEmail({ farmers = [], filters = {} }) {
                     ) : (
                         <div className="max-h-[28rem] overflow-y-auto -mx-2 px-2 space-y-2">
                             {farmers.map(farmer => {
-                                const active = String(farmer.id) === String(data.farmer_id);
+                                const active = String(farmer.id) === String(farmerId);
 
                                 return (
                                     <button
                                         type="button"
                                         key={farmer.id}
-                                        onClick={() => setData('farmer_id', String(farmer.id))}
+                                        onClick={() => setFarmerId(String(farmer.id))}
                                         className={`w-full text-left px-4 py-3 rounded-xl border transition ${
                                             active
                                                 ? 'bg-green-50 border-green-500 ring-2 ring-green-500/30'
@@ -105,9 +110,6 @@ export default function SendEmail({ farmers = [], filters = {} }) {
                         </div>
                     )}
 
-                    {errors.farmer_id && (
-                        <p className="mt-3 text-sm text-red-600">{errors.farmer_id}</p>
-                    )}
                 </Card>
 
                 {/* -------------------------------------------------- message */}
@@ -148,7 +150,7 @@ export default function SendEmail({ farmers = [], filters = {} }) {
                                 id="subject"
                                 value={data.subject}
                                 onChange={e => setData('subject', e.target.value)}
-                                maxLength={150}
+                                maxLength={200}
                                 placeholder="e.g. Seed distribution schedule for San Pedro"
                                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm text-sm"
                             />
@@ -164,7 +166,7 @@ export default function SendEmail({ farmers = [], filters = {} }) {
                                 value={data.message}
                                 onChange={e => setData('message', e.target.value)}
                                 rows={10}
-                                maxLength={5000}
+                                maxLength={10000}
                                 placeholder={'Write the message as you would say it.\n\nLeave a blank line between points — each paragraph is kept in the email.'}
                                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm text-sm leading-relaxed"
                             />
