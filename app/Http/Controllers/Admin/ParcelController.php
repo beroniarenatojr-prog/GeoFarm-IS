@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Barangay;
 use App\Models\FarmParcel;
 use App\Models\Farmer;
 use App\Models\FarmType;
@@ -33,7 +34,9 @@ class ParcelController extends Controller
                         ->orWhere('last_name', 'like', "%$s%")
                         ->orWhere('rsbsa_no', 'like', "%$s%"));
             }))
-            ->when($request->barangay, fn ($q, $b) => $q->where('barangay', $b))
+            // Partial, matching the farmer registry: the filter is a type-ahead
+            // now, so "Cali" has to find Caligayan.
+            ->when($request->barangay, fn ($q, $b) => $q->where('barangay', 'like', "%$b%"))
             ->when($request->farm_type_id, fn ($q, $t) => $q->where('farm_type_id', $t))
             ->when($request->ownership, fn ($q, $o) => $q->where('ownership_type', $o))
             // A parcel counts as mapped once geometry has been drawn for it.
@@ -52,7 +55,10 @@ class ParcelController extends Controller
             'filters'   => $request->only(['search', 'barangay', 'farm_type_id', 'ownership', 'mapped', 'sort', 'direction', 'per_page']),
             'sort'      => ['column' => $sort, 'direction' => $direction],
             'perPage'   => $perPage,
-            'barangays' => FarmParcel::distinct()->orderBy('barangay')->pluck('barangay')->filter()->values(),
+            // The canonical list, not the distinct values already on parcels:
+            // this page's Add/Edit modal is a form, and a form has to be able
+            // to enter a barangay that has no parcel recorded in it yet.
+            'barangays' => $this->barangayNames(),
             'farmTypes' => FarmType::orderBy('type_name')->get(['id', 'type_name']),
             // Totals follow the active filter, so the headline always describes
             // what is listed below it.
@@ -68,7 +74,17 @@ class ParcelController extends Controller
     {
         return Inertia::render('Admin/Parcels/Form', [
             'farmTypes' => FarmType::all(),
+            'barangays' => $this->barangayNames(),
         ]);
+    }
+
+    /** The municipality's barangays, for the address type-ahead. */
+    private function barangayNames(): array
+    {
+        return Barangay::where('is_active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->all();
     }
 
     public function store(Request $request)
@@ -111,6 +127,7 @@ class ParcelController extends Controller
             'parcel'    => $parcel->load('farmer'),
             'geojson'   => $geo?->geojson,
             'farmTypes' => FarmType::all(),
+            'barangays' => $this->barangayNames(),
         ]);
     }
 

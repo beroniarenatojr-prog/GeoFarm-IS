@@ -45,7 +45,10 @@ class FarmerController extends Controller
                     ->orWhere('rsbsa_no', 'like', "%$s%")
                     ->orWhere('mobile_no', 'like', "%$s%");
             }))
-            ->when($request->barangay, fn ($q, $b) => $q->where('barangay', $b))
+            // Partial rather than exact: the filter is a type-ahead now, so
+            // "Cali" has to find Caligayan. Picking a suggestion still sends
+            // the full name, which matches only itself.
+            ->when($request->barangay, fn ($q, $b) => $q->where('barangay', 'like', "%$b%"))
             ->orderBy($sort, $direction)
             // Ties on a common surname would otherwise shuffle between pages.
             ->orderBy('id')
@@ -65,8 +68,25 @@ class FarmerController extends Controller
     public function create()
     {
         return Inertia::render('Admin/Farmers/FormRSBSA', [
-            'farmTypes' => \App\Models\FarmType::all(),
+            'farmTypes'  => \App\Models\FarmType::all(),
+            'barangays'  => $this->barangayNames(),
         ]);
+    }
+
+    /**
+     * The municipality's barangays, for the address type-aheads.
+     *
+     * The canonical table rather than the distinct values already in
+     * farmers.barangay: a form has to be able to enter a barangay that has no
+     * farmer in it yet, and suggesting from existing rows would spread any
+     * misspelling already in the registry to every record typed after it.
+     */
+    private function barangayNames(): array
+    {
+        return \App\Models\Barangay::where('is_active', true)
+            ->orderBy('name')
+            ->pluck('name')
+            ->all();
     }
 
     public function store(Request $request)
@@ -345,8 +365,9 @@ class FarmerController extends Controller
     {
         $farmer->load('parcels');
         return Inertia::render('Admin/Farmers/FormRSBSA', [
-            'farmer' => $farmer,
+            'farmer'    => $farmer,
             'farmTypes' => \App\Models\FarmType::all(),
+            'barangays' => $this->barangayNames(),
         ]);
     }
 

@@ -3,6 +3,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm } from '@inertiajs/react';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
+import SuggestInput from '@/Components/ui/SuggestInput';
 import BoundaryImport from '@/Components/Parcels/BoundaryImport';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -55,7 +56,7 @@ function parseGeometry(value) {
  * carries a MapLibre instance, a draw control and a ResizeObserver, and a
  * second copy of that would be a second thing to keep correct.
  */
-export default function ParcelForm({ parcel, farmTypes, geojson, onClose = null }) {
+export default function ParcelForm({ parcel, farmTypes, geojson, barangays = [], onClose = null }) {
   const isEdit = Boolean(parcel);
   const embedded = Boolean(onClose);
   const mapRef = useRef(null);
@@ -273,12 +274,24 @@ export default function ParcelForm({ parcel, farmTypes, geojson, onClose = null 
           ].map(([label, key, type = 'text']) => (
             <div key={key}>
               <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
-              <input
-                type={type}
-                value={data[key]}
-                onChange={(event) => setData(key, event.target.value)}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
-              />
+              {key === 'barangay' ? (
+                // Suggested from the municipality's own list so a parcel and
+                // its farmer end up filed under the same spelling.
+                <SuggestInput
+                  value={data.barangay}
+                  onChange={(v) => setData('barangay', v)}
+                  options={barangays}
+                  placeholder="Start typing, e.g. Cali…"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
+                />
+              ) : (
+                <input
+                  type={type}
+                  value={data[key]}
+                  onChange={(event) => setData(key, event.target.value)}
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
+                />
+              )}
             </div>
           ))}
 

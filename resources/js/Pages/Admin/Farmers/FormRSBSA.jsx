@@ -5,8 +5,9 @@ import { User, MapPin, Users, Briefcase, Map, Image as ImageIcon, FileCheck, Che
 import toast from 'react-hot-toast';
 import { useState } from 'react';
 import { formatRsbsa, formatMobile, titleCaseName, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
+import SuggestInput from '@/Components/ui/SuggestInput';
 
-export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
+export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMode = false }) {
     const isEdit = !!farmer;
     const [currentStep, setCurrentStep] = useState(1);
     const [photoPreview, setPhotoPreview] = useState(farmer?.photo_url || null);
@@ -1030,11 +1031,12 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Barangay <span className="text-red-500">*</span>
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    <SuggestInput
                                                         value={data.barangay}
-                                                        onChange={e => setData('barangay', titleCaseName(e.target.value))}
-                                                        placeholder="e.g. San Pablo"
+                                                        onChange={v => setData('barangay', v)}
+                                                        options={barangays}
+                                                        transform={titleCaseName}
+                                                        placeholder="Start typing, e.g. Cali…"
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />
                                                 </div>
@@ -1128,10 +1130,11 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Barangay
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    <SuggestInput
                                                         value={data.provincial_barangay}
-                                                        onChange={e => setData('provincial_barangay', titleCaseName(e.target.value))}
+                                                        onChange={v => setData('provincial_barangay', v)}
+                                                        options={barangays}
+                                                        transform={titleCaseName}
                                                         disabled={data.region !== 'NCR'}
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
                                                     />
@@ -1337,7 +1340,7 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                         { value: 'Farm Worker', label: 'FARM WORKER', tagalog: '(MANGGAGAWA SA SAKAHAN)', icon: '👨‍🌾', note: 'If you are a FARM WORKER or FISHER, kindly request a CERTIFICATION', nextStep: 'Skip to Step 7', color: 'blue' },
                                         // The label is display only. `value` stays 'Fisher' because it is
                                         // the stored column, the validation rule and the PDF mapper's key.
-                                        { value: 'Fisher', label: 'FISHER/FISHERFOLK', tagalog: '(MANGINGISDA)', icon: '🎣', note: 'If you are a FARM WORKER or FISHER, kindly request a CERTIFICATION', nextStep: 'Skip to Step 7', color: 'blue' },
+                                        { value: 'Fisher', label: 'FISHERFOLK', tagalog: '(MANGINGISDA)', icon: '🎣', note: 'If you are a FARM WORKER or FISHER, kindly request a CERTIFICATION', nextStep: 'Skip to Step 7', color: 'blue' },
                                         { value: 'Agri-Youth', label: 'AGRI-YOUTH', tagalog: '', icon: '👨‍🎓', note: 'If you are an AGRI-YOUTH proceed to PART 4', nextStep: 'Skip to Step 7', color: 'purple' },
                                     ].map(livelihood => (
                                         <div
@@ -1420,10 +1423,11 @@ export default function FormRSBSA({ farmer, farmTypes, publicMode = false }) {
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Farm Location — Barangay <span className="text-red-500">*</span>
                                                     </label>
-                                                    <input
-                                                        type="text"
+                                                    <SuggestInput
                                                         value={parcel.barangay}
-                                                        onChange={e => updateParcel(index, 'barangay', titleCaseName(e.target.value))}
+                                                        onChange={v => updateParcel(index, 'barangay', v)}
+                                                        options={barangays}
+                                                        transform={titleCaseName}
                                                         placeholder="Lokasyon ng Sakahan"
                                                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                                                     />

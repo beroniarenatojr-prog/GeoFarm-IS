@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\Barangay;
 use App\Models\FarmType;
 use App\Models\Farmer;
 use App\Models\User;
@@ -32,6 +33,14 @@ class FarmerRegistrationController extends Controller
         return Inertia::render('Admin/Farmers/FormRSBSA', [
             'farmTypes'  => FarmType::all(),
             'publicMode' => true,
+            // Suggestions for the address fields. Farmers registering
+            // themselves are the ones most likely to spell their barangay a
+            // way the office does not, so this matters more here than in the
+            // staff-facing copy of the same form.
+            'barangays'  => Barangay::where('is_active', true)
+                ->orderBy('name')
+                ->pluck('name')
+                ->all(),
         ]);
     }
 

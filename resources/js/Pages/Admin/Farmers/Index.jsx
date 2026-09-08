@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { usePermissions } from '@/hooks/usePermissions';
+import SuggestInput from '@/Components/ui/SuggestInput';
 import { formatDate } from '@/utils/dateFormatter';
 
 const PER_PAGE = [25, 50, 100];
@@ -99,14 +100,20 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
                         />
                     </div>
 
-                    <select
-                        value={barangay}
-                        onChange={e => { setBarangay(e.target.value); go({ barangay: e.target.value, page: 1 }); }}
-                        className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                    >
-                        <option value="">All barangays</option>
-                        {barangays.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
+                    {/* A type-ahead rather than a dropdown: the municipality has
+                        dozens of barangays, and scrolling a select to find one
+                        is slower than typing three letters of it. Clearing the
+                        box is what removes the filter. */}
+                    <div className="w-56">
+                        <SuggestInput
+                            value={barangay}
+                            onChange={setBarangay}
+                            onSelect={b => go({ barangay: b, page: 1 })}
+                            options={barangays}
+                            placeholder="All barangays"
+                            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                        />
+                    </div>
 
                     <button
                         onClick={() => go({ page: 1 })}

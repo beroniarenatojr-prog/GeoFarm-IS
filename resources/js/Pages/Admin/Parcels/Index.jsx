@@ -2,6 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import ModalShell from '@/Components/ui/ModalShell';
+import SuggestInput from '@/Components/ui/SuggestInput';
 import ParcelForm from './Form';
 import {
     Plus, Search, MapPin, Map, Ruler, X, Edit3, Trash2,
@@ -38,7 +39,7 @@ const select = 'px-3 py-2.5 border border-gray-200 rounded-xl text-sm bg-white f
  * ST_AsGeoJSON and is not part of a list row, so opening the form straight from
  * the table would show an empty map for a parcel that already has one.
  */
-function ParcelModal({ editing, farmTypes, onClose }) {
+function ParcelModal({ editing, farmTypes, barangays, onClose }) {
     const isEdit = editing.mode === 'edit';
     const [loaded, setLoaded] = useState(isEdit ? null : { parcel: null, geojson: null });
     const [failed, setFailed] = useState(false);
@@ -81,6 +82,7 @@ function ParcelModal({ editing, farmTypes, onClose }) {
                     parcel={loaded.parcel}
                     geojson={loaded.geojson}
                     farmTypes={farmTypes}
+                    barangays={barangays}
                     onClose={onClose}
                 />
             )}
@@ -91,13 +93,14 @@ function ParcelModal({ editing, farmTypes, onClose }) {
 export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, sort, perPage, summary }) {
     const { can } = usePermissions();
     const [search, setSearch] = useState(filters.search ?? '');
+    const [barangay, setBarangay] = useState(filters.barangay ?? '');
 
     // { mode: 'new' } or { mode: 'edit', id } — null when the modal is closed.
     const [editing, setEditing] = useState(null);
 
     const go = (params = {}) => router.get('/admin/parcels',
         {
-            search, barangay: filters.barangay ?? '', farm_type_id: filters.farm_type_id ?? '',
+            search, barangay, farm_type_id: filters.farm_type_id ?? '',
             ownership: filters.ownership ?? '', mapped: filters.mapped ?? '',
             sort: sort.column, direction: sort.direction, per_page: perPage, ...params,
         },
@@ -115,6 +118,7 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
 
     const clearFilters = () => {
         setSearch('');
+        setBarangay('');
         router.get('/admin/parcels', {}, { preserveState: true, replace: true });
     };
 
@@ -179,11 +183,17 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                    <select className={select} value={filters.barangay ?? ''}
-                        onChange={e => go({ barangay: e.target.value, page: 1 })}>
-                        <option value="">All barangays</option>
-                        {barangays.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
+                    {/* Type-ahead rather than a dropdown, matching the farmer
+                        registry: typing three letters beats scrolling dozens of
+                        barangays. Applies as soon as one is picked. */}
+                    <SuggestInput
+                        value={barangay}
+                        onChange={setBarangay}
+                        onSelect={b => go({ barangay: b, page: 1 })}
+                        options={barangays}
+                        placeholder="All barangays"
+                        className={select}
+                    />
 
                     <select className={select} value={filters.farm_type_id ?? ''}
                         onChange={e => go({ farm_type_id: e.target.value, page: 1 })}>
@@ -385,6 +395,7 @@ export default function ParcelsIndex({ parcels, filters, barangays, farmTypes, s
                     key={editing.mode === 'edit' ? editing.id : 'new'}
                     editing={editing}
                     farmTypes={farmTypes}
+                    barangays={barangays}
                     onClose={() => setEditing(null)}
                 />
             )}
