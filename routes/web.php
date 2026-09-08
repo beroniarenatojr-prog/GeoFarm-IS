@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\FarmAssetController;
 use App\Http\Controllers\Admin\FarmerLookupController;
 use App\Http\Controllers\Admin\FarmInventoryController;
 use App\Http\Controllers\Admin\FarmerController;
+use App\Http\Controllers\Admin\FarmerEmailController;
 use App\Http\Controllers\Admin\FishpondController;
 use App\Http\Controllers\Admin\GISController;
 use App\Http\Controllers\Admin\GlobalSearchController;
@@ -82,6 +83,17 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
         ->middleware('permission:edit farmers')->name('farmer-verification.approve');
     Route::post('farmer-verification/{farmer}/reject', [FarmerVerificationController::class, 'reject'])
         ->middleware('permission:edit farmers')->name('farmer-verification.reject');
+    // Staff writing to a farmer directly. Behind "edit farmers" rather than a
+    // new permission: sending an official message on the office's behalf is
+    // the same level of trust as changing the record it is about, and Viewer
+    // deliberately holds neither.
+    Route::get('farmer-email', [FarmerEmailController::class, 'create'])
+        ->middleware('permission:edit farmers')->name('farmer-email.create');
+    // Throttled because this is the one staff screen that can put mail on the
+    // wire, and the office's account is what would get rate-limited upstream.
+    Route::post('farmer-email', [FarmerEmailController::class, 'store'])
+        ->middleware(['permission:edit farmers', 'throttle:20,1'])->name('farmer-email.store');
+
     Route::get('farmers/export', [FarmerController::class, 'export'])->middleware('permission:export reports')->name('farmers.export');
     Route::post('farmers/import', [FarmerController::class, 'import'])->middleware('permission:create farmers')->name('farmers.import');
     Route::get('farmers/create', [FarmerController::class, 'create'])->middleware('permission:create farmers')->name('farmers.create');

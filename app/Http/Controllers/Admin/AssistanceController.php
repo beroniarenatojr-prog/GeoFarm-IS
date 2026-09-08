@@ -10,14 +10,18 @@ use App\Models\FarmParcel;
 use App\Models\Farmer;
 use App\Models\FinancialAssistance;
 use App\Models\InventoryItem;
+use App\Notifications\FarmerAssistanceDistributed;
 use App\Services\AuditService;
 use App\Services\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
 use RuntimeException;
+use Throwable;
 
 class AssistanceController extends Controller
 {
@@ -150,6 +154,40 @@ class AssistanceController extends Controller
      * distributions. Enforced here rather than only in the UI, because a
      * hidden button is not a control.
      */
+    /**
+     * Email the farmer that a hand-out was recorded for them.
+     *
+     * Called after the transaction commits, never inside it.
+     *
+     * A farmer encoded at the office may have no login account, so the address
+     * on their own record comes first and the linked user account is the
+     * fallback. With neither, there is nowhere to write and the distribution
+     * simply stands unannounced — staff hand the goods over in person anyway.
+     */
+    private function tellFarmerAboutHandout(AssistanceDistribution $payout): void
+    {
+        $payout->loadMissing(['farmer.user', 'program', 'itemIssues.item']);
+
+        $address = $payout->farmer?->email ?: $payout->farmer?->user?->email;
+
+        if (blank($address)) {
+            return;
+        }
+
+        try {
+            Notification::route('mail', $address)
+                ->notify(new FarmerAssistanceDistributed($payout));
+        } catch (Throwable $e) {
+            // The goods are handed over and the row is committed. A mail or
+            // queue problem must not turn a recorded distribution into an
+            // error page that invites staff to record it a second time.
+            Log::warning('Could not queue the assistance distribution email.', [
+                'assistance_distribution_id' => $payout->id,
+                'error'                      => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function blockIfLocked(FinancialAssistance $assistance): ?RedirectResponse
     {
         if (!$assistance->is_locked) {
@@ -451,7 +489,12 @@ class AssistanceController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($assistance, $data, $items, $inventory, $request) {
+            // The payout is returned out of the transaction rather than handled
+            // inside it, so the farmer is emailed only once the row has actually
+            // committed. Short stock throws below and rolls the whole thing
+            // back; nobody should be told they received goods that never left
+            // the store.
+            $payout = DB::transaction(function () use ($assistance, $data, $items, $inventory, $request) {
                 /*
                  * Recorded means handed over.
                  *
@@ -498,11 +541,15 @@ class AssistanceController extends Controller
                         'quantity'          => $i['quantity'],
                     ])->all(),
                 ]);
+
+                return $payout;
             });
         } catch (RuntimeException $e) {
             // Insufficient stock — the message names the item and the shortfall.
             return back()->with('error', $e->getMessage());
         }
+
+        $this->tellFarmerAboutHandout($payout);
 
         return back()->with('success', $items->isEmpty()
             ? 'Distribution recorded successfully.'

@@ -7,6 +7,7 @@ import UserMenu from '@/Components/ui/UserMenu';
 import {
     LayoutDashboard,
     Users,
+    Mail,
     MapPin,
     Globe,
     Calendar,
@@ -51,6 +52,7 @@ const nav = [
         icon: FolderOpen,
         items: [
             { label: 'Farmers', href: '/admin/farmers', icon: Users, permission: 'view farmers' },
+            { label: 'Send Email', href: '/admin/farmer-email', icon: Mail, permission: 'edit farmers' },
             // Verification lives in the header notification bell, not here.
             { label: 'Parcels', href: '/admin/parcels', icon: MapPin, permission: 'view parcels' },
             { label: 'GIS Map', href: '/admin/gis/map', icon: Globe, permission: 'view maps' },
