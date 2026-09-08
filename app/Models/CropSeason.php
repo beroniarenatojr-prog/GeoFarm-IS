@@ -20,16 +20,30 @@ class CropSeason extends Model
     public const OUTCOME_BREAK_EVEN = 'break_even';
     public const OUTCOME_LOSS       = 'loss';
 
+    /** The two croppings a parcel's schedule can open. */
+    public const SEASON_WET = 'wet';
+    public const SEASON_DRY = 'dry';
+
     protected $fillable = [
         'parcel_id','season','cropping_year','crop_id',
         'area_planted_ha','planting_date','harvest_date','yield_kg','inputs_used',
-        'production_cost','total_income','fertilizer_type','fertilizer_qty_kg','fertilizer_class',
+        'production_unit','selling_price',
+        'production_cost','labor_cost','other_cost','total_income',
+        'fertilizer_type','fertilizer_qty_kg','fertilizer_class','is_organic',
     ];
 
-    protected $casts = ['inputs_used' => 'array', 'planting_date' => 'date', 'harvest_date' => 'date'];
+    protected $casts = [
+        'inputs_used'   => 'array',
+        'planting_date' => 'date',
+        'harvest_date'  => 'date',
+        'is_organic'    => 'boolean',
+    ];
 
     /** Derived figures travel with the row so the table need not recompute them. */
-    protected $appends = ['cost_per_kg', 'cost_per_hectare', 'net_farm_income', 'financial_outcome'];
+    protected $appends = [
+        'cost_per_kg', 'cost_per_hectare', 'net_farm_income', 'financial_outcome',
+        'gross_revenue', 'inputs_cost', 'input_cost_breakdown', 'grown_organically',
+    ];
 
     /**
      * What it cost to produce a kilo of this harvest.
@@ -122,7 +136,110 @@ class CropSeason extends Model
         );
     }
 
+    /**
+     * What the harvest sold for.
+     *
+     * total_income is the stored answer and stays authoritative — the risk
+     * scorer, net_farm_income and the palugi classification all read it, and a
+     * second revenue column could only disagree with the first. This falls
+     * back to quantity x price for a row where staff recorded the price but no
+     * total, so the figure appears rather than reading as an empty cell.
+     */
+    public function getGrossRevenueAttribute(): ?float
+    {
+        if ($this->total_income !== null) {
+            return round((float) $this->total_income, 2);
+        }
+
+        if ($this->yield_kg === null || $this->selling_price === null) {
+            return null;
+        }
+
+        return round((float) $this->yield_kg * (float) $this->selling_price, 2);
+    }
+
+    /** What the itemised inputs cost, all categories together. */
+    public function getInputsCostAttribute(): ?float
+    {
+        if (!$this->relationLoaded('inputs') && !$this->exists) {
+            return null;
+        }
+
+        $inputs = $this->inputs;
+
+        return $inputs->isEmpty() ? null : round((float) $inputs->sum('cost'), 2);
+    }
+
+    /**
+     * Input cost per RSBSA reporting line.
+     *
+     * Summed from the input rows rather than stored as its own columns: a
+     * fertilizer_cost column beside a list of fertilizers is two answers to
+     * one question, and they drift the first time a row is corrected.
+     */
+    public function getInputCostBreakdownAttribute(): array
+    {
+        if (!$this->relationLoaded('inputs') && !$this->exists) {
+            return [];
+        }
+
+        $inputs = $this->inputs;
+
+        $sum = fn (array $types) => round(
+            (float) $inputs->whereIn('input_type', $types)->sum('cost'),
+            2,
+        );
+
+        return [
+            'seed'       => $sum(['seed']),
+            'fertilizer' => $sum(['fertilizer']),
+            'chemical'   => $sum(SeasonalInput::CHEMICAL_TYPES),
+            'other'      => $sum(['fuel', 'other']),
+            'labor'      => round((float) ($this->labor_cost ?? 0), 2),
+            'expenses'   => round((float) ($this->other_cost ?? 0), 2),
+        ];
+    }
+
+    /**
+     * Everything this cropping cost, from its own parts.
+     *
+     * Used to keep production_cost in step when staff itemise. Null when
+     * nothing has been itemised, so a season costed as a single figure is left
+     * exactly as the office entered it.
+     */
+    public function costFromParts(): ?float
+    {
+        $inputs = $this->inputs()->sum('cost');
+        $labor  = $this->labor_cost;
+        $other  = $this->other_cost;
+
+        if (!$inputs && $labor === null && $other === null) {
+            return null;
+        }
+
+        return round((float) $inputs + (float) $labor + (float) $other, 2);
+    }
+
+    /**
+     * Whether this cropping was grown organically.
+     *
+     * Answered on the season first, because practice changes between them — a
+     * farmer can crop organically in the wet season and not in the dry. Falls
+     * back to the parcel's standing answer for every row encoded before the
+     * season carried its own.
+     */
+    public function getGrownOrganicallyAttribute(): ?bool
+    {
+        return $this->is_organic ?? $this->parcel?->is_organic;
+    }
+
     public function parcel() { return $this->belongsTo(FarmParcel::class, 'parcel_id'); }
 
     public function crop()   { return $this->belongsTo(Crop::class); }
+
+    /** Fertilizer, chemicals and seed actually applied — many per season. */
+    public function inputs()
+    {
+        return $this->hasMany(SeasonalInput::class, 'crop_season_id');
+    }
 }

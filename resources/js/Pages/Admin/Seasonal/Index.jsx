@@ -8,7 +8,9 @@ import { Pencil, Trash2, Coins } from 'lucide-react';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
 // ── Input types for the dynamic inputs section ──────────────────────────────
-const INPUT_TYPES = ['fertilizer', 'seed', 'pesticide', 'herbicide', 'other'];
+// Matches SeasonalInput::TYPES. A season carries a row per input, so two
+// fertilizers and three chemicals is an ordinary entry, not an edge case.
+const INPUT_TYPES = ['fertilizer', 'herbicide', 'pesticide', 'insecticide', 'fungicide', 'seed', 'fuel', 'other'];
 const UNITS = ['kg', 'L', 'bag', 'pack', 'piece'];
 
 /** Suggestions only — the box stays free text, since blends vary by supplier. */
@@ -27,7 +29,7 @@ const CLASS_TONE = {
 const peso = (n, dp = 2) =>
     `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 
-const emptyInput = () => ({ type: 'fertilizer', name: '', quantity: '', unit: 'kg', source: '' });
+const emptyInput = () => ({ input_type: 'fertilizer', name: '', quantity: '', unit: 'bag', cost: '' });
 
 const emptyForm = (parcel_id = '') => ({
     parcel_id,
@@ -43,7 +45,14 @@ const emptyForm = (parcel_id = '') => ({
     fertilizer_type: '',
     fertilizer_qty_kg: '',
     fertilizer_class: '',
-    inputs_used: [],
+    production_unit: 'kg',
+    selling_price: '',
+    labor_cost: '',
+    other_cost: '',
+    // Blank means "as recorded on the parcel"; practice changes between
+    // seasons, so the season answers for itself once staff say so.
+    is_organic: '',
+    inputs: [],
 });
 
 const farmerName = (s) =>
@@ -195,18 +204,18 @@ function Modal({ title, onClose, children }) {
 // ── Season Form (add / edit) ─────────────────────────────────────────────────
 function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
     function addInput() {
-        setData('inputs_used', [...(data.inputs_used ?? []), emptyInput()]);
+        setData('inputs', [...(data.inputs ?? []), emptyInput()]);
     }
 
     function removeInput(i) {
-        setData('inputs_used', data.inputs_used.filter((_, idx) => idx !== i));
+        setData('inputs', data.inputs.filter((_, idx) => idx !== i));
     }
 
     function updateInput(i, field, value) {
-        const updated = data.inputs_used.map((item, idx) =>
+        const updated = data.inputs.map((item, idx) =>
             idx === i ? { ...item, [field]: value } : item
         );
-        setData('inputs_used', updated);
+        setData('inputs', updated);
     }
 
     const field = 'px-3 py-2 border rounded-lg text-sm w-full focus:outline-none focus:ring-2 focus:ring-green-500';
@@ -263,16 +272,42 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
 
             <div className="grid grid-cols-2 gap-3">
                 <div>
-                    <label className={label}>Yield (kg)</label>
-                    <input type="number" step="0.01" min="0" className={field} value={data.yield_kg}
-                        onChange={e => setData('yield_kg', e.target.value)} />
+                    <label className={label}>Production quantity</label>
+                    <div className="flex gap-2">
+                        <input type="number" step="0.01" min="0" className={`${field} flex-1`} value={data.yield_kg}
+                            onChange={e => setData('yield_kg', e.target.value)} />
+                        <select className={`${field} w-24`} value={data.production_unit ?? 'kg'}
+                            onChange={e => setData('production_unit', e.target.value)}>
+                            {['kg', 'sacks', 'tons', 'pieces'].map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label className={label}>Selling price (₱ per unit)</label>
+                    <input type="number" step="0.01" min="0" className={field} value={data.selling_price}
+                        onChange={e => setData('selling_price', e.target.value)}
+                        placeholder="e.g. 22.00" />
+                    {errors.selling_price && <p className={err}>{errors.selling_price}</p>}
+                    {/* Gross revenue as it is typed. Saved into the income
+                        field below when that is left blank, so there is only
+                        ever one revenue figure on the record. */}
+                    {data.yield_kg > 0 && data.selling_price > 0 && (
+                        <p className="mt-1 text-[11px] font-medium text-[#006400]">
+                            Gross revenue {peso(Number(data.yield_kg) * Number(data.selling_price), 0)}
+                        </p>
+                    )}
                 </div>
                 <div>
                     <label className={label}>Cost of production (₱)</label>
                     <input type="number" step="0.01" min="0" className={field} value={data.production_cost}
                         onChange={e => setData('production_cost', e.target.value)}
-                        placeholder="Seed, fertilizer, labour, fuel" />
+                        placeholder="Or itemise below" />
                     {errors.production_cost && <p className={err}>{errors.production_cost}</p>}
+                    {(data.inputs ?? []).length > 0 && (
+                        <p className="mt-1 text-[11px] text-amber-700">
+                            Replaced on save by the itemised inputs, labour and other expenses.
+                        </p>
+                    )}
                     {/* Shown as it is typed so a slip of a zero is obvious
                         before saving, rather than a month later in a report. */}
                     {data.production_cost > 0 && data.yield_kg > 0 && (
@@ -302,6 +337,34 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
                             </p>
                         );
                     })()}
+                </div>
+                {/* Labour and "other" are the costs that are not an input you
+                    can hold, so they sit here rather than in the list below.
+                    Seed, fertilizer and chemical totals come from that list. */}
+                <div>
+                    <label className={label}>Labour cost (₱)</label>
+                    <input type="number" step="0.01" min="0" className={field} value={data.labor_cost}
+                        onChange={e => setData('labor_cost', e.target.value)}
+                        placeholder="Planting, weeding, harvesting" />
+                    {errors.labor_cost && <p className={err}>{errors.labor_cost}</p>}
+                </div>
+                <div>
+                    <label className={label}>Other expenses (₱)</label>
+                    <input type="number" step="0.01" min="0" className={field} value={data.other_cost}
+                        onChange={e => setData('other_cost', e.target.value)}
+                        placeholder="Hauling, rent, irrigation fees" />
+                    {errors.other_cost && <p className={err}>{errors.other_cost}</p>}
+                </div>
+                <div>
+                    <label className={label}>Grown organically?</label>
+                    {/* Answered per season, not per parcel: a farmer can crop
+                        organically in the wet season and not in the dry. */}
+                    <select className={field} value={data.is_organic ?? ''}
+                        onChange={e => setData('is_organic', e.target.value)}>
+                        <option value="">As recorded on the parcel</option>
+                        <option value="1">Yes — organic this season</option>
+                        <option value="0">No — inorganic this season</option>
+                    </select>
                 </div>
             </div>
 
@@ -354,26 +417,29 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
                     <button type="button" onClick={addInput}
                         className="text-xs text-green-700 hover:text-green-900 font-medium">+ Add Input</button>
                 </div>
-                {(data.inputs_used ?? []).length === 0 && (
+                {(data.inputs ?? []).length === 0 && (
                     <p className="text-xs text-gray-400 italic">No inputs added yet.</p>
                 )}
                 <div className="space-y-2">
-                    {(data.inputs_used ?? []).map((inp, i) => (
+                    {(data.inputs ?? []).map((inp, i) => (
                         <div key={i} className="grid grid-cols-12 gap-2 items-center bg-gray-50 p-2 rounded-lg">
-                            <select className={`${field} col-span-2`} value={inp.type}
-                                onChange={e => updateInput(i, 'type', e.target.value)}>
+                            <select className={`${field} col-span-2`} value={inp.input_type}
+                                onChange={e => updateInput(i, 'input_type', e.target.value)}>
                                 {INPUT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                             </select>
-                            <input placeholder="Name / variety" className={`${field} col-span-3`} value={inp.name}
+                            <input placeholder="Name / variety" className={`${field} col-span-3`} value={inp.name ?? ''}
                                 onChange={e => updateInput(i, 'name', e.target.value)} />
-                            <input type="number" placeholder="Qty" className={`${field} col-span-2`} value={inp.quantity}
+                            <input type="number" step="0.01" placeholder="Qty" className={`${field} col-span-2`} value={inp.quantity ?? ''}
                                 onChange={e => updateInput(i, 'quantity', e.target.value)} />
-                            <select className={`${field} col-span-1`} value={inp.unit}
+                            <select className={`${field} col-span-1`} value={inp.unit ?? ''}
                                 onChange={e => updateInput(i, 'unit', e.target.value)}>
                                 {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
-                            <input placeholder="Source" className={`${field} col-span-3`} value={inp.source}
-                                onChange={e => updateInput(i, 'source', e.target.value)} />
+                            {/* The figure the old JSON column had no room for,
+                                and the one the office actually needs: these
+                                add up to the season's production cost. */}
+                            <input type="number" step="0.01" placeholder="Cost ₱" className={`${field} col-span-3`} value={inp.cost ?? ''}
+                                onChange={e => updateInput(i, 'cost', e.target.value)} />
                             <button type="button" onClick={() => removeInput(i)}
                                 className="col-span-1 text-red-400 hover:text-red-600 text-lg leading-none text-center">&times;</button>
                         </div>
@@ -392,7 +458,7 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
 }
 
 // ── Main Page ────────────────────────────────────────────────────────────────
-export default function SeasonalIndex({ parcels, seasons, crops, filters, summary, costByYear = [] }) {
+export default function SeasonalIndex({ parcels, seasons, crops, filters, summary, costByYear = [], barangays = [], commodities = [] }) {
     const { can } = usePermissions();
     const [showAdd, setShowAdd]   = useState(false);
     const [editing, setEditing]   = useState(null);
@@ -429,7 +495,8 @@ export default function SeasonalIndex({ parcels, seasons, crops, filters, summar
         router.get('/admin/seasonal', {}, { preserveState: true });
     }
 
-    const hasActiveFilters = filters.parcel_id || filters.season || filters.year || filters.crop_id || filters.search;
+    const hasActiveFilters = filters.parcel_id || filters.season || filters.year || filters.crop_id
+        || filters.search || filters.barangay || filters.commodity;
 
     // Add form
     const addForm = useForm(emptyForm(''));
@@ -469,7 +536,23 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
             fertilizer_type:    season.fertilizer_type ?? '',
             fertilizer_qty_kg:  season.fertilizer_qty_kg ?? '',
             fertilizer_class:   season.fertilizer_class ?? '',
-            inputs_used:     season.inputs_used ?? [],
+            production_unit:    season.production_unit ?? 'kg',
+            selling_price:      season.selling_price ?? '',
+            labor_cost:         season.labor_cost ?? '',
+            other_cost:         season.other_cost ?? '',
+            // '' is "follow the parcel", so an untouched season is not forced
+            // to declare a practice it never stated.
+            is_organic:         season.is_organic === null || season.is_organic === undefined
+                ? '' : (season.is_organic ? '1' : '0'),
+            // The saved rows, so editing a season shows what it already used
+            // rather than an empty list that would wipe them on save.
+            inputs: (season.inputs ?? []).map(i => ({
+                input_type: i.input_type,
+                name:       i.name ?? '',
+                quantity:   i.quantity ?? '',
+                unit:       i.unit ?? '',
+                cost:       i.cost ?? '',
+            })),
         });
         setEditing(season);
     }
@@ -566,7 +649,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                 <div className="bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden mb-6">
                     <div className="border-b border-green-100 bg-green-50/40 px-4 sm:px-5 py-3">
                         <h2 className="text-sm font-bold uppercase tracking-wide text-[#006400]">
-                            Cost of production by year
+                            Agricultural year — cost, revenue and net income
                         </h2>
                         <p className="text-[11px] text-gray-500">Wet and dry season, for the current filter</p>
                     </div>
@@ -580,7 +663,10 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     <th className="px-4 py-2.5 font-semibold text-right">Dry — ₱/kg</th>
                                     <th className="px-4 py-2.5 font-semibold text-right">Wet — cost</th>
                                     <th className="px-4 py-2.5 font-semibold text-right">Wet — ₱/kg</th>
-                                    <th className="px-4 py-2.5 font-semibold text-right">Year total</th>
+                                    <th className="px-4 py-2.5 font-semibold text-right">Annual cost</th>
+                                    <th className="px-4 py-2.5 font-semibold text-right">Annual revenue</th>
+                                    <th className="px-4 py-2.5 font-semibold text-right">Net income</th>
+                                    <th className="px-4 py-2.5 font-semibold text-right">₱/ha</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-green-50">
@@ -599,8 +685,25 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                                 </td>
                                             </Fragment>
                                         ))}
+                                        {/* Wet + dry, which is simply the sum of
+                                            whichever seasons the parcel is
+                                            worked in — no separate rule for a
+                                            holding cropped only once a year. */}
                                         <td className="px-4 py-2.5 text-right tabular-nums font-bold text-gray-900">
                                             {peso(y.total_cost, 0)}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                                            {y.total_revenue > 0 ? peso(y.total_revenue, 0) : <span className="text-gray-300">—</span>}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums font-bold">
+                                            {y.total_revenue > 0 || y.total_cost > 0
+                                                ? <span className={y.net_income < 0 ? 'text-red-600' : 'text-[#006400]'}>
+                                                    {peso(y.net_income, 0)}
+                                                  </span>
+                                                : <span className="text-gray-300">—</span>}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
+                                            {y.cost_per_hectare != null ? peso(y.cost_per_hectare, 0) : <span className="text-gray-300">—</span>}
                                         </td>
                                     </tr>
                                 ))}
@@ -666,6 +769,27 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                     >
                         <option value="">All Crops</option>
                         {crops.map(c => <option key={c.id} value={c.id}>{c.crop_name}</option>)}
+                    </select>
+
+                    {/* Barangay and commodity both live on the parcel, so these
+                        filter through the relationship rather than through
+                        columns copied onto every cropping. */}
+                    <select
+                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={filters.barangay ?? ''}
+                        onChange={e => applyFilter('barangay', e.target.value)}
+                    >
+                        <option value="">All Barangays</option>
+                        {barangays.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+
+                    <select
+                        className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        value={filters.commodity ?? ''}
+                        onChange={e => applyFilter('commodity', e.target.value)}
+                    >
+                        <option value="">All Commodities</option>
+                        {commodities.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
 
                     {hasActiveFilters && (
