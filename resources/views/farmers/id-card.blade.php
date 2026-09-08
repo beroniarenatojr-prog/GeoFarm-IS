@@ -49,12 +49,21 @@
   }
   .header-top { display: flex; align-items: center; gap: 10px; }
   .seal {
-    width: 34px; height: 34px;
+    width: 38px; height: 38px;
     border-radius: 50%;
     background: #fff;
     display: flex; align-items: center; justify-content: center;
     font-size: 16px; color: #1f6d3c; font-weight: 800;
     flex-shrink: 0;
+    overflow: hidden;
+    /* A white ring so the municipal seal reads as a seal against the green
+       rather than as a photo pasted on the header. */
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.55);
+  }
+  .seal img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
   }
   .header-text { line-height: 1.15; }
   .header-text .muni {
@@ -169,6 +178,13 @@
     @page { size: A4 landscape; margin: 12mm; }
     body { background: #fff; padding: 0; gap: 24px; }
     .toolbar, .label-tag { display: none !important; }
+    /* Browsers drop background colours when printing unless told otherwise,
+       which would put the header's white text on a white header and lose the
+       green entirely. A card that only looks right on screen is no use. */
+    .card, .card * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
     .card {
       box-shadow: none;
       border: 1px solid #cbd9cd;   /* a cutting line once the shadow is gone */
@@ -195,10 +211,18 @@
   <div class="card card-front">
     <div class="header">
       <div class="header-top">
-        <div class="seal">&#127806;</div>
+        <div class="seal">
+          {{-- Falls back to the sheaf this used to carry, so a missing asset
+               leaves a deliberate mark rather than an empty white disc. --}}
+          @if ($logoData)
+            <img src="{{ $logoData }}" alt="Municipality of Tumauini seal">
+          @else
+            &#127806;
+          @endif
+        </div>
         <div class="header-text">
           <div class="muni">Registry System for Basic Sectors in Agriculture (RSBSA)</div>
-          <div class="title">Farmer Identification Card</div>
+          <div class="title">LGU Tumauini Registered Farmers</div>
           <div class="sub">Municipal Agriculture Office &middot; Tumauini, Isabela</div>
         </div>
       </div>

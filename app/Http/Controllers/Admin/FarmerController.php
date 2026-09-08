@@ -247,6 +247,7 @@ class FarmerController extends Controller
             'farmerType'  => $commodities->take(3)->implode(' / ') ?: '—',
             'qrSvg'       => $this->inlineSvg($farmer->qr_code_path),
             'photoData'   => $this->inlineImage($farmer->photo_path),
+            'logoData'    => $this->inlinePublicImage('images/Logo.jpeg'),
         ]);
     }
 
@@ -286,6 +287,38 @@ class FarmerController extends Controller
         };
 
         return 'data:' . $mime . ';base64,' . base64_encode(Storage::disk('public')->get($path));
+    }
+
+    /**
+     * A file shipped in public/ as a data URI.
+     *
+     * Separate from inlineImage() because that one reads the storage disk,
+     * which is uploaded content; the municipal seal is an asset committed with
+     * the code.
+     *
+     * Inlined for the same reason the photo and QR are: the card is meant to
+     * be printed, and a print dialog does not reliably fetch linked images —
+     * a plain src can come out blank on the paper while looking right on
+     * screen. Returns null when the file is missing so the card falls back
+     * rather than rendering a broken image on an official document.
+     */
+    private function inlinePublicImage(string $relativePath): ?string
+    {
+        $absolute = public_path($relativePath);
+
+        if (!is_file($absolute)) {
+            return null;
+        }
+
+        $mime = match (strtolower(pathinfo($absolute, PATHINFO_EXTENSION))) {
+            'png'   => 'image/png',
+            'gif'   => 'image/gif',
+            'webp'  => 'image/webp',
+            'svg'   => 'image/svg+xml',
+            default => 'image/jpeg',
+        };
+
+        return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($absolute));
     }
 
     public function show(Farmer $farmer)

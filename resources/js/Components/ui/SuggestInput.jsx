@@ -49,11 +49,17 @@ export default function SuggestInput({
     const matches = useMemo(() => {
         const term = String(value ?? '').trim().toLowerCase();
 
-        if (term === '') return [];
-
         const pool = options
             .map(option => (typeof option === 'string' ? option : option?.name))
             .filter(Boolean);
+
+        // An empty box offers the start of the list rather than nothing.
+        //
+        // Partly so staff can browse when they cannot spell what they are
+        // after, and partly so a missing list is visible: when nothing at all
+        // appears on focus, the options never arrived — previously that looked
+        // identical to "you typed something with no match".
+        if (term === '') return pool.slice(0, limit);
 
         // What someone typing "cali" wants first is "Caligayan", not
         // "Barangay Cali-something" — so names that start with the term are
@@ -121,6 +127,14 @@ export default function SuggestInput({
 
     const showList = open && matches.length > 0;
 
+    // Typed something the list does not hold. Worth saying out loud: the value
+    // is still accepted, and staff should know that rather than assume the box
+    // is broken or that they must pick one of the offered names.
+    const showNoMatch = open
+        && matches.length === 0
+        && options.length > 0
+        && String(value ?? '').trim() !== '';
+
     return (
         <div ref={boxRef} className="relative">
             <input
@@ -168,6 +182,12 @@ export default function SuggestInput({
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {showNoMatch && (
+                <div className="absolute z-30 mt-1 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-xs text-gray-500 shadow-xl">
+                    Not on the list — it will be saved exactly as typed.
+                </div>
             )}
         </div>
     );
