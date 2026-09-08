@@ -357,6 +357,34 @@ class SeasonalTrackingTest extends TestCase
 
     // ------------------------------------------------------------- filters
 
+    public function test_the_add_form_is_given_the_parcels_it_needs_to_offer(): void
+    {
+        // Without this prop the Add Season form has no farmer or parcel to
+        // choose, and store() rejects every submission for a missing
+        // parcel_id with nothing on screen to fix.
+        $this->parcel(['cropping_schedule' => 'Wet']);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->has('parcels', 1)
+                ->where('parcels.0.farmer', 'Juan Dela Cruz')
+                ->where('parcels.0.label', 'Parcel #SAKAHAN-1 · Annafunan · Rice'));
+    }
+
+    public function test_a_season_cannot_be_added_without_a_parcel(): void
+    {
+        $crop = Crop::create(['crop_name' => 'Rice']);
+
+        $this->actingAs($this->staff())
+            ->post(route('admin.seasonal.store'), [
+                'season'        => 'wet',
+                'cropping_year' => now()->year,
+                'crop_id'       => $crop->id,
+            ])
+            ->assertSessionHasErrors('parcel_id');
+    }
+
     public function test_seasons_can_be_filtered_by_barangay_and_commodity(): void
     {
         $this->parcel(['cropping_schedule' => 'Wet', 'barangay' => 'Annafunan', 'commodity' => 'Rice']);

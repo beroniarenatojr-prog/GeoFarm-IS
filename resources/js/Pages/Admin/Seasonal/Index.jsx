@@ -202,7 +202,19 @@ function Modal({ title, onClose, children }) {
 }
 
 // ── Season Form (add / edit) ─────────────────────────────────────────────────
-function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
+function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = false, onSubmit, onClose }) {
+    /*
+     * Farmer first, then their land.
+     *
+     * Staff know who they are encoding for; nobody knows a parcel by its
+     * number. Grouping under the farmer's name is what makes this the
+     * Farmer -> Parcel -> Season chain the register is built on.
+     */
+    const byFarmer = parcels.reduce((groups, parcel) => {
+        (groups[parcel.farmer] ??= []).push(parcel);
+        return groups;
+    }, {});
+
     function addInput() {
         setData('inputs', [...(data.inputs ?? []), emptyInput()]);
     }
@@ -224,6 +236,33 @@ function SeasonForm({ data, setData, errors, crops, onSubmit, onClose }) {
 
     return (
         <form onSubmit={onSubmit} className="space-y-4">
+            {/* Only when adding. A season belongs to the parcel it was recorded
+                against, and moving it to another farmer's land afterwards would
+                rewrite history rather than correct it. */}
+            {showParcel && (
+                <div>
+                    <label className={label}>
+                        Farmer &amp; parcel <span className="text-red-500">*</span>
+                    </label>
+                    <select className={field} value={data.parcel_id ?? ''}
+                        onChange={e => setData('parcel_id', e.target.value)}>
+                        <option value="">— Select the farmer&apos;s parcel —</option>
+                        {Object.entries(byFarmer).map(([farmer, owned]) => (
+                            <optgroup key={farmer} label={farmer}>
+                                {owned.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                            </optgroup>
+                        ))}
+                    </select>
+                    {errors.parcel_id && <p className={err}>{errors.parcel_id}</p>}
+                    {parcels.length === 0 && (
+                        <p className="mt-1 text-xs text-amber-700">
+                            No farm parcels are recorded yet. A cropping season belongs to a
+                            parcel, so add land to a farmer first.
+                        </p>
+                    )}
+                </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className={label}>Season</label>
@@ -503,10 +542,14 @@ export default function SeasonalIndex({ parcels, seasons, crops, filters, summar
 
     function submitAdd(e) {
         e.preventDefault();
+
+        // Reported against the field rather than through alert(), which said
+        // "please select a parcel" for a picker the form did not have.
         if (!addForm.data.parcel_id) {
-            alert('Please select a parcel');
+            addForm.setError('parcel_id', 'Choose the farmer and parcel this cropping belongs to.');
             return;
         }
+
         addForm.post('/admin/seasonal', {
             onSuccess: () => { setShowAdd(false); addForm.reset(); },
         });
@@ -799,8 +842,10 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                         </button>
                     )}
 
+                    {/* Prefilled when the page is already filtered to one
+                        parcel — that is the parcel being worked on. */}
                     {can('create seasonal') && (
-                        <button onClick={() => { addForm.setData(emptyForm('')); setShowAdd(true); }}
+                        <button onClick={() => { addForm.setData(emptyForm(filters.parcel_id ?? '')); setShowAdd(true); }}
                             className="ml-auto bg-[#006400] text-white px-5 py-2 rounded-xl text-sm font-semibold hover:bg-[#228B22] shadow-sm transition-colors whitespace-nowrap">
                             + Add Season
                         </button>
@@ -1009,6 +1054,8 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                         setData={addForm.setData}
                         errors={addForm.errors}
                         crops={crops}
+                        parcels={parcels}
+                        showParcel
                         onSubmit={submitAdd}
                         onClose={() => setShowAdd(false)}
                     />

@@ -199,9 +199,22 @@ class Farmer extends Model
         return $this->hasManyThrough(CropSeason::class, FarmParcel::class, 'farmer_id', 'parcel_id');
     }
 
+    /**
+     * The farmer's name as it should be read.
+     *
+     * The gaps are collapsed, not just trimmed. Most farmers have no middle
+     * name or suffix, and interpolating the blanks left a double space in the
+     * middle of the name — "Juan  Dela Cruz" — which trim() cannot reach
+     * because it is not at either end. That name is printed on ID cards and
+     * addressed in email, so the extra space is visible to the farmer.
+     */
     public function getFullNameAttribute(): string
     {
-        return trim("{$this->first_name} {$this->middle_name} {$this->last_name} {$this->suffix}");
+        return trim(preg_replace(
+            '/\s+/',
+            ' ',
+            "{$this->first_name} {$this->middle_name} {$this->last_name} {$this->suffix}",
+        ));
     }
 
     /**

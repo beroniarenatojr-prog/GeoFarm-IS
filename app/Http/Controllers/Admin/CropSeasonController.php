@@ -17,14 +17,34 @@ class CropSeasonController extends Controller
 {
     public function index(Request $request)
     {
+        /*
+         * The picker is Farmer -> Parcel, in that order.
+         *
+         * Staff know who they are encoding for; they do not know a parcel by
+         * its number. The farmer travels separately so the form can group the
+         * options under their name, and the label describes the land rather
+         * than repeating it.
+         *
+         * Most parcels carry no parcel_number, which is why the barangay
+         * stands in — the old label printed a bare "Parcel #" for all of them.
+         */
         $parcels = FarmParcel::with('farmer')
-            ->select('id', 'parcel_number', 'barangay', 'farmer_id')
-            ->orderBy('parcel_number')
+            ->select('id', 'parcel_number', 'barangay', 'commodity', 'farmer_id')
             ->get()
-            ->map(fn($p) => [
-                'id'    => $p->id,
-                'label' => "Parcel #{$p->parcel_number} – {$p->farmer?->full_name} – {$p->barangay}",
-            ]);
+            ->sortBy([
+                fn ($p) => $p->farmer?->full_name ?? '',
+                fn ($p) => $p->parcel_number ?? '',
+            ])
+            ->map(fn ($p) => [
+                'id'     => $p->id,
+                'farmer' => $p->farmer?->full_name ?: 'Unknown farmer',
+                'label'  => collect([
+                    $p->parcel_number ? "Parcel #{$p->parcel_number}" : 'No parcel no.',
+                    $p->barangay,
+                    $p->commodity,
+                ])->filter()->implode(' · '),
+            ])
+            ->values();
 
         // Show all seasons by default with filters
         $seasons = CropSeason::with(['crop', 'parcel.farmer', 'parcel.farmType', 'inputs'])
