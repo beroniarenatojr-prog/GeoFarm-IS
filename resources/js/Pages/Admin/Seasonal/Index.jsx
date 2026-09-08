@@ -31,6 +31,17 @@ const peso = (n, dp = 2) =>
     `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
 
 /**
+ * The unit as it reads after "per": one sack, not "per sacks".
+ *
+ * Short units are abbreviations rather than plurals — kg and L keep their
+ * trailing letter — so only longer words lose the s.
+ */
+const perUnit = (unit) => {
+    const u = unit ?? 'kg';
+    return u.length > 2 && u.endsWith('s') ? u.slice(0, -1) : u;
+};
+
+/**
  * Reads back an amount as it is typed, grouped and to two decimals.
  *
  * A number input cannot show thousand separators — browsers refuse, because
@@ -145,7 +156,7 @@ function Cost({ season, onAdd, mayEdit }) {
                     cost over yield_kg, so a season entered in sacks yields a
                     cost per sack — saying "/ kg" there would be a lie. */}
                 {season.cost_per_kg != null
-                    ? `${peso(season.cost_per_kg)} / ${season.production_unit ?? 'kg'}`
+                    ? `${peso(season.cost_per_kg)} / ${perUnit(season.production_unit)}`
                     : <span className="text-gray-400">awaiting harvest</span>}
             </p>
         </div>
@@ -249,7 +260,7 @@ function Section({ title, children }) {
  * breakdown, and every agricultural input — had nowhere to be read at all.
  * They live here, one row, whole.
  */
-function SeasonDetail({ season, onClose, onEdit, mayEdit }) {
+function SeasonDetail({ season, onClose }) {
     const breakdown = season.input_cost_breakdown ?? {};
     const inputs = season.inputs ?? [];
 
@@ -263,18 +274,10 @@ function SeasonDetail({ season, onClose, onEdit, mayEdit }) {
             size="xl"
             title={`${farmerName(season)} — ${season.crop?.crop_name ?? 'Cropping'} ${season.season} ${season.cropping_year}`}
             footer={
-                <>
-                    <button type="button" onClick={onClose}
-                        className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                        Close
-                    </button>
-                    {mayEdit && (
-                        <button type="button" onClick={onEdit}
-                            className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2 text-sm font-medium text-white shadow hover:bg-green-700">
-                            <Pencil className="h-4 w-4" /> Edit
-                        </button>
-                    )}
-                </>
+                <button type="button" onClick={onClose}
+                    className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Close
+                </button>
             }
         >
             <div className="space-y-4">
@@ -384,7 +387,7 @@ function SeasonDetail({ season, onClose, onEdit, mayEdit }) {
                         <Fact label="Total cost" tone="font-bold text-gray-900">
                             {season.production_cost != null ? peso(season.production_cost, 0) : null}
                         </Fact>
-                        <Fact label={`Cost per ${season.production_unit ?? 'kg'}`} tone="text-[#006400] font-semibold">
+                        <Fact label={`Cost per ${perUnit(season.production_unit)}`} tone="text-[#006400] font-semibold">
                             {season.cost_per_kg != null ? peso(season.cost_per_kg) : null}
                         </Fact>
                         <Fact label="Cost per hectare" tone="text-[#006400] font-semibold">
@@ -1323,12 +1326,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
 
             {/* The whole record for one cropping, opened by clicking its row. */}
             {viewing && (
-                <SeasonDetail
-                    season={viewing}
-                    mayEdit={can('edit seasonal')}
-                    onClose={() => setViewing(null)}
-                    onEdit={() => { const s = viewing; setViewing(null); openEdit(s); }}
-                />
+                <SeasonDetail season={viewing} onClose={() => setViewing(null)} />
             )}
 
             {/* Add Modal */}
