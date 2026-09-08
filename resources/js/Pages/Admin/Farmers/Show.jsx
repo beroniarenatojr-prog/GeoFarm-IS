@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { User, MapPin, Phone, Mail, Calendar, Map, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard } from 'lucide-react';
+import { User, MapPin, Phone, Mail, Calendar, Map, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '@/Components/ui/DataTable';
 import Tabs from '@/Components/ui/Tabs';
@@ -293,7 +293,14 @@ export default function FarmerShow({ farmer }) {
                 )}
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3">
+            {/* Icon-only, matching the registry toolbar. Five labelled buttons
+                pushed the farmer's own details off a laptop screen, and these
+                are the same five actions on every profile — staff learn them
+                by position. Each keeps its colour so the row still reads at a
+                glance, and every one carries a title and an aria-label, since
+                an icon with neither is unusable to a screen reader and a
+                guess to everyone else. */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* The QR lives on the back of the ID card now, beside the photo,
                   rather than floating on its own in a modal. Only a verified
                   farmer can be issued one, so the button is hidden otherwise. */}
@@ -303,10 +310,10 @@ export default function FarmerShow({ farmer }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Open the RSBSA ID card (front and back) to print"
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm"
+                  aria-label="Open the RSBSA ID card to print"
+                  className="flex items-center justify-center p-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
                 >
-                  <IdCard className="h-4 w-4" />
-                  ID Card
+                  <IdCard className="h-5 w-5" />
                 </a>
               )}
               {/* Opens the official RSBSA Enrollment Form (LEGAL size) in a new tab. */}
@@ -315,10 +322,10 @@ export default function FarmerShow({ farmer }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Print the RSBSA Enrollment Form (Legal size)"
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm"
+                aria-label="Print the RSBSA Enrollment Form"
+                className="flex items-center justify-center p-3 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
               >
-                <Printer className="h-4 w-4" />
-                Print RSBSA Form
+                <Printer className="h-5 w-5" />
               </a>
               {/* Writing to a farmer is the same level of trust as changing
                   their record, so it rides on the same permission. Hidden
@@ -329,28 +336,34 @@ export default function FarmerShow({ farmer }) {
                 <button
                   onClick={() => setEmailOpen(true)}
                   title={`Send an email to ${farmer.contact_email}`}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm"
+                  aria-label={`Send an email to ${farmer.contact_email}`}
+                  className="flex items-center justify-center p-3 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
                 >
-                  <Mail className="h-4 w-4" />
-                  Send Email
+                  <Mail className="h-5 w-5" />
                 </button>
               )}
               {can('edit farmers') && (
                 <Link
                   href={`/admin/farmers/${farmer.id}/edit`}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm"
+                  title="Edit this farmer's profile"
+                  aria-label="Edit this farmer's profile"
+                  className="flex items-center justify-center p-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
                 >
-                  <User className="h-4 w-4" />
-                  Edit Profile
+                  {/* A pencil, not the person icon this used to carry: on a
+                      profile page a person icon reads as "the farmer", not as
+                      "edit". */}
+                  <Pencil className="h-5 w-5" />
                 </Link>
               )}
               {can('delete farmers') && (
                 <button
                   onClick={handleDelete}
                   disabled={loading}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 text-sm disabled:opacity-50"
+                  title="Delete this farmer"
+                  aria-label="Delete this farmer"
+                  className="flex items-center justify-center p-3 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50"
                 >
-                  Delete
+                  <Trash2 className="h-5 w-5" />
                 </button>
               )}
             </div>
