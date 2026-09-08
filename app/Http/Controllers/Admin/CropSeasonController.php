@@ -110,7 +110,22 @@ class CropSeasonController extends Controller
             'summary'        => [
                 'seasons'   => $scoped()->count(),
                 'hectares'  => round((float) $scoped()->sum('area_planted_ha'), 2),
-                'yield_kg'  => round((float) $scoped()->sum('yield_kg'), 2),
+                /*
+                 * Kilogram rows only.
+                 *
+                 * yield_kg holds whatever quantity was recorded and
+                 * production_unit says what it counts, so adding 40 sacks to
+                 * 5,000 kg would report 5,040 kg of municipal production. A
+                 * null unit is a row encoded before the unit existed, which
+                 * means kilograms.
+                 */
+                'yield_kg'  => round((float) $this->inKilograms($scoped())->sum('yield_kg'), 2),
+                // So the tile can say what it left out rather than quietly
+                // under-reporting.
+                'other_units' => $scoped()
+                    ->whereNotNull('production_unit')
+                    ->where('production_unit', '!=', 'kg')
+                    ->count(),
                 'harvested' => $scoped()->whereNotNull('harvest_date')->count(),
                 'cost'      => round((float) $scoped()->sum('production_cost'), 2),
                 'revenue'   => round((float) $scoped()->sum('total_income'), 2),
@@ -130,6 +145,21 @@ class CropSeasonController extends Controller
     }
 
     /**
+     * Narrow a season query to quantities that can actually be added together.
+     *
+     * production_unit says what yield_kg counts. Rows recorded in sacks, tons
+     * or pieces are real data but not kilograms, and summing them into a
+     * kilogram total would misstate municipal production. Null is kilograms —
+     * every row encoded before the unit was recorded.
+     */
+    private function inKilograms($query)
+    {
+        return $query->where(
+            fn ($q) => $q->whereNull('production_unit')->orWhere('production_unit', 'kg')
+        );
+    }
+
+    /**
      * Cost per kilo across a set of seasons.
      *
      * Total cost over total yield, not the mean of each row's ratio — a season
@@ -142,7 +172,7 @@ class CropSeasonController extends Controller
      */
     private function blendedCostPerKg($query): ?float
     {
-        $row = (clone $query)
+        $row = $this->inKilograms(clone $query)
             ->whereNotNull('production_cost')
             ->where('yield_kg', '>', 0)
             ->selectRaw('SUM(production_cost) AS cost, SUM(yield_kg) AS kg')

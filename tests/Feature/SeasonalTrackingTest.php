@@ -413,6 +413,103 @@ class SeasonalTrackingTest extends TestCase
             ->assertSessionHasErrors('parcel_id');
     }
 
+    public function test_the_table_payload_carries_what_the_detail_modal_reads(): void
+    {
+        /*
+         * The row detail is rendered from the same payload the table uses, so
+         * anything it shows has to travel with the season. The inputs and the
+         * farm type are the two that come through relationships — miss either
+         * and the modal renders a column of dashes for data that exists.
+         */
+        $crop   = Crop::create(['crop_name' => 'Rice']);
+        $type   = \App\Models\FarmType::create(['type_name' => 'Irrigated']);
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet', 'farm_type_id' => $type->id]);
+        $season = CropSeason::where('parcel_id', $parcel->id)->firstOrFail();
+
+        $this->actingAs($this->staff())
+            ->put(route('admin.seasonal.update', $season), [
+                'season'        => 'wet',
+                'cropping_year' => $season->cropping_year,
+                'crop_id'       => $crop->id,
+                'yield_kg'      => 5000,
+                'selling_price' => 22,
+                'labor_cost'    => 20000,
+                'inputs'        => [
+                    ['input_type' => 'fertilizer', 'name' => 'Urea', 'quantity' => 20, 'unit' => 'bags', 'cost' => 30000],
+                ],
+            ]);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->where('seasons.data.0.parcel.farm_type.type_name', 'Irrigated')
+                ->where('seasons.data.0.parcel.barangay', 'Annafunan')
+                ->has('seasons.data.0.inputs', 1)
+                ->where('seasons.data.0.inputs.0.name', 'Urea')
+                // Derived figures the modal shows without recomputing them.
+                ->where('seasons.data.0.gross_revenue', 110000)
+                ->where('seasons.data.0.input_cost_breakdown.fertilizer', 30000)
+                ->has('seasons.data.0.cost_per_hectare')
+                ->has('seasons.data.0.grown_organically'));
+    }
+
+    public function test_the_recorded_unit_survives_an_edit(): void
+    {
+        $crop   = Crop::create(['crop_name' => 'Rice']);
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet']);
+        $season = CropSeason::where('parcel_id', $parcel->id)->firstOrFail();
+
+        $this->actingAs($this->staff())
+            ->put(route('admin.seasonal.update', $season), [
+                'season'          => 'wet',
+                'cropping_year'   => $season->cropping_year,
+                'crop_id'         => $crop->id,
+                'yield_kg'        => 40,
+                'production_unit' => 'sacks',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('sacks', $season->fresh()->production_unit);
+    }
+
+    public function test_sacks_are_not_added_into_a_kilogram_total(): void
+    {
+        /*
+         * yield_kg holds whatever quantity was recorded; production_unit says
+         * what it counts. Adding 40 sacks to 5,000 kg would report 5,040 kg of
+         * municipal production, which is not a number that means anything.
+         */
+        $inKg    = $this->parcel(['cropping_schedule' => 'Wet']);
+        $inSacks = $this->parcel(['parcel_number' => 'SAKAHAN-2', 'cropping_schedule' => 'Wet']);
+
+        CropSeason::where('parcel_id', $inKg->id)
+            ->update(['yield_kg' => 5000, 'production_unit' => 'kg']);
+        CropSeason::where('parcel_id', $inSacks->id)
+            ->update(['yield_kg' => 40, 'production_unit' => 'sacks']);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.yield_kg', 5000)
+                // Not hidden: the tile says how many rows it left out.
+                ->where('summary.other_units', 1));
+    }
+
+    public function test_a_row_with_no_unit_still_counts_as_kilograms(): void
+    {
+        // Everything encoded before the unit existed is kilograms, and must
+        // keep counting toward the total.
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet']);
+        CropSeason::where('parcel_id', $parcel->id)
+            ->update(['yield_kg' => 3000, 'production_unit' => null]);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->where('summary.yield_kg', 3000)
+                ->where('summary.other_units', 0));
+    }
+
     public function test_seasons_can_be_filtered_by_barangay_and_commodity(): void
     {
         $this->parcel(['cropping_schedule' => 'Wet', 'barangay' => 'Annafunan', 'commodity' => 'Rice']);

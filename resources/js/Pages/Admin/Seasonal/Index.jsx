@@ -141,8 +141,11 @@ function Cost({ season, onAdd, mayEdit }) {
         <div>
             <p className="font-semibold text-gray-900 tabular-nums">{peso(season.production_cost, 0)}</p>
             <p className="text-xs tabular-nums text-[#006400]">
+                {/* Per whatever the harvest was recorded in. cost_per_kg is
+                    cost over yield_kg, so a season entered in sacks yields a
+                    cost per sack — saying "/ kg" there would be a lie. */}
                 {season.cost_per_kg != null
-                    ? `${peso(season.cost_per_kg)} / kg`
+                    ? `${peso(season.cost_per_kg)} / ${season.production_unit ?? 'kg'}`
                     : <span className="text-gray-400">awaiting harvest</span>}
             </p>
         </div>
@@ -213,6 +216,209 @@ function Badge({ value }) {
         ? 'bg-yellow-100 text-yellow-700'
         : 'bg-green-100 text-green-700';
     return <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${cls}`}>{value}</span>;
+}
+
+/** One labelled figure. The unit of the detail modal's grids. */
+function Fact({ label, children, tone = '' }) {
+    return (
+        <div>
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</dt>
+            <dd className={`mt-0.5 text-sm tabular-nums ${tone || 'text-gray-900'}`}>
+                {children ?? <span className="text-gray-300">—</span>}
+            </dd>
+        </div>
+    );
+}
+
+function Section({ title, children }) {
+    return (
+        <section className="rounded-xl border border-green-100 bg-white">
+            <h3 className="border-b border-green-100 bg-green-50/50 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-[#006400]">
+                {title}
+            </h3>
+            <div className="p-4">{children}</div>
+        </section>
+    );
+}
+
+/**
+ * Everything recorded about one cropping.
+ *
+ * The table can only carry nine columns before it stops fitting a laptop, so
+ * the figures the office needs least often — selling price, the cost
+ * breakdown, and every agricultural input — had nowhere to be read at all.
+ * They live here, one row, whole.
+ */
+function SeasonDetail({ season, onClose, onEdit, mayEdit }) {
+    const breakdown = season.input_cost_breakdown ?? {};
+    const inputs = season.inputs ?? [];
+
+    const organic = season.grown_organically;
+    const loss = season.financial_outcome === 'loss';
+
+    return (
+        <ModalShell
+            open
+            onClose={onClose}
+            size="xl"
+            title={`${farmerName(season)} — ${season.crop?.crop_name ?? 'Cropping'} ${season.season} ${season.cropping_year}`}
+            footer={
+                <>
+                    <button type="button" onClick={onClose}
+                        className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Close
+                    </button>
+                    {mayEdit && (
+                        <button type="button" onClick={onEdit}
+                            className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2 text-sm font-medium text-white shadow hover:bg-green-700">
+                            <Pencil className="h-4 w-4" /> Edit
+                        </button>
+                    )}
+                </>
+            }
+        >
+            <div className="space-y-4">
+
+                <Section title="Farmer & land">
+                    <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <Fact label="Farmer">{farmerName(season)}</Fact>
+                        <Fact label="Parcel">{parcelLabel(season.parcel)}</Fact>
+                        <Fact label="Barangay">{season.parcel?.barangay}</Fact>
+                        {/* Read through the parcel, never copied onto the
+                            season: irrigated or rainfed is a property of the
+                            land. A parcel recorded as N/A has none. */}
+                        <Fact label="Farm type">{season.parcel?.farm_type?.type_name}</Fact>
+                    </dl>
+                </Section>
+
+                <Section title="Cropping">
+                    <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <Fact label="Crop">{season.crop?.crop_name}</Fact>
+                        <Fact label="Season"><Badge value={season.season} /></Fact>
+                        <Fact label="Year">{season.cropping_year}</Fact>
+                        <Fact label="Area planted">
+                            {season.area_planted_ha != null
+                                ? `${Number(season.area_planted_ha).toFixed(2)} ha` : null}
+                        </Fact>
+                        <Fact label="Growing period"><Period season={season} /></Fact>
+                        <Fact label="Practice">
+                            {organic === null || organic === undefined ? null : (
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                    organic ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'
+                                }`}>
+                                    {organic ? 'Organic' : 'Inorganic'}
+                                </span>
+                            )}
+                        </Fact>
+                    </dl>
+                </Section>
+
+                <Section title="Production & revenue">
+                    <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <Fact label="Quantity">
+                            {season.yield_kg != null
+                                ? `${Number(season.yield_kg).toLocaleString('en-PH')} ${season.production_unit ?? 'kg'}`
+                                : null}
+                        </Fact>
+                        <Fact label="Selling price">
+                            {season.selling_price != null ? `${peso(season.selling_price)} / ${season.production_unit ?? 'kg'}` : null}
+                        </Fact>
+                        <Fact label="Gross revenue" tone="font-semibold text-gray-900">
+                            {season.gross_revenue != null ? peso(season.gross_revenue, 0) : null}
+                        </Fact>
+                        <Fact label="Yield per hectare">
+                            {season.yield_kg != null && season.area_planted_ha
+                                ? `${(Number(season.yield_kg) / Number(season.area_planted_ha)).toLocaleString('en-PH', { maximumFractionDigits: 0 })} ${season.production_unit ?? 'kg'}/ha`
+                                : null}
+                        </Fact>
+                    </dl>
+                </Section>
+
+                <Section title="Agricultural inputs">
+                    {inputs.length === 0 ? (
+                        <p className="text-sm text-gray-400">
+                            No inputs recorded for this cropping.
+                        </p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="text-left text-[11px] uppercase tracking-wide text-gray-400">
+                                    <tr>
+                                        <th className="pb-2 font-semibold">Type</th>
+                                        <th className="pb-2 font-semibold">Name / variety</th>
+                                        <th className="pb-2 text-right font-semibold">Quantity</th>
+                                        <th className="pb-2 text-right font-semibold">Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-green-50">
+                                    {inputs.map(input => (
+                                        <tr key={input.id}>
+                                            <td className="py-2 capitalize text-gray-700">{input.input_type}</td>
+                                            <td className="py-2 text-gray-600">{input.name || <span className="text-gray-300">—</span>}</td>
+                                            <td className="py-2 text-right tabular-nums text-gray-700">
+                                                {input.quantity != null
+                                                    ? `${Number(input.quantity).toLocaleString('en-PH')} ${input.unit ?? ''}`.trim()
+                                                    : <span className="text-gray-300">—</span>}
+                                            </td>
+                                            <td className="py-2 text-right tabular-nums text-gray-900">
+                                                {input.cost != null ? peso(input.cost) : <span className="text-gray-300">—</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </Section>
+
+                <Section title="Costs">
+                    {/* Seed, fertilizer and chemical are summed from the input
+                        rows above rather than stored again, so the categories
+                        and the itemised list cannot disagree. */}
+                    <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                        <Fact label="Seed">{breakdown.seed ? peso(breakdown.seed, 0) : null}</Fact>
+                        <Fact label="Fertilizer">{breakdown.fertilizer ? peso(breakdown.fertilizer, 0) : null}</Fact>
+                        <Fact label="Chemicals">{breakdown.chemical ? peso(breakdown.chemical, 0) : null}</Fact>
+                        <Fact label="Labour">{season.labor_cost != null ? peso(season.labor_cost, 0) : null}</Fact>
+                        <Fact label="Other expenses">{season.other_cost != null ? peso(season.other_cost, 0) : null}</Fact>
+                        <Fact label="Total cost" tone="font-bold text-gray-900">
+                            {season.production_cost != null ? peso(season.production_cost, 0) : null}
+                        </Fact>
+                        <Fact label={`Cost per ${season.production_unit ?? 'kg'}`} tone="text-[#006400] font-semibold">
+                            {season.cost_per_kg != null ? peso(season.cost_per_kg) : null}
+                        </Fact>
+                        <Fact label="Cost per hectare" tone="text-[#006400] font-semibold">
+                            {season.cost_per_hectare != null ? peso(season.cost_per_hectare, 0) : null}
+                        </Fact>
+                    </dl>
+                </Section>
+
+                <Section title="Result">
+                    <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                        <Fact label="Revenue">{season.gross_revenue != null ? peso(season.gross_revenue, 0) : null}</Fact>
+                        <Fact label="Less cost">{season.production_cost != null ? peso(season.production_cost, 0) : null}</Fact>
+                        <Fact label="Net income" tone={`font-bold ${loss ? 'text-red-600' : 'text-[#006400]'}`}>
+                            {season.net_farm_income != null ? peso(season.net_farm_income, 0) : null}
+                        </Fact>
+                    </dl>
+                    {season.financial_outcome && (
+                        <p className={`mt-3 text-sm font-semibold ${loss ? 'text-red-600' : 'text-[#006400]'}`}>
+                            {loss ? 'Palugi — this cropping lost money.'
+                                : season.financial_outcome === 'break_even' ? 'This cropping broke even.'
+                                : 'This cropping was profitable.'}
+                        </p>
+                    )}
+                    {season.net_farm_income == null && (
+                        // Deliberate: a half-encoded season is not break-even,
+                        // and an unrecorded income is not zero.
+                        <p className="mt-3 text-xs text-gray-400">
+                            Net income appears once both the cost and the income are recorded.
+                        </p>
+                    )}
+                </Section>
+            </div>
+        </ModalShell>
+    );
 }
 
 function Modal({ title, onClose, children }) {
@@ -558,6 +764,7 @@ export default function SeasonalIndex({ parcels, seasons, crops, filters, summar
     const [showAdd, setShowAdd]   = useState(false);
     const [editing, setEditing]   = useState(null);
     const [deleting, setDeleting] = useState(null);
+    const [viewing, setViewing]   = useState(null);
     const [yearInput, setYearInput] = useState(filters.year ?? '');
     const [searchInput, setSearchInput] = useState(filters.search ?? '');
 
@@ -688,7 +895,15 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                     {[
                         { label: 'Cropping seasons', value: (summary?.seasons ?? 0).toLocaleString('en-PH'), tone: '#006400' },
                         { label: 'Hectares planted', value: (summary?.hectares ?? 0).toLocaleString('en-PH'), tone: '#228B22' },
-                        { label: 'Total yield (kg)', value: (summary?.yield_kg ?? 0).toLocaleString('en-PH', { maximumFractionDigits: 0 }), tone: '#4CAF50' },
+                        {
+                            label: summary?.other_units
+                                // Named rather than folded in: adding sacks to
+                                // kilograms would misstate what the town grew.
+                                ? `Total yield (kg) · ${summary.other_units} in other units`
+                                : 'Total yield (kg)',
+                            value: (summary?.yield_kg ?? 0).toLocaleString('en-PH', { maximumFractionDigits: 0 }),
+                            tone: '#4CAF50',
+                        },
                         { label: 'Harvested', value: `${summary?.harvested ?? 0} of ${summary?.seasons ?? 0}`, tone: '#81C784' },
                     ].map(s => (
                         <div key={s.label} className="bg-white rounded-2xl border border-green-100 shadow-sm p-4">
@@ -948,7 +1163,9 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                 </thead>
                                 <tbody className="divide-y divide-green-50">
                                     {seasons.data.map(s => (
-                                        <tr key={s.id} className="hover:bg-green-50/60 transition-colors align-top">
+                                        <tr key={s.id}
+                                            onClick={() => setViewing(s)}
+                                            className="cursor-pointer hover:bg-green-50/60 transition-colors align-top">
                                             <td className="px-4 py-3">
                                                 <p className="font-medium text-gray-900">{farmerName(s)}</p>
                                                 <p className="text-xs text-gray-400">{parcelLabel(s.parcel)}</p>
@@ -969,10 +1186,10 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-gray-700">
                                                 {s.yield_kg != null
-                                                    ? <>{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> kg</span></>
+                                                    ? <>{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {s.production_unit ?? 'kg'}</span></>
                                                     : <span className="text-gray-300">—</span>}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
+                                            <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                                                 <Cost season={s} onAdd={() => openEdit(s)} mayEdit={can('edit seasonal')} />
                                             </td>
                                             <td className="px-4 py-3 text-right">
@@ -981,7 +1198,9 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             <td className="px-4 py-3">
                                                 <Fertilizer season={s} />
                                             </td>
-                                            <td className="px-4 py-3">
+                                            {/* The row opens the detail; these
+                                                do their own thing. */}
+                                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                                                 <div className="flex items-center justify-end gap-1.5">
                                                     {can('edit seasonal') && (
                                                         <button onClick={() => openEdit(s)} title="Edit"
@@ -1007,7 +1226,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                             was unusable on the laptops the office actually uses. */}
                         <ul className="xl:hidden divide-y divide-green-50">
                             {seasons.data.map(s => (
-                                <li key={s.id} className="p-4">
+                                <li key={s.id} onClick={() => setViewing(s)} className="cursor-pointer p-4">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <p className="font-semibold text-gray-900 truncate">
@@ -1020,7 +1239,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             </p>
                                             <p className="text-xs text-gray-400">{parcelLabel(s.parcel)}</p>
                                         </div>
-                                        <div className="flex flex-shrink-0 items-center gap-1.5">
+                                        <div className="flex flex-shrink-0 items-center gap-1.5" onClick={e => e.stopPropagation()}>
                                             {can('edit seasonal') && (
                                                 <button onClick={() => openEdit(s)} title="Edit"
                                                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700">
@@ -1047,7 +1266,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             <dt className="text-[11px] uppercase tracking-wide text-gray-400">Yield</dt>
                                             <dd className="font-semibold text-gray-800 tabular-nums">
                                                 {s.yield_kg != null
-                                                    ? `${Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })} kg`
+                                                    ? `${Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })} ${s.production_unit ?? 'kg'}`
                                                     : '—'}
                                             </dd>
                                         </div>
@@ -1101,6 +1320,16 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                     </div>
                 )}
             </div>
+
+            {/* The whole record for one cropping, opened by clicking its row. */}
+            {viewing && (
+                <SeasonDetail
+                    season={viewing}
+                    mayEdit={can('edit seasonal')}
+                    onClose={() => setViewing(null)}
+                    onEdit={() => { const s = viewing; setViewing(null); openEdit(s); }}
+                />
+            )}
 
             {/* Add Modal */}
             {showAdd && (

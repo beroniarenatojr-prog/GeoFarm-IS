@@ -185,10 +185,29 @@ class ClimateRiskScorer
             return null;
         }
 
+        /*
+         * Compare like with like, or do not compare.
+         *
+         * yield_kg holds whatever quantity was recorded and production_unit
+         * says what it counts. A neighbour who recorded 40 sacks against one
+         * who recorded 2,000 kg of the same crop differ by a factor of fifty
+         * in this column alone, so mixing them would report the farmer who
+         * writes in sacks as costing fifty times more per unit than their
+         * barangay — and this figure raises a farmer's risk level.
+         *
+         * Null means kilograms: every row predates the unit being recorded.
+         */
+        $unit = $season->production_unit;
+
         $peers = CropSeason::forVerifiedFarmers()
             ->where('crop_id', $season->crop_id)
             ->where('id', '!=', $season->id)
             ->whereHas('parcel', fn ($q) => $q->where('barangay', $barangay))
+            ->when(
+                $unit === null,
+                fn ($q) => $q->whereNull('production_unit'),
+                fn ($q) => $q->where('production_unit', $unit),
+            )
             ->whereNotNull('yield_kg')
             ->where('yield_kg', '>', 0)
             ->whereNotNull('area_planted_ha')
