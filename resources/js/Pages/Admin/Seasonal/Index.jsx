@@ -3,6 +3,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { router, useForm } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import ModalShell from '@/Components/ui/ModalShell';
+import SuggestSelect from '@/Components/ui/SuggestSelect';
 import { Pencil, Trash2, Coins } from 'lucide-react';
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
@@ -206,14 +207,17 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
     /*
      * Farmer first, then their land.
      *
-     * Staff know who they are encoding for; nobody knows a parcel by its
-     * number. Grouping under the farmer's name is what makes this the
-     * Farmer -> Parcel -> Season chain the register is built on.
+     * The farmer's name goes in `group` so it is both the heading on each
+     * suggestion and part of what the search matches — typing "Juan" has to
+     * find Juan's parcels, which is how staff actually look one up.
      */
-    const byFarmer = parcels.reduce((groups, parcel) => {
-        (groups[parcel.farmer] ??= []).push(parcel);
-        return groups;
-    }, {});
+    const parcelOptions = parcels.map(p => ({
+        id:    p.id,
+        group: p.farmer,
+        label: p.label,
+    }));
+
+    const cropOptions = crops.map(c => ({ id: c.id, label: c.crop_name }));
 
     function addInput() {
         setData('inputs', [...(data.inputs ?? []), emptyInput()]);
@@ -244,22 +248,15 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
                     <label className={label}>
                         Farmer &amp; parcel <span className="text-red-500">*</span>
                     </label>
-                    <select className={field} value={data.parcel_id ?? ''}
-                        onChange={e => setData('parcel_id', e.target.value)}>
-                        <option value="">— Select the farmer&apos;s parcel —</option>
-                        {Object.entries(byFarmer).map(([farmer, owned]) => (
-                            <optgroup key={farmer} label={farmer}>
-                                {owned.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-                            </optgroup>
-                        ))}
-                    </select>
+                    <SuggestSelect
+                        value={data.parcel_id ?? ''}
+                        onChange={id => setData('parcel_id', id)}
+                        options={parcelOptions}
+                        placeholder="Type a farmer's name, barangay or parcel no…"
+                        className={field}
+                        emptyHint="No farm parcels are recorded yet. A cropping season belongs to a parcel, so add land to a farmer first."
+                    />
                     {errors.parcel_id && <p className={err}>{errors.parcel_id}</p>}
-                    {parcels.length === 0 && (
-                        <p className="mt-1 text-xs text-amber-700">
-                            No farm parcels are recorded yet. A cropping season belongs to a
-                            parcel, so add land to a farmer first.
-                        </p>
-                    )}
                 </div>
             )}
 
@@ -282,10 +279,14 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
 
             <div>
                 <label className={label}>Crop</label>
-                <select className={field} value={data.crop_id} onChange={e => setData('crop_id', e.target.value)}>
-                    <option value="">— Select crop —</option>
-                    {crops.map(c => <option key={c.id} value={c.id}>{c.crop_name}</option>)}
-                </select>
+                <SuggestSelect
+                    value={data.crop_id ?? ''}
+                    onChange={id => setData('crop_id', id)}
+                    options={cropOptions}
+                    placeholder="Type a crop name…"
+                    className={field}
+                    emptyHint="No crops are on file yet. Add them under Lookups first."
+                />
                 {errors.crop_id && <p className={err}>{errors.crop_id}</p>}
             </div>
 
