@@ -8,8 +8,10 @@ use App\Models\Farmer;
 use App\Models\FarmParcel;
 use App\Models\SeasonalInput;
 use App\Models\User;
+use App\Services\CroppingScheduleService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -356,6 +358,32 @@ class SeasonalTrackingTest extends TestCase
     }
 
     // ------------------------------------------------------------- filters
+
+    public function test_a_failure_to_open_seasons_never_takes_down_the_parcel_save(): void
+    {
+        /*
+         * The parcel is what the office came to enter; the seasons are a
+         * convenience derived from it. When this was not guarded, a server
+         * whose seasonal migrations had not run returned a 500 for every
+         * attempt to edit a farmer, because the observer wrote to a column
+         * that did not exist yet.
+         */
+        Log::spy();
+
+        $this->mock(CroppingScheduleService::class, function ($mock) {
+            $mock->shouldReceive('openFor')
+                ->andThrow(new \RuntimeException("Unknown column 'is_organic'"));
+        });
+
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet/Dry']);
+
+        $this->assertTrue($parcel->exists, 'the parcel must still be saved');
+        $this->assertDatabaseHas('farm_parcels', ['id' => $parcel->id]);
+
+        Log::shouldHaveReceived('error')
+            ->withArgs(fn (string $message) => str_contains($message, 'Could not open cropping seasons'))
+            ->once();
+    }
 
     public function test_the_add_form_is_given_the_parcels_it_needs_to_offer(): void
     {
