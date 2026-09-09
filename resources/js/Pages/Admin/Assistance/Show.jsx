@@ -2,7 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Lock, Unlock, Send, Wallet, Users, Package as PackageIcon } from 'lucide-react';
+import { Lock, Unlock, Send, Wallet, Package as PackageIcon } from 'lucide-react';
 import ModalShell from '@/Components/ui/ModalShell';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
 import { usePageLock } from '@/hooks/usePageLock';
@@ -268,102 +268,45 @@ export default function AssistanceShow({
             </div>
 
             {/* ------------------------------------------------- overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            {/* Two facts, not three cards.
 
-                {/* Money: what was committed, what has gone out, what is left. */}
-                <div className="bg-white rounded-xl shadow-sm p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Wallet className="h-4 w-4 text-[#006400]" />
-                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Budget</h3>
-                    </div>
+                Budget, Beneficiaries and Items given out were replaced: the
+                budget field is gone from the form, so that card read "₱0 left
+                of ₱0" on every new programme — a figure the office never gave,
+                presented as though it had. What remains is what the programme
+                is and what it has actually handed out. The beneficiary counts
+                and the goods breakdown are still on the page, in the
+                distributions table below. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 
-                    <p className="text-2xl font-bold text-gray-900 tabular-nums">
-                        {peso(summary.remaining ?? 0)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                        left of {peso(summary.budget ?? 0)}
-                    </p>
-
-                    {summary.budget_used_pct !== null && summary.budget_used_pct !== undefined && (
-                        <>
-                            <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
-                                <div className="h-full rounded-full bg-[#006400]"
-                                    style={{ width: `${Math.max(summary.budget_used_pct, 0.5)}%` }} />
-                            </div>
-                            <p className="mt-1.5 text-xs text-gray-500">
-                                {peso(summary.disbursed ?? 0)} disbursed · {summary.budget_used_pct}% used
-                            </p>
-                        </>
-                    )}
-
-                    {summary.cash_covers_more != null && (
-                        <p className="mt-2 text-xs text-gray-500">
-                            Covers about <b className="text-gray-700">{summary.cash_covers_more.toLocaleString()}</b> more
-                            farmers at {peso(program.standard_cash_amount ?? 0)} each.
-                        </p>
-                    )}
-                </div>
-
-                {/* Who has been served. */}
-                <div className="bg-white rounded-xl shadow-sm p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Users className="h-4 w-4 text-[#006400]" />
-                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Beneficiaries</h3>
-                    </div>
-
-                    <p className="text-2xl font-bold text-gray-900 tabular-nums">{summary.beneficiaries ?? 0}</p>
-                    <p className="text-xs text-gray-500">farmers served</p>
-
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800">
-                            {summary.claimed ?? 0} claimed
-                        </span>
-                        {summary.pending > 0 && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                                {summary.pending} pending
-                            </span>
-                        )}
-                        {summary.forfeited > 0 && (
-                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600">
-                                {summary.forfeited} forfeited
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Goods this programme has taken out of the store. */}
                 <div className="bg-white rounded-xl shadow-sm p-5">
                     <div className="flex items-center gap-2 mb-3">
                         <PackageIcon className="h-4 w-4 text-[#006400]" />
-                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Items given out</h3>
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Program</h3>
                     </div>
 
-                    {summary.goods?.length ? (
-                        <ul className="space-y-2">
-                            {summary.goods.map(g => (
-                                <li key={g.item}>
-                                    <div className="flex items-baseline justify-between gap-3">
-                                        <span className="text-sm text-gray-800 truncate">{g.item}</span>
-                                        <span className="text-sm font-bold tabular-nums text-[#006400] whitespace-nowrap">
-                                            {Number(g.issued).toLocaleString()} {g.unit}
-                                        </span>
-                                    </div>
-                                    <p className="text-[11px] text-gray-500">
-                                        {Number(g.in_stock).toLocaleString()} {g.unit} still in the store
-                                    </p>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <>
-                            <p className="text-2xl font-bold text-gray-300 tabular-nums">—</p>
-                            <p className="text-xs text-gray-500">
-                                {programItems.length
-                                    ? 'Nothing issued yet.'
-                                    : 'Cash only — no items in this program’s package.'}
-                            </p>
-                        </>
-                    )}
+                    <p className="text-2xl font-bold text-gray-900 leading-tight">
+                        {program.program_name}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                        {program.assistance_type?.type_name ?? 'No type recorded'}
+                    </p>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Wallet className="h-4 w-4 text-[#006400]" />
+                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Actual amount</h3>
+                    </div>
+
+                    <p className="text-2xl font-bold text-gray-900 tabular-nums">
+                        {peso(summary.disbursed ?? 0)}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                        {/* Cash actually handed over, summed from the
+                            distributions — not a plan or an allocation. */}
+                        released to {(summary.beneficiaries ?? 0).toLocaleString()} farmer{summary.beneficiaries === 1 ? '' : 's'}
+                    </p>
                 </div>
             </div>
 
