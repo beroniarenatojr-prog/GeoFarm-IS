@@ -38,6 +38,9 @@ class FarmerController extends Controller
                 'id', 'rsbsa_no', 'first_name', 'middle_name', 'last_name', 'suffix',
                 'barangay', 'city_municipality', 'province', 'birthdate', 'sex',
                 'mobile_no', 'is_4ps', 'is_indigenous', 'pwd', 'organization_name',
+                // Part 2 of the RSBSA form: which of the four sectors this
+                // registration belongs to.
+                'livelihood_type',
             ])
             ->when($request->search, fn ($q, $s) => $q->where(function ($query) use ($s) {
                 $query->where('first_name', 'like', "%$s%")

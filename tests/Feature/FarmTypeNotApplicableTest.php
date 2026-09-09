@@ -162,6 +162,20 @@ class FarmTypeNotApplicableTest extends TestCase
         $this->assertNull($parcel->farmType?->type_name);
     }
 
+    public function test_the_registry_carries_the_livelihood_category(): void
+    {
+        // The registry lists only the columns it renders, so a new column has
+        // to be added to that select or it arrives undefined and the cell
+        // silently reads "Not stated" for every farmer.
+        $farmer = $this->farmer();
+        $farmer->update(['livelihood_type' => 'Fisher']);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.farmers.index'))
+            ->assertInertia(fn ($page) => $page
+                ->where('farmers.data.0.livelihood_type', 'Fisher'));
+    }
+
     // ------------------------------------------------ the registration flow
 
     public function test_public_registration_has_the_same_protection(): void

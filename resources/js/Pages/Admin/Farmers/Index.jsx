@@ -42,6 +42,39 @@ function YesNo({ value }) {
     );
 }
 
+/**
+ * Which of Part 2's four sectors this registration belongs to.
+ *
+ * Each gets its own colour so the mix in a barangay reads at a glance — the
+ * office reports on these four separately, and a column of identical grey
+ * chips would need reading word by word.
+ *
+ * "Fisher" is what the column stores; "Fisherfolk" is what the form and this
+ * badge call it, which is the term the office uses.
+ */
+const LIVELIHOODS = {
+    'Farmer':      { label: 'Farmer',      tone: 'bg-green-100 text-green-800' },
+    'Farm Worker': { label: 'Farm Worker', tone: 'bg-amber-100 text-amber-800' },
+    'Fisher':      { label: 'Fisherfolk',  tone: 'bg-sky-100 text-sky-800' },
+    'Agri-Youth':  { label: 'Agri-Youth',  tone: 'bg-violet-100 text-violet-800' },
+};
+
+function Livelihood({ value }) {
+    const sector = LIVELIHOODS[value];
+
+    // Not every record carries one — the field is optional on the form, and
+    // registrations predating Part 2 have none. Saying so beats an empty cell.
+    if (!sector) {
+        return <span className="text-xs text-gray-300">Not stated</span>;
+    }
+
+    return (
+        <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${sector.tone}`}>
+            {sector.label}
+        </span>
+    );
+}
+
 export default function FarmersIndex({ farmers, filters, barangays, sort, perPage, pendingCount }) {
     const { can } = usePermissions();
     const [search, setSearch] = useState(filters.search ?? '');
@@ -196,6 +229,7 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
                                         <SortHeader column="last_name" label="Name" sort={sort} onSort={onSort} />
                                         <SortHeader column="barangay" label="Barangay" sort={sort} onSort={onSort} />
                                         <SortHeader column="birthdate" label="Birthdate" sort={sort} onSort={onSort} />
+                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Category</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Sex</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider">Contact</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-center">4Ps</th>
@@ -214,6 +248,7 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
                                             </td>
                                             <td className="px-4 py-3 text-gray-700 whitespace-nowrap">{f.barangay || '—'}</td>
                                             <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{f.birthdate ? formatDate(f.birthdate, 'date-only') : '—'}</td>
+                                            <td className="px-4 py-3"><Livelihood value={f.livelihood_type} /></td>
                                             <td className="px-4 py-3 text-gray-600">{f.sex || '—'}</td>
                                             <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{f.mobile_no || '—'}</td>
                                             <td className="px-4 py-3 text-center"><YesNo value={f.is_4ps} /></td>
@@ -250,6 +285,7 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
                                     <div className="min-w-0">
                                         <p className="font-semibold text-gray-900 truncate">{fullName(f)}</p>
                                         <p className="text-xs font-mono text-gray-500 mt-0.5">{f.rsbsa_no || 'No RSBSA number'}</p>
+                                        <p className="mt-1.5"><Livelihood value={f.livelihood_type} /></p>
                                     </div>
                                     <div className="flex flex-shrink-0 gap-1">
                                         {can('view farmers') && (
