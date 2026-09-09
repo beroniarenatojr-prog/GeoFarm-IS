@@ -93,8 +93,14 @@ export default function AdminLayout({
     // from conceptually, not wherever browser history happens to point.
     backHref = null,
     backLabel = 'Go back',
-    // The page has locked itself. The visit is refused by the page's own guard
-    // either way; this just stops the arrow looking merely broken.
+    /*
+     * The page has locked itself.
+     *
+     * Navigation away is refused by the page's own guard either way. This
+     * makes that visible rather than merely broken: the back arrow shows a
+     * padlock, and the sidebar is taken off screen for as long as the lock
+     * holds, so the only way out on offer is releasing it.
+     */
     backLocked = false,
 }) {
     const page = usePage();
@@ -172,8 +178,14 @@ export default function AdminLayout({
 
     return (
         <div className="min-h-screen flex">
-            {/* LAYER 1: Sidebar - Deep Forest Green */}
-            <aside
+            {/* LAYER 1: Sidebar - Deep Forest Green
+
+                Hidden entirely while the page is locked. The lock exists to
+                keep a clerk on one screen through a hand-out queue, and it
+                already refuses navigation — but leaving the menu on screen
+                invites clicks that are only answered with a refusal. A door
+                that will not open is better not shown. */}
+            {!backLocked && <aside
                 onMouseEnter={() => setHovering(true)}
                 onMouseLeave={() => setHovering(false)}
                 className={`fixed left-0 top-0 bottom-0 flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} overflow-y-auto z-50 sidebar-scroll`}
@@ -287,10 +299,14 @@ export default function AdminLayout({
                     {/* Profile opens a panel beside the sidebar; logout lives in it. */}
                     <UserMenu expanded={expanded} onOpenChange={setMenuOpen} />
                 </div>
-            </aside>
+            </aside>}
 
-            {/* Main content, over plain paper and the seal */}
-            <div className="flex-1 flex flex-col min-w-0 relative overflow-hidden ml-16">
+            {/* Main content, over plain paper and the seal.
+
+                The left offset only clears the sidebar's collapsed width, so
+                it goes with it — otherwise a locked page would sit against a
+                16-unit strip of nothing. */}
+            <div className={`flex-1 flex flex-col min-w-0 relative overflow-hidden ${backLocked ? '' : 'ml-16'}`}>
                 {/* The paper. Flat now — the contour lines and the two green
                     washes that used to sit here have gone, so the seal is the
                     only thing behind the content. */}
