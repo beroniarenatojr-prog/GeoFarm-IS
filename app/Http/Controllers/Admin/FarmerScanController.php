@@ -79,10 +79,17 @@ class FarmerScanController extends Controller
             return (int) $code;
         }
 
-        // The path this application writes, wherever it is hosted: the domain
-        // differs between the office's server and a laptop, and a card printed
-        // under one must still scan under the other.
-        if (preg_match('#/admin/farmers/(\d+)(?:[/?#]|$)#', $code, $found)) {
+        /*
+         * The path this application writes, wherever it is hosted: the domain
+         * differs between the office's server and a laptop, and a card printed
+         * under one must still scan under the other.
+         *
+         * Delimited with ~ deliberately. With # as the delimiter, the # inside
+         * the character class ends the pattern early — PCRE then reads "]|$)"
+         * as modifiers, preg_match fails, and Laravel turns that warning into
+         * a 500 on every scan.
+         */
+        if (preg_match('~/admin/farmers/(\d+)(?:[/?\#]|$)~', $code, $found)) {
             return (int) $found[1];
         }
 
