@@ -164,6 +164,54 @@ function Cost({ season, onAdd, mayEdit }) {
 }
 
 /**
+ * The year's cost, with what each cropping contributed beneath it.
+ *
+ * The breakdown is the point: annual cost IS wet plus dry, and a single total
+ * with no parts hides which season the money went into.
+ */
+function AnnualFigure({ row, onAdd, mayEdit }) {
+    if (row.annual.cost == null) {
+        return mayEdit
+            ? <button onClick={onAdd} className="text-xs font-medium text-[#006400] hover:underline">+ Add cost</button>
+            : <span className="text-gray-300">—</span>;
+    }
+
+    const parts = row.seasons.filter(s => s.production_cost != null);
+
+    return (
+        <div>
+            <p className="font-semibold text-gray-900 tabular-nums">{peso(row.annual.cost, 0)}</p>
+            {parts.length > 1 && (
+                <p className="text-xs tabular-nums text-gray-400">
+                    {parts.map(s => `${s.season} ${peso(s.production_cost, 0)}`).join(' · ')}
+                </p>
+            )}
+        </div>
+    );
+}
+
+/** The year's net income, once both a cost and an income exist for it. */
+function AnnualNet({ row }) {
+    if (row.annual.net_income == null) {
+        return <span className="text-gray-300">—</span>;
+    }
+
+    const loss = row.annual.net_income < 0;
+    const even = row.annual.net_income === 0;
+
+    return (
+        <div>
+            <p className={`font-semibold tabular-nums ${loss ? 'text-red-600' : 'text-gray-900'}`}>
+                {peso(row.annual.net_income, 0)}
+            </p>
+            <p className={`text-xs font-medium ${loss ? 'text-red-600' : even ? 'text-gray-500' : 'text-[#006400]'}`}>
+                {loss ? 'Palugi' : even ? 'Break-even' : 'Profitable'}
+            </p>
+        </div>
+    );
+}
+
+/**
  * What the season cleared, and whether that was a loss.
  *
  * Blank until both figures exist. A season with a cost but no income yet is
@@ -762,7 +810,7 @@ function SeasonForm({ data, setData, errors, crops, parcels = [], showParcel = f
 }
 
 // ── Main Page ────────────────────────────────────────────────────────────────
-export default function SeasonalIndex({ parcels, seasons, crops, filters, summary, costByYear = [], barangays = [], commodities = [] }) {
+export default function SeasonalIndex({ parcels, rows, crops, filters, summary, costByYear = [], barangays = [], commodities = [] }) {
     const { can } = usePermissions();
     const [showAdd, setShowAdd]   = useState(false);
     const [editing, setEditing]   = useState(null);
@@ -1127,13 +1175,13 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                 </div>
 
                 <p className="text-xs text-gray-500">
-                    Showing {seasons.data?.length ?? 0} of {seasons.total ?? 0} season(s)
+                    Showing {rows.data?.length ?? 0} of {rows.total ?? 0} cropping year(s)
                 </p>
             </div>
 
             {/* Seasons */}
             <div className="bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
-                {seasons.data?.length === 0 ? (
+                {rows.data?.length === 0 ? (
                     <div className="py-20 text-center">
                         <p className="text-sm font-medium text-gray-600">
                             {hasActiveFilters ? 'No seasons match those filters' : 'No cropping seasons recorded yet'}
@@ -1164,55 +1212,76 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-green-50">
-                                    {seasons.data.map(s => (
-                                        <tr key={s.id}
-                                            onClick={() => setViewing(s)}
-                                            className="cursor-pointer hover:bg-green-50/60 transition-colors align-top">
+                                    {rows.data.map(row => (
+                                        <tr key={row.key} className="hover:bg-green-50/60 transition-colors align-top">
                                             <td className="px-4 py-3">
-                                                <p className="font-medium text-gray-900">{farmerName(s)}</p>
-                                                <p className="text-xs text-gray-400">{parcelLabel(s.parcel)}</p>
+                                                <p className="font-medium text-gray-900">{farmerName(row.seasons[0])}</p>
+                                                <p className="text-xs text-gray-400">{parcelLabel(row.parcel)}</p>
                                             </td>
                                             <td className="px-4 py-3">
-                                                <p className="font-medium text-gray-900">{s.crop?.crop_name ?? '—'}</p>
-                                                <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-400">
-                                                    <Badge value={s.season} /> {s.cropping_year}
+                                                <p className="font-medium text-gray-900">{row.crop?.crop_name ?? '—'}</p>
+                                                {/* Each badge opens its own cropping. A parcel
+                                                    worked twice shows Wet and Dry side by side,
+                                                    and either one is a way into that record. */}
+                                                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
+                                                    {row.seasons.map(s => (
+                                                        <button key={s.id} onClick={() => setViewing(s)}
+                                                            title={`Open the ${s.season} season`}
+                                                            className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-500">
+                                                            <Badge value={s.season} />
+                                                        </button>
+                                                    ))}
+                                                    {row.cropping_year}
                                                 </p>
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {s.area_planted_ha != null
-                                                    ? <>{Number(s.area_planted_ha).toFixed(2)}<span className="text-gray-400"> ha</span></>
+                                                {row.annual.area != null
+                                                    ? <>{Number(row.annual.area).toFixed(2)}<span className="text-gray-400"> ha</span></>
                                                     : <span className="text-gray-300">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {s.yield_kg != null
-                                                    ? <>{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {s.production_unit ?? 'kg'}</span></>
-                                                    : <span className="text-gray-300">—</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                                                <Cost season={s} onAdd={() => openEdit(s)} mayEdit={can('edit seasonal')} />
+                                                {row.annual.yield != null
+                                                    ? <>{Number(row.annual.yield).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {row.annual.unit}</span></>
+                                                    : row.annual.mixed_units
+                                                        // Sacks and kilograms do not add up.
+                                                        ? <span className="text-xs text-amber-700">mixed units</span>
+                                                        : <span className="text-gray-300">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                <NetIncome season={s} />
+                                                <AnnualFigure row={row} field="cost"
+                                                    onAdd={() => openEdit(row.seasons[0])} mayEdit={can('edit seasonal')} />
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <AnnualNet row={row} />
                                             </td>
                                             <td className="px-4 py-3">
-                                                <Fertilizer season={s} />
+                                                {row.seasons.map(s => (
+                                                    <div key={s.id} className="text-xs">
+                                                        <Fertilizer season={s} />
+                                                    </div>
+                                                ))}
                                             </td>
-                                            {/* The row opens the detail; these
-                                                do their own thing. */}
-                                            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    {can('edit seasonal') && (
-                                                        <button onClick={() => openEdit(s)} title="Edit"
-                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
-                                                            <Pencil className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    )}
-                                                    {can('delete seasonal') && (
-                                                        <button onClick={() => setDeleting(s)} title="Delete"
-                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    )}
+                                            <td className="px-4 py-3">
+                                                {/* One set per cropping: the two seasons are
+                                                    still separate records to edit or remove. */}
+                                                <div className="flex flex-col items-end gap-1.5">
+                                                    {row.seasons.map(s => (
+                                                        <div key={s.id} className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] uppercase text-gray-400">{s.season}</span>
+                                                            {can('edit seasonal') && (
+                                                                <button onClick={() => openEdit(s)} title={`Edit the ${s.season} season`}
+                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
+                                                                    <Pencil className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                            {can('delete seasonal') && (
+                                                                <button onClick={() => setDeleting(s)} title={`Delete the ${s.season} season`}
+                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1224,67 +1293,76 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                         {/* Below xl the same rows as cards — a 13-column table
                             was unusable on the laptops the office actually uses. */}
                         <ul className="xl:hidden divide-y divide-green-50">
-                            {seasons.data.map(s => (
-                                <li key={s.id} onClick={() => setViewing(s)} className="cursor-pointer p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <p className="font-semibold text-gray-900 truncate">
-                                                {s.crop?.crop_name ?? 'Unrecorded crop'}
-                                            </p>
-                                            <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                                                <Badge value={s.season} /> {s.cropping_year}
-                                                <span className="text-gray-300">·</span>
-                                                {farmerName(s)}
-                                            </p>
-                                            <p className="text-xs text-gray-400">{parcelLabel(s.parcel)}</p>
-                                        </div>
-                                        <div className="flex flex-shrink-0 items-center gap-1.5" onClick={e => e.stopPropagation()}>
-                                            {can('edit seasonal') && (
-                                                <button onClick={() => openEdit(s)} title="Edit"
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700">
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
-                                            {can('delete seasonal') && (
-                                                <button onClick={() => setDeleting(s)} title="Delete"
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
-                                        </div>
+                            {rows.data.map(row => (
+                                <li key={row.key} className="p-4">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-gray-900 truncate">
+                                            {row.crop?.crop_name ?? 'Unrecorded crop'}
+                                        </p>
+                                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                                            {row.seasons.map(s => <Badge key={s.id} value={s.season} />)}
+                                            {row.cropping_year}
+                                            <span className="text-gray-300">·</span>
+                                            {farmerName(row.seasons[0])}
+                                        </p>
+                                        <p className="text-xs text-gray-400">{parcelLabel(row.parcel)}</p>
                                     </div>
 
                                     <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                                         <div>
                                             <dt className="text-[11px] uppercase tracking-wide text-gray-400">Area</dt>
                                             <dd className="font-semibold text-gray-800 tabular-nums">
-                                                {s.area_planted_ha != null ? `${Number(s.area_planted_ha).toFixed(2)} ha` : '—'}
+                                                {row.annual.area != null ? `${Number(row.annual.area).toFixed(2)} ha` : '—'}
                                             </dd>
                                         </div>
                                         <div>
                                             <dt className="text-[11px] uppercase tracking-wide text-gray-400">Yield</dt>
                                             <dd className="font-semibold text-gray-800 tabular-nums">
-                                                {s.yield_kg != null
-                                                    ? `${Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })} ${s.production_unit ?? 'kg'}`
-                                                    : '—'}
+                                                {row.annual.yield != null
+                                                    ? `${Number(row.annual.yield).toLocaleString('en-PH', { maximumFractionDigits: 0 })} ${row.annual.unit}`
+                                                    : row.annual.mixed_units ? 'mixed units' : '—'}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-[11px] uppercase tracking-wide text-gray-400">Cost</dt>
+                                            <dt className="text-[11px] uppercase tracking-wide text-gray-400">Annual cost</dt>
                                             <dd className="font-semibold text-gray-800 tabular-nums">
-                                                {s.production_cost != null ? peso(s.production_cost, 0) : '—'}
+                                                {row.annual.cost != null ? peso(row.annual.cost, 0) : '—'}
                                             </dd>
                                         </div>
                                         <div>
-                                            <dt className="text-[11px] uppercase tracking-wide text-gray-400">Per kilo</dt>
-                                            <dd className="font-semibold text-[#006400] tabular-nums">
-                                                {s.cost_per_kg != null ? peso(s.cost_per_kg) : '—'}
+                                            <dt className="text-[11px] uppercase tracking-wide text-gray-400">Net income</dt>
+                                            <dd className={`font-semibold tabular-nums ${
+                                                row.annual.net_income < 0 ? 'text-red-600' : 'text-[#006400]'
+                                            }`}>
+                                                {row.annual.net_income != null ? peso(row.annual.net_income, 0) : '—'}
                                             </dd>
                                         </div>
                                     </dl>
 
-                                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                                        <Fertilizer season={s} compact />
+                                    {/* One line per cropping, each its own record. */}
+                                    <div className="mt-3 space-y-1.5">
+                                        {row.seasons.map(s => (
+                                            <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
+                                                <button onClick={() => setViewing(s)} className="flex items-center gap-2 text-xs text-gray-600">
+                                                    <Badge value={s.season} />
+                                                    {s.production_cost != null ? peso(s.production_cost, 0) : 'no cost yet'}
+                                                </button>
+                                                <div className="flex flex-shrink-0 items-center gap-1.5">
+                                                    {can('edit seasonal') && (
+                                                        <button onClick={() => openEdit(s)} title={`Edit the ${s.season} season`}
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700">
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                    {can('delete seasonal') && (
+                                                        <button onClick={() => setDeleting(s)} title={`Delete the ${s.season} season`}
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </li>
                             ))}
@@ -1299,7 +1377,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                             Page {seasons.current_page} of {seasons.last_page}
                         </p>
                         <div className="flex gap-2">
-                            {seasons.links.map((link, i) => (
+                            {rows.links.map((link, i) => (
                                 <button
                                     key={i}
                                     onClick={() => link.url && router.get(link.url)}

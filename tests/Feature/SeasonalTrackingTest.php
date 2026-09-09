@@ -413,6 +413,79 @@ class SeasonalTrackingTest extends TestCase
             ->assertSessionHasErrors('parcel_id');
     }
 
+    public function test_a_wet_dry_parcel_is_one_row_holding_both_croppings(): void
+    {
+        /*
+         * Two records, one line.
+         *
+         * The wet and dry seasons keep their own production, price and cost —
+         * that is what makes annual cost = wet + dry work — but listed
+         * separately they read as duplicates of each other.
+         */
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet/Dry']);
+
+        CropSeason::where('parcel_id', $parcel->id)->where('season', 'wet')
+            ->update(['production_cost' => 85000, 'total_income' => 110000, 'yield_kg' => 5000]);
+        CropSeason::where('parcel_id', $parcel->id)->where('season', 'dry')
+            ->update(['production_cost' => 78000, 'total_income' => 108000, 'yield_kg' => 4500]);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->has('rows.data', 1)
+                ->has('rows.data.0.seasons', 2)
+                // The spec's own worked example.
+                ->where('rows.data.0.annual.cost', 163000)
+                ->where('rows.data.0.annual.revenue', 218000)
+                ->where('rows.data.0.annual.net_income', 55000)
+                ->where('rows.data.0.annual.yield', 9500)
+                // The same land worked twice is not twice the land.
+                ->where('rows.data.0.annual.area', 2.5));
+    }
+
+    public function test_a_single_season_parcel_is_still_one_row(): void
+    {
+        $this->parcel(['cropping_schedule' => 'Wet']);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->has('rows.data', 1)
+                ->has('rows.data.0.seasons', 1));
+    }
+
+    public function test_two_crops_on_one_parcel_stay_apart(): void
+    {
+        // Rice in the wet season and corn in the dry is two croppings, not one
+        // "Wet/Dry rice" — so the crop is part of what groups a row.
+        $rice   = Crop::create(['crop_name' => 'Rice']);
+        $corn   = Crop::create(['crop_name' => 'Corn']);
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet/Dry']);
+
+        CropSeason::where('parcel_id', $parcel->id)->where('season', 'wet')->update(['crop_id' => $rice->id]);
+        CropSeason::where('parcel_id', $parcel->id)->where('season', 'dry')->update(['crop_id' => $corn->id]);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page->has('rows.data', 2));
+    }
+
+    public function test_mixed_units_are_flagged_rather_than_added(): void
+    {
+        $parcel = $this->parcel(['cropping_schedule' => 'Wet/Dry']);
+
+        CropSeason::where('parcel_id', $parcel->id)->where('season', 'wet')
+            ->update(['yield_kg' => 5000, 'production_unit' => 'kg']);
+        CropSeason::where('parcel_id', $parcel->id)->where('season', 'dry')
+            ->update(['yield_kg' => 40, 'production_unit' => 'sacks']);
+
+        $this->actingAs($this->staff())
+            ->get(route('admin.seasonal.index'))
+            ->assertInertia(fn ($page) => $page
+                ->where('rows.data.0.annual.yield', null)
+                ->where('rows.data.0.annual.mixed_units', true));
+    }
+
     public function test_the_table_payload_carries_what_the_detail_modal_reads(): void
     {
         /*
@@ -442,15 +515,15 @@ class SeasonalTrackingTest extends TestCase
         $this->actingAs($this->staff())
             ->get(route('admin.seasonal.index'))
             ->assertInertia(fn ($page) => $page
-                ->where('seasons.data.0.parcel.farm_type.type_name', 'Irrigated')
-                ->where('seasons.data.0.parcel.barangay', 'Annafunan')
-                ->has('seasons.data.0.inputs', 1)
-                ->where('seasons.data.0.inputs.0.name', 'Urea')
+                ->where('rows.data.0.parcel.farm_type.type_name', 'Irrigated')
+                ->where('rows.data.0.parcel.barangay', 'Annafunan')
+                ->has('rows.data.0.seasons.0.inputs', 1)
+                ->where('rows.data.0.seasons.0.inputs.0.name', 'Urea')
                 // Derived figures the modal shows without recomputing them.
-                ->where('seasons.data.0.gross_revenue', 110000)
-                ->where('seasons.data.0.input_cost_breakdown.fertilizer', 30000)
-                ->has('seasons.data.0.cost_per_hectare')
-                ->has('seasons.data.0.grown_organically'));
+                ->where('rows.data.0.seasons.0.gross_revenue', 110000)
+                ->where('rows.data.0.seasons.0.input_cost_breakdown.fertilizer', 30000)
+                ->has('rows.data.0.seasons.0.cost_per_hectare')
+                ->has('rows.data.0.seasons.0.grown_organically'));
     }
 
     public function test_the_recorded_unit_survives_an_edit(): void
@@ -520,10 +593,10 @@ class SeasonalTrackingTest extends TestCase
 
         $this->actingAs($this->staff())
             ->get(route('admin.seasonal.index', ['barangay' => 'Annafunan']))
-            ->assertInertia(fn ($page) => $page->has('seasons.data', 1));
+            ->assertInertia(fn ($page) => $page->has('rows.data', 1));
 
         $this->actingAs($this->staff())
             ->get(route('admin.seasonal.index', ['commodity' => 'Corn']))
-            ->assertInertia(fn ($page) => $page->has('seasons.data', 1));
+            ->assertInertia(fn ($page) => $page->has('rows.data', 1));
     }
 }

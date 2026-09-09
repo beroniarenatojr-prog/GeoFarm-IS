@@ -8,6 +8,7 @@ use App\Models\CropSeason;
 use App\Models\Farmer;
 use App\Models\FarmParcel;
 use App\Models\SeasonalInput;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -46,35 +47,6 @@ class CropSeasonController extends Controller
             ])
             ->values();
 
-        // Show all seasons by default with filters
-        $seasons = CropSeason::with(['crop', 'parcel.farmer', 'parcel.farmType', 'inputs'])
-            ->when($request->parcel_id, fn($q, $p) => $q->where('parcel_id', $p))
-            ->when($request->season, fn($q, $s) => $q->where('season', $s))
-            ->when($request->year,   fn($q, $y) => $q->where('cropping_year', $y))
-            ->when($request->crop_id, fn($q, $c) => $q->where('crop_id', $c))
-            // Barangay and commodity live on the parcel, not the season, so
-            // both filter through the relationship rather than duplicating
-            // those columns onto every cropping.
-            ->when($request->barangay, fn ($q, $b) => $q->whereHas(
-                'parcel', fn ($p) => $p->where('barangay', 'like', "%{$b}%")
-            ))
-            ->when($request->commodity, fn ($q, $c) => $q->whereHas(
-                'parcel', fn ($p) => $p->where('commodity', 'like', "%{$c}%")
-            ))
-            ->when($request->search, function($q, $search) {
-                $q->whereHas('parcel.farmer', function($q) use ($search) {
-                    $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere('rsbsa_no', 'like', "%{$search}%");
-                });
-            })
-            // Farmer, then year, then season — the order the office reads a
-            // holding's history in.
-            ->orderByDesc('cropping_year')
-            ->orderBy('season')
-            ->paginate(20)
-            ->withQueryString();
-
         // Totals for the summary strip. Deliberately reflect the SAME filters
         // as the table, so the headline figures always describe what is on
         // screen rather than the whole database.
@@ -83,6 +55,9 @@ class CropSeasonController extends Controller
             ->when($request->season, fn ($q, $s) => $q->where('season', $s))
             ->when($request->year, fn ($q, $y) => $q->where('cropping_year', $y))
             ->when($request->crop_id, fn ($q, $c) => $q->where('crop_id', $c))
+            // Barangay and commodity live on the parcel, not the season, so
+            // both filter through the relationship rather than duplicating
+            // those columns onto every cropping.
             ->when($request->barangay, fn ($q, $b) => $q->whereHas(
                 'parcel', fn ($p) => $p->where('barangay', 'like', "%{$b}%")
             ))
@@ -96,9 +71,12 @@ class CropSeasonController extends Controller
                     ->orWhere('rsbsa_no', 'like', "%{$search}%")
             ));
 
+        $rows = $this->croppingYears($scoped());
+
+        // Totals for the summary strip. Deliberately reflect the SAME filters
         return Inertia::render('Admin/Seasonal/Index', [
             'parcels'        => $parcels,
-            'seasons'        => $seasons,
+            'rows'           => $rows,
             'crops'          => Crop::orderBy('crop_name')->get(['id', 'crop_name']),
             'filters'        => $request->only([
                 'parcel_id', 'season', 'year', 'crop_id', 'search', 'barangay', 'commodity',
@@ -142,6 +120,107 @@ class CropSeasonController extends Controller
             // Cost of production by year, split wet and dry.
             'costByYear'     => $this->costByYear($scoped()),
         ]);
+    }
+
+    /**
+     * One row per parcel, crop and year — with its wet and dry croppings in it.
+     *
+     * A parcel worked Wet/Dry holds two season records, because wet and dry
+     * have their own production, price and cost, and the year's cost is the
+     * two added together. Listed one per line those read as duplicates of each
+     * other, so the table groups them and the records stay as they are.
+     *
+     * Grouped in the query rather than in the browser for two reasons: the old
+     * ordering put every dry season before every wet one, so a parcel's two
+     * croppings were never adjacent; and paginating rows would split a pair
+     * across a page boundary, showing half a year at the bottom of one page.
+     *
+     * The crop is part of the key. A parcel planted with rice in the wet season
+     * and corn in the dry is two different croppings, and calling that one
+     * "Wet/Dry rice" would be wrong.
+     */
+    private function croppingYears($query): LengthAwarePaginator
+    {
+        $groups = (clone $query)
+            ->select('parcel_id', 'cropping_year', 'crop_id')
+            ->groupBy('parcel_id', 'cropping_year', 'crop_id')
+            ->orderByDesc('cropping_year')
+            ->orderBy('parcel_id')
+            ->paginate(20)
+            ->withQueryString();
+
+        if ($groups->isEmpty()) {
+            return $groups;
+        }
+
+        // The seasons behind the groups on this page. One query for the lot,
+        // matched on the same three columns the grouping used.
+        $seasons = CropSeason::with(['crop', 'parcel.farmer', 'parcel.farmType', 'inputs'])
+            ->where(function ($q) use ($groups) {
+                foreach ($groups as $group) {
+                    $q->orWhere(function ($match) use ($group) {
+                        $match->where('parcel_id', $group->parcel_id)
+                            ->where('cropping_year', $group->cropping_year);
+
+                        $group->crop_id === null
+                            ? $match->whereNull('crop_id')
+                            : $match->where('crop_id', $group->crop_id);
+                    });
+                }
+            })
+            // Wet reads first because the wet season is cropped first.
+            ->orderBy('season', 'desc')
+            ->get();
+
+        return $groups->through(function ($group) use ($seasons) {
+            $inGroup = $seasons->filter(fn (CropSeason $s) => $s->parcel_id === $group->parcel_id
+                && (int) $s->cropping_year === (int) $group->cropping_year
+                && $s->crop_id === $group->crop_id)->values();
+
+            return [
+                'key'           => $group->parcel_id . '-' . $group->cropping_year . '-' . ($group->crop_id ?? 'none'),
+                'cropping_year' => (int) $group->cropping_year,
+                'crop'          => $inGroup->first()?->crop,
+                'parcel'        => $inGroup->first()?->parcel,
+                'seasons'       => $inGroup,
+                'annual'        => $this->annualTotals($inGroup),
+            ];
+        });
+    }
+
+    /**
+     * The year's figures for one parcel and crop.
+     *
+     * Cost and revenue are null when nothing has been recorded, rather than
+     * zero: a year still being encoded has not earned nothing. Quantity is
+     * only added up when both croppings were measured the same way — sacks and
+     * kilograms do not sum.
+     *
+     * @param  \Illuminate\Support\Collection<int, CropSeason>  $seasons
+     */
+    private function annualTotals($seasons): array
+    {
+        $costed  = $seasons->whereNotNull('production_cost');
+        $earned  = $seasons->whereNotNull('total_income');
+        $units   = $seasons->whereNotNull('yield_kg')
+            ->map(fn (CropSeason $s) => $s->production_unit ?? 'kg')->unique();
+
+        $cost    = $costed->isEmpty() ? null : round((float) $costed->sum('production_cost'), 2);
+        $revenue = $earned->isEmpty() ? null : round((float) $earned->sum('total_income'), 2);
+
+        return [
+            // The planted area of the largest cropping. Summing would double a
+            // holding worked twice — it is the same two hectares each season.
+            'area'       => $seasons->max('area_planted_ha') === null
+                ? null : round((float) $seasons->max('area_planted_ha'), 2),
+            'yield'      => $units->count() === 1
+                ? round((float) $seasons->sum('yield_kg'), 2) : null,
+            'unit'       => $units->count() === 1 ? $units->first() : null,
+            'mixed_units' => $units->count() > 1,
+            'cost'       => $cost,
+            'revenue'    => $revenue,
+            'net_income' => ($cost === null || $revenue === null) ? null : round($revenue - $cost, 2),
+        ];
     }
 
     /**
