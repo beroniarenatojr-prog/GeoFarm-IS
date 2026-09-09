@@ -1371,10 +1371,10 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                 )}
 
                 {/* Pagination */}
-                {seasons.last_page > 1 && (
+                {rows.last_page > 1 && (
                     <div className="px-4 py-3 border-t flex items-center justify-between">
                         <p className="text-xs text-gray-500">
-                            Page {seasons.current_page} of {seasons.last_page}
+                            Page {rows.current_page} of {rows.last_page}
                         </p>
                         <div className="flex gap-2">
                             {rows.links.map((link, i) => (
