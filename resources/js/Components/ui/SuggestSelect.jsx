@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import AnchoredList from './AnchoredList';
 
 /**
  * A type-ahead for a field that stores an id rather than what was typed.
@@ -51,6 +52,7 @@ export default function SuggestSelect({
     const [active, setActive] = useState(0);
 
     const boxRef = useRef(null);
+    const anchorRef = useRef(null);
     const generatedId = useId();
     const inputId = id ?? generatedId;
     const listId = `${inputId}-suggestions`;
@@ -110,6 +112,9 @@ export default function SuggestSelect({
         if (!open) return;
 
         const onPointerDown = e => {
+            // The list is portalled out of this element, so it has to be
+            // recognised explicitly or choosing from it reads as clicking away.
+            if (e.target.closest?.('[data-anchored-list]')) return;
             if (boxRef.current && !boxRef.current.contains(e.target)) close();
         };
 
@@ -176,7 +181,7 @@ export default function SuggestSelect({
 
     return (
         <div ref={boxRef} className="relative">
-            <div className="relative">
+            <div ref={anchorRef} className="relative">
                 <input
                     id={inputId}
                     type="text"
@@ -214,11 +219,13 @@ export default function SuggestSelect({
                 )}
             </div>
 
-            {showList && (
+            {/* Portalled so a dialog's scrolling body cannot clip it. */}
+            <AnchoredList anchorRef={anchorRef} open={showList} maxHeight={240}
+                className="rounded-xl border border-green-100 bg-white shadow-xl">
                 <ul
                     id={listId}
                     role="listbox"
-                    className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-green-100 bg-white py-1 shadow-xl"
+                    className="py-1"
                 >
                     {matches.map((option, index) => (
                         <li
@@ -263,13 +270,12 @@ export default function SuggestSelect({
                         </li>
                     )}
                 </ul>
-            )}
+            </AnchoredList>
 
-            {showNoMatch && (
-                <div className="absolute z-30 mt-1 w-full rounded-xl border border-gray-100 bg-white px-4 py-2 text-xs text-gray-500 shadow-xl">
-                    Nothing matches that. Only records already on file can be chosen here.
-                </div>
-            )}
+            <AnchoredList anchorRef={anchorRef} open={showNoMatch} maxHeight={80}
+                className="rounded-xl border border-gray-100 bg-white px-4 py-2 text-xs text-gray-500 shadow-xl">
+                Nothing matches that. Only records already on file can be chosen here.
+            </AnchoredList>
 
             {options.length === 0 && emptyHint && (
                 <p className="mt-1 text-xs text-amber-700">{emptyHint}</p>

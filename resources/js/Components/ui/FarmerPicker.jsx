@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, X, Loader2, CheckCircle2 } from 'lucide-react';
+import AnchoredList from './AnchoredList';
 
 /**
  * Type-ahead farmer selector.
@@ -30,6 +31,7 @@ export default function FarmerPicker({
     const [active, setActive] = useState(0);
 
     const boxRef = useRef(null);
+    const anchorRef = useRef(null);
     const abortRef = useRef(null);
 
     // Clearing the value from outside (a form reset after save) must clear the
@@ -79,6 +81,9 @@ export default function FarmerPicker({
     // Clicking away closes the suggestions.
     useEffect(() => {
         const onDown = e => {
+            // The suggestions are portalled out of this element now, so a click
+            // on one is technically outside it — recognise it explicitly.
+            if (e.target.closest?.('[data-anchored-list]')) return;
             if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
         };
         document.addEventListener('mousedown', onDown);
@@ -142,7 +147,7 @@ export default function FarmerPicker({
                 </label>
             )}
 
-            <div className="relative">
+            <div ref={anchorRef} className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                     type="text"
@@ -163,14 +168,19 @@ export default function FarmerPicker({
                 )}
             </div>
 
-            {open && matches.length > 0 && (
-                <div className="absolute z-20 mt-1 max-h-56 w-full divide-y divide-gray-50 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+            {/* Portalled, so a short dialog cannot clip it — see AnchoredList. */}
+            <AnchoredList anchorRef={anchorRef} open={open && matches.length > 0} maxHeight={224}
+                className="divide-y divide-gray-50 rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div>
                     {matches.map((m, i) => (
                         <button
                             key={m.id}
                             type="button"
                             onMouseEnter={() => setActive(i)}
-                            onClick={() => pick(m)}
+                            // mousedown, not click: the outside-click handler
+                            // fires on mousedown and the list now lives outside
+                            // this component, so a click would never land.
+                            onMouseDown={e => { e.preventDefault(); pick(m); }}
                             className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
                                 i === active ? 'bg-green-50' : 'hover:bg-green-50'
                             }`}
@@ -185,13 +195,16 @@ export default function FarmerPicker({
                         </button>
                     ))}
                 </div>
-            )}
+            </AnchoredList>
 
-            {open && !loading && term.trim().length >= 2 && matches.length === 0 && (
-                <div className="absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-3 text-center text-xs text-gray-500 shadow-lg">
-                    No farmer matches “{term}”.
-                </div>
-            )}
+            <AnchoredList
+                anchorRef={anchorRef}
+                open={open && !loading && term.trim().length >= 2 && matches.length === 0}
+                maxHeight={80}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-3 text-center text-xs text-gray-500 shadow-lg"
+            >
+                No farmer matches “{term}”.
+            </AnchoredList>
 
             {term.trim().length > 0 && term.trim().length < 2 && (
                 <p className="mt-1 text-[11px] text-gray-400">Keep typing — at least two characters.</p>
