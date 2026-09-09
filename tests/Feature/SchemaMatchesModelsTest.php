@@ -25,6 +25,20 @@ class SchemaMatchesModelsTest extends TestCase
             'Farmer'      => [Farmer::class],
             'FarmerChild' => [FarmerChild::class],
             'FarmParcel'  => [FarmParcel::class],
+            /*
+             * Added after FinancialAssistance was found declaring
+             * assistance_type_id with no column behind it — the controller
+             * wrote to it, and saving any programme died with "Unknown
+             * column". Three models was too narrow a net for a guard whose
+             * whole purpose is catching that.
+             */
+            'FinancialAssistance'    => [\App\Models\FinancialAssistance::class],
+            'AssistanceDistribution' => [\App\Models\AssistanceDistribution::class],
+            'AssistanceType'         => [\App\Models\AssistanceType::class],
+            'CropSeason'             => [\App\Models\CropSeason::class],
+            'SeasonalInput'          => [\App\Models\SeasonalInput::class],
+            'Barangay'               => [\App\Models\Barangay::class],
+            'ClimateRiskAssessment'  => [\App\Models\ClimateRiskAssessment::class],
         ];
     }
 

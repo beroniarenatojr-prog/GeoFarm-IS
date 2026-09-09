@@ -81,18 +81,27 @@ class AssistanceController extends Controller
             'new_type_distribution' => 'required|in:' . implode(',', AssistanceType::DISTRIBUTION_TYPES),
         ]);
 
-        $name = trim($data['new_type_name']);
+        /*
+         * One name, however it was typed.
+         *
+         * "Fuel Subsidy", "fuel subsidy" and " FUEL SUBSIDY " are the same
+         * type. Surrounding space is trimmed, runs of space inside collapse to
+         * one, and the lookup lower-cases both sides rather than trusting the
+         * connection's collation — which is case-insensitive on MySQL but not
+         * everywhere, and this list is what every assistance report groups by.
+         */
+        $name = preg_replace('/\s+/', ' ', trim($data['new_type_name']));
 
-        // Reuse an existing type of the same name rather than accumulating
-        // near-duplicates. MySQL's default collation makes this
-        // case-insensitive, so "Fishery" will not sit beside "fishery".
-        $type = AssistanceType::firstOrCreate(
-            ['type_name' => $name],
-            [
-                'category'          => AssistanceType::CUSTOM_CATEGORY,
-                'distribution_type' => $data['new_type_distribution'],
-            ],
-        );
+        $existing = AssistanceType::whereRaw('LOWER(type_name) = ?', [mb_strtolower($name)])->first();
+
+        $type = $existing ?? AssistanceType::create([
+            // The first spelling wins, so an existing type keeps the casing the
+            // office already uses rather than being rewritten by whoever
+            // typed it next.
+            'type_name'         => $name,
+            'category'          => AssistanceType::CUSTOM_CATEGORY,
+            'distribution_type' => $data['new_type_distribution'],
+        ]);
 
         $request->merge(['assistance_type_id' => $type->id]);
     }

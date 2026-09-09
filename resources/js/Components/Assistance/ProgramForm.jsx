@@ -1,4 +1,6 @@
 import { useForm } from '@inertiajs/react';
+import SuggestSelect from '@/Components/ui/SuggestSelect';
+import MultiSuggestSelect from '@/Components/ui/MultiSuggestSelect';
 
 /**
  * The assistance programme form, shared by the full page at
@@ -64,7 +66,7 @@ function Field({ label: text, span, error, children }) {
 }
 
 export function ProgramFormFields({
-    form, assistanceTypes = [], barangays = [], stockItems = [], barangayHeight = 'max-h-32',
+    form, assistanceTypes = [], barangays = [], stockItems = [],
 }) {
     const { data, setData, errors } = form;
 
@@ -99,14 +101,25 @@ export function ProgramFormFields({
 
     const stockFor = id => stockItems.find(s => String(s.id) === String(id));
 
-    const toggleBarangay = id => setData(
-        'barangay_ids',
-        data.barangay_ids.includes(id)
-            ? data.barangay_ids.filter(bid => bid !== id)
-            : [...data.barangay_ids, id],
-    );
+    /*
+     * The types to offer, plus the one being added.
+     *
+     * A pending new type has no id yet — it is created server-side on save —
+     * so it rides along under the CUSTOM_TYPE sentinel. Without it the box
+     * would go blank the moment "Add new type: …" was chosen.
+     */
+    const typeOptions = [
+        ...assistanceTypes.map(type => ({
+            id:    type.id,
+            label: type.type_name,
+            meta:  type.category,
+        })),
+        ...(isCustomType && data.new_type_name
+            ? [{ id: CUSTOM_TYPE, label: data.new_type_name, meta: 'New type' }]
+            : []),
+    ];
 
-    const allSelected = barangays.length > 0 && data.barangay_ids.length === barangays.length;
+    const barangayOptions = barangays.map(b => ({ id: b.id, label: b.name }));
 
     return (
         // Two columns: the short fields pair up instead of each claiming a full
@@ -118,14 +131,23 @@ export function ProgramFormFields({
             </Field>
 
             <Field label="Assistance Type" span error={errors.assistance_type_id}>
-                <select value={data.assistance_type_id} onChange={e => setData('assistance_type_id', e.target.value)}
-                    className={field} required>
-                    <option value="">Select type</option>
-                    {assistanceTypes.map(type => (
-                        <option key={type.id} value={type.id}>{type.category} - {type.type_name}</option>
-                    ))}
-                    <option value={CUSTOM_TYPE}>Other — type a new one…</option>
-                </select>
+                {/* Typing filters the list; typing something that is not on it
+                    offers to add it. The pending new type is carried as an
+                    option of its own so the box keeps showing what was typed
+                    rather than falling back to blank. */}
+                <SuggestSelect
+                    value={data.assistance_type_id}
+                    onChange={id => setData('assistance_type_id', id)}
+                    options={typeOptions}
+                    onCreate={name => setData(d => ({
+                        ...d,
+                        assistance_type_id: CUSTOM_TYPE,
+                        new_type_name: name,
+                    }))}
+                    createLabel={name => `Add new type: ${name}`}
+                    placeholder="Type to search, or type a new one…"
+                    className={field}
+                />
             </Field>
 
             {isCustomType && (
@@ -303,34 +325,23 @@ export function ProgramFormFields({
                     <label className={`${label} mb-0`}>
                         Target Barangays
                         <span className="ml-1.5 font-normal text-gray-400">
-                            {data.barangay_ids.length === 0
-                                ? '— all barangays'
-                                : `— ${data.barangay_ids.length} of ${barangays.length}`}
+                            {data.barangay_ids.length === 0 ? '— all barangays' : ''}
                         </span>
                     </label>
-                    <button
-                        type="button"
-                        onClick={() => setData('barangay_ids', allSelected ? [] : barangays.map(b => b.id))}
-                        className="text-xs font-medium text-green-700 hover:underline"
-                    >
-                        {allSelected ? 'Clear all' : 'Select all'}
-                    </button>
                 </div>
 
-                <div className={`border border-gray-300 rounded-lg p-2 overflow-y-auto overscroll-contain bg-gray-50 ${barangayHeight}`}>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-0.5">
-                        {barangays.map(barangay => (
-                            <label key={barangay.id}
-                                className="flex items-center gap-1.5 text-xs cursor-pointer rounded px-1 py-0.5 hover:bg-white">
-                                <input type="checkbox"
-                                    checked={data.barangay_ids.includes(barangay.id)}
-                                    onChange={() => toggleBarangay(barangay.id)}
-                                    className="h-3.5 w-3.5 rounded text-green-700 focus:ring-green-500" />
-                                <span className="truncate text-gray-700">{barangay.name}</span>
-                            </label>
-                        ))}
-                    </div>
-                </div>
+                {/* Typing beats hunting through 46 checkboxes. What is chosen
+                    stays visible as chips, since a filtered list would hide
+                    the very rows already ticked. */}
+                <MultiSuggestSelect
+                    value={data.barangay_ids}
+                    onChange={ids => setData('barangay_ids', ids)}
+                    options={barangayOptions}
+                    allLabel="Select all barangays"
+                    placeholder="Type a barangay name…"
+                    className={field}
+                    emptyHint="No active barangays are on file."
+                />
 
                 {errors.barangay_ids && <p className={errorText}>{errors.barangay_ids}</p>}
             </div>

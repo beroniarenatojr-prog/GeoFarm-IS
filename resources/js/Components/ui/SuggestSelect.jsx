@@ -30,6 +30,13 @@ export default function SuggestSelect({
     limit = 10,
     /** Shown under the box when there is nothing at all to choose from. */
     emptyHint = null,
+    /**
+     * Optional. Given the typed text when it matches nothing on the list,
+     * which turns this into a combobox that can add as well as choose.
+     */
+    onCreate = null,
+    /** How the create row reads, e.g. text => `Add new type: ${text}`. */
+    createLabel = text => `Add “${text}”`,
 }) {
     const chosen = useMemo(
         () => options.find(option => String(option.id) === String(value)) ?? null,
@@ -82,6 +89,21 @@ export default function SuggestSelect({
         return [...starts, ...contains].slice(0, limit);
     }, [query, typing, options, limit]);
 
+    /*
+     * Whether to offer adding what was typed.
+     *
+     * Only when nothing already matches it, compared with case and surrounding
+     * spaces ignored — "Fuel Subsidy", "fuel subsidy" and " FUEL SUBSIDY "
+     * are one type, and offering to add a second would be how the list fills
+     * with near-duplicates.
+     */
+    const typed = query.trim().replace(/\s+/g, ' ');
+
+    const canCreate = onCreate
+        && typing
+        && typed !== ''
+        && !options.some(o => `${o.label}`.trim().toLowerCase() === typed.toLowerCase());
+
     useEffect(() => setActive(0), [query]);
 
     useEffect(() => {
@@ -114,23 +136,34 @@ export default function SuggestSelect({
         setOpen(false);
     };
 
+    const create = () => {
+        onCreate?.(typed);
+        setQuery(typed);
+        setTyping(false);
+        setOpen(false);
+    };
+
+    // The create row sits after the matches, so Enter on a real suggestion
+    // always wins over adding a near-miss as a new entry.
+    const rowCount = matches.length + (canCreate ? 1 : 0);
+
     const onKeyDown = e => {
         if (e.key === 'ArrowDown' && !open) {
             setOpen(true);
             return;
         }
 
-        if (!open || matches.length === 0) return;
+        if (!open || rowCount === 0) return;
 
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setActive(i => (i + 1) % matches.length);
+            setActive(i => (i + 1) % rowCount);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            setActive(i => (i - 1 + matches.length) % matches.length);
+            setActive(i => (i - 1 + rowCount) % rowCount);
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            choose(matches[active]);
+            active < matches.length ? choose(matches[active]) : create();
         } else if (e.key === 'Escape') {
             close();
         } else if (e.key === 'Tab') {
@@ -138,8 +171,8 @@ export default function SuggestSelect({
         }
     };
 
-    const showList = open && matches.length > 0;
-    const showNoMatch = open && matches.length === 0 && options.length > 0;
+    const showList = open && rowCount > 0;
+    const showNoMatch = open && rowCount === 0 && options.length > 0;
 
     return (
         <div ref={boxRef} className="relative">
@@ -214,6 +247,21 @@ export default function SuggestSelect({
                             )}
                         </li>
                     ))}
+
+                    {canCreate && (
+                        <li
+                            id={`${listId}-${matches.length}`}
+                            role="option"
+                            aria-selected={active === matches.length}
+                            onMouseDown={e => { e.preventDefault(); create(); }}
+                            onMouseEnter={() => setActive(matches.length)}
+                            className={`cursor-pointer border-t border-green-100 px-4 py-2 text-sm font-medium text-[#006400] ${
+                                active === matches.length ? 'bg-green-50' : ''
+                            }`}
+                        >
+                            {createLabel(typed)}
+                        </li>
+                    )}
                 </ul>
             )}
 
