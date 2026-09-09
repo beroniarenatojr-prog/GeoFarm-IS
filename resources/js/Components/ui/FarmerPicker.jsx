@@ -200,7 +200,9 @@ export default function FarmerPicker({
                 </label>
             )}
 
-            <div className="flex items-center gap-2">
+            {/* items-stretch, so the scan control is a full-height button
+                beside the box rather than a small square floating next to it. */}
+            <div className="flex items-stretch gap-2">
             <div ref={anchorRef} className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
@@ -224,14 +226,20 @@ export default function FarmerPicker({
 
             {/* The camera path. A handheld scanner needs no button — it types
                 into the box beside this one. */}
+            {/* Deliberately a real button, not an icon tucked in a corner.
+                Scanning is the fast path at a counter with a queue — it should
+                look like the offer it is, and be big enough to hit without
+                aiming. The label drops on narrow screens; the icon and the
+                accessible name stay. */}
             <button
                 type="button"
                 onClick={() => { setScanError(null); setCameraOpen(true); }}
                 title="Scan the QR on the back of the farmer's ID card"
                 aria-label="Scan the farmer's ID card"
-                className="shrink-0 rounded-lg border border-green-200 bg-green-50 p-2 text-[#006400] hover:bg-green-100"
+                className="flex shrink-0 items-center gap-2 rounded-lg border-2 border-green-600 bg-green-50 px-4 text-sm font-semibold text-[#006400] transition-colors hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500"
             >
-                <ScanLine className="h-4 w-4" />
+                <ScanLine className="h-6 w-6" />
+                <span className="hidden sm:inline">Scan ID</span>
             </button>
             </div>
 
