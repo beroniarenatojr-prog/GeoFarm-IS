@@ -159,11 +159,6 @@ export function ProgramFormFields({
                 <p className={`sm:col-span-2 ${errorText}`}>{errors.new_type_name}</p>
             )}
 
-            <Field label="Total Budget (₱)" error={errors.total_budget}>
-                <input type="number" step="0.01" value={data.total_budget}
-                    onChange={e => setData('total_budget', e.target.value)} className={field} required />
-            </Field>
-
             <Field label="Status" error={errors.status}>
                 <select value={data.status} onChange={e => setData('status', e.target.value)} className={field}>
                     <option value="draft">Draft</option>

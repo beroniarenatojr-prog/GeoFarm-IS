@@ -191,7 +191,11 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
                 />
             </td>
 
-            <td className="px-4 py-3">₱{Number(p.total_budget ?? 0).toLocaleString()}</td>
+            <td className="px-4 py-3">
+                {p.total_budget != null
+                    ? `₱${Number(p.total_budget).toLocaleString()}`
+                    : <span className="text-gray-300">—</span>}
+            </td>
 
             <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
                 {formatDate(p.start_date, 'date-only')} – {formatDate(p.end_date, 'date-only')}

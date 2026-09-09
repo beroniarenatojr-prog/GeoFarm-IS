@@ -214,9 +214,14 @@ export default function AssistanceShow({
                         <p className="mt-1 text-sm font-semibold text-gray-900">
                             {formatDate(program.start_date, 'date-only')} – {formatDate(program.end_date, 'date-only')}
                         </p>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                            Total budget {peso(program.total_budget)}
-                        </p>
+                        {/* Only when one was recorded. The form stopped asking
+                            for a budget, and printing ₱0.00 would state a
+                            figure the office never gave. */}
+                        {program.total_budget != null && (
+                            <p className="mt-0.5 text-xs text-gray-500">
+                                Total budget {peso(program.total_budget)}
+                            </p>
+                        )}
                     </div>
 
                     {/* What one farmer receives — previously only visible inside

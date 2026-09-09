@@ -61,16 +61,6 @@ class AssistanceController extends Controller
     private const CUSTOM_TYPE = '__other__';
 
     /**
-     * Turn an "Other" selection into a real assistance_types row, so the
-     * programme still points at a proper type.
-     *
-     * Storing the typed name as loose text on the programme would have broken
-     * every report that groups by type, and left the system unable to tell
-     * whether the programme hands out goods — which is what decides if it has
-     * an item list at all. Creating the row instead keeps the foreign key
-     * intact and makes the new type reusable next time.
-     */
-    /**
      * What a new type hands out, worked out rather than asked.
      *
      * The form used to ask, and the answer earned almost nothing: the item
@@ -91,6 +81,16 @@ class AssistanceController extends Controller
         return $items->isNotEmpty() ? 'material' : 'financial';
     }
 
+    /**
+     * Turn an "Other" selection into a real assistance_types row, so the
+     * programme still points at a proper type.
+     *
+     * Storing the typed name as loose text on the programme would have broken
+     * every report that groups by type, and left the system unable to tell
+     * whether the programme hands out goods — which is what decides if it has
+     * an item list at all. Creating the row instead keeps the foreign key
+     * intact and makes the new type reusable next time.
+     */
     private function resolveCustomType(Request $request): void
     {
         if ($request->input('assistance_type_id') !== self::CUSTOM_TYPE) {
@@ -252,7 +252,7 @@ class AssistanceController extends Controller
             'program_name'           => 'required|string|max:100',
             'assistance_type_id'     => 'required|exists:assistance_types,id',
             'description'            => 'nullable|string',
-            'total_budget'           => 'required|numeric|min:0',
+            'total_budget'           => 'nullable|numeric|min:0',
             'standard_cash_amount'   => 'nullable|numeric|min:0',
             'start_date'             => 'required|date',
             'end_date'               => 'required|date|after_or_equal:start_date',
@@ -612,7 +612,7 @@ class AssistanceController extends Controller
             'program_name'           => 'required|string|max:100',
             'assistance_type_id'     => 'required|exists:assistance_types,id',
             'description'            => 'nullable|string',
-            'total_budget'           => 'required|numeric|min:0',
+            'total_budget'           => 'nullable|numeric|min:0',
             'standard_cash_amount'   => 'nullable|numeric|min:0',
             'start_date'             => 'required|date',
             'end_date'               => 'required|date|after_or_equal:start_date',

@@ -62,7 +62,6 @@ class AssistanceProgramFormTest extends TestCase
     {
         return $this->actingAs($this->staff())->post(route('admin.assistance.store'), array_merge([
             'program_name'  => 'Rice Input Support',
-            'total_budget'  => 500000,
             'start_date'    => '2026-01-01',
             'end_date'      => '2026-12-31',
         ], $overrides));
@@ -207,6 +206,38 @@ class AssistanceProgramFormTest extends TestCase
     {
         $this->submit(['assistance_type_id' => 99999])
             ->assertSessionHasErrors('assistance_type_id');
+    }
+
+    public function test_a_programme_saves_without_a_budget(): void
+    {
+        // The form stopped asking for one, so "required" would have made every
+        // new programme unsavable.
+        $type = AssistanceType::create([
+            'type_name'         => 'Seed Distribution',
+            'category'          => 'Production Inputs',
+            'distribution_type' => 'material',
+        ]);
+
+        $this->submit(['assistance_type_id' => $type->id])->assertSessionHasNoErrors();
+
+        // Null, not zero: the office never stated a figure, and zero would
+        // read as a programme funded with nothing.
+        $this->assertNull(FinancialAssistance::firstOrFail()->total_budget);
+    }
+
+    public function test_a_budget_is_still_kept_when_one_is_supplied(): void
+    {
+        // Existing programmes carry budgets, and an import may still send one.
+        $type = AssistanceType::create([
+            'type_name'         => 'Cash Assistance',
+            'category'          => 'Financial & Credit',
+            'distribution_type' => 'financial',
+        ]);
+
+        $this->submit(['assistance_type_id' => $type->id, 'total_budget' => 500000])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('500000.00', FinancialAssistance::firstOrFail()->total_budget);
     }
 
     // --------------------------------------------------------- barangays
