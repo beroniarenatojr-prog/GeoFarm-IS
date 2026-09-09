@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CropSeasonController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\FarmAssetController;
 use App\Http\Controllers\Admin\FarmerLookupController;
+use App\Http\Controllers\Admin\FarmerScanController;
 use App\Http\Controllers\Admin\FarmInventoryController;
 use App\Http\Controllers\Admin\FarmerController;
 use App\Http\Controllers\Admin\FarmerEmailController;
@@ -62,6 +63,11 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     // Shared type-ahead used by every form that has to name a farmer.
     Route::get('farmer-options', FarmerLookupController::class)
         ->middleware('permission:view farmers')->name('farmer-options');
+    // Resolves the QR on the back of a farmer's ID card. Same permission as
+    // the type-ahead it stands in for — scanning is a faster way to name a
+    // farmer, not a way to reach one you could not otherwise look up.
+    Route::get('farmer-scan', FarmerScanController::class)
+        ->middleware('permission:view farmers')->name('farmer-scan');
 
     // The signed-in user's own account. No extra permission: every staff role
     // may view and edit their own details, and only their own.

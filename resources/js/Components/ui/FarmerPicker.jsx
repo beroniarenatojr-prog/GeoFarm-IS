@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, X, Loader2, CheckCircle2 } from 'lucide-react';
+import { Search, X, Loader2, CheckCircle2, ScanLine } from 'lucide-react';
 import AnchoredList from './AnchoredList';
+import QrScanner from './QrScanner';
 
 /**
  * Type-ahead farmer selector.
@@ -30,6 +31,10 @@ export default function FarmerPicker({
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
 
+    const [cameraOpen, setCameraOpen] = useState(false);
+    const [scanning, setScanning] = useState(false);
+    const [scanError, setScanError] = useState(null);
+
     const boxRef = useRef(null);
     const anchorRef = useRef(null);
     const abortRef = useRef(null);
@@ -41,6 +46,13 @@ export default function FarmerPicker({
     }, [value]);
 
     useEffect(() => {
+        // A card landed in the box — resolve it instead of searching for its
+        // URL as though someone had typed that by hand.
+        if (looksScanned(term)) {
+            resolveScan(term);
+            return;
+        }
+
         if (term.trim().length < 2) {
             setMatches([]);
             setLoading(false);
@@ -98,6 +110,47 @@ export default function FarmerPicker({
         setOpen(false);
     };
 
+    /*
+     * A scanned ID card, from either kind of scanner.
+     *
+     * A handheld scanner behaves as a keyboard: it types the QR's contents
+     * into whatever has focus. So rather than guessing at typing speed, this
+     * simply recognises the card's own URL as soon as it appears in the box —
+     * which also covers a paste, and the camera path below.
+     */
+    const resolveScan = async code => {
+        setScanning(true);
+        setScanError(null);
+
+        try {
+            const url = `/admin/farmer-scan?code=${encodeURIComponent(code)}`
+                + (includeUnverified ? '&include_unverified=1' : '');
+            const res = await fetch(url, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+
+            const body = await res.json();
+
+            if (res.ok) {
+                pick(body);
+                setCameraOpen(false);
+            } else {
+                // The server says why — an unverified farmer, a deleted record,
+                // a QR from something else entirely.
+                setScanError(body.message ?? 'That card could not be read.');
+                setTerm('');
+            }
+        } catch {
+            setScanError('Could not reach the server to look that card up.');
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    /** Whether what is in the box is a scanned card rather than a search. */
+    const looksScanned = text => /\/admin\/farmers\/\d+/.test(text);
+
     const clear = () => {
         setChosen(null);
         onChange('');
@@ -147,7 +200,8 @@ export default function FarmerPicker({
                 </label>
             )}
 
-            <div ref={anchorRef} className="relative">
+            <div className="flex items-center gap-2">
+            <div ref={anchorRef} className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                     type="text"
@@ -163,10 +217,27 @@ export default function FarmerPicker({
                         error ? 'border-red-500' : 'border-gray-300'
                     }`}
                 />
-                {loading && (
+                {(loading || scanning) && (
                     <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
                 )}
             </div>
+
+            {/* The camera path. A handheld scanner needs no button — it types
+                into the box beside this one. */}
+            <button
+                type="button"
+                onClick={() => { setScanError(null); setCameraOpen(true); }}
+                title="Scan the QR on the back of the farmer's ID card"
+                aria-label="Scan the farmer's ID card"
+                className="shrink-0 rounded-lg border border-green-200 bg-green-50 p-2 text-[#006400] hover:bg-green-100"
+            >
+                <ScanLine className="h-4 w-4" />
+            </button>
+            </div>
+
+            {scanError && (
+                <p className="mt-1 text-xs text-red-600">{scanError}</p>
+            )}
 
             {/* Portalled, so a short dialog cannot clip it — see AnchoredList. */}
             <AnchoredList anchorRef={anchorRef} open={open && matches.length > 0} maxHeight={224}
@@ -211,6 +282,12 @@ export default function FarmerPicker({
             )}
 
             {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+
+            <QrScanner
+                open={cameraOpen}
+                onClose={() => setCameraOpen(false)}
+                onScan={resolveScan}
+            />
         </div>
     );
 }
