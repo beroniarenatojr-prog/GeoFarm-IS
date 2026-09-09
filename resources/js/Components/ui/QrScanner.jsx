@@ -1,15 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Camera, AlertTriangle } from 'lucide-react';
+import { Camera, AlertTriangle } from 'lucide-react';
+import jsQR from 'jsqr';
 import ModalShell from './ModalShell';
 
 /**
  * Reads the QR on the back of a farmer's ID card using the device camera.
  *
- * Built on the browser's own BarcodeDetector rather than a bundled decoder.
- * That keeps a QR library — and the megabyte it costs on a rural connection —
- * out of a build the office loads over mobile data. The trade is support:
- * Chrome and Edge have it, Firefox and iOS Safari do not, so this says so
- * plainly and the handheld scanner remains the way in on those.
+ * Two decoders, in that order:
+ *
+ *   1. BarcodeDetector, the browser's own, where it exists. It is faster and
+ *      hardware-accelerated, and costs nothing to use.
+ *   2. jsQR otherwise.
+ *
+ * The fallback is not optional. BarcodeDetector ships on Android, macOS and
+ * ChromeOS — but NOT on Chrome for Windows, and Brave disables it outright.
+ * Windows desktop is exactly what sits on the distribution counter, so a
+ * camera feature resting on the native API alone would have failed on the one
+ * machine it was built for.
  *
  * The camera stream is stopped on every exit path. A viewfinder left running
  * behind a closed dialog is both a battery drain and a light on the laptop
@@ -17,13 +24,12 @@ import ModalShell from './ModalShell';
  */
 export default function QrScanner({ open, onClose, onScan }) {
     const videoRef = useRef(null);
+    const canvasRef = useRef(null);
     const streamRef = useRef(null);
     const [error, setError] = useState(null);
 
-    const supported = typeof window !== 'undefined' && 'BarcodeDetector' in window;
-
     useEffect(() => {
-        if (!open || !supported) return;
+        if (!open) return;
 
         let cancelled = false;
         let frame = null;
@@ -55,20 +61,49 @@ export default function QrScanner({ open, onClose, onScan }) {
                     await videoRef.current.play();
                 }
 
-                const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+                const native = 'BarcodeDetector' in window
+                    ? new window.BarcodeDetector({ formats: ['qr_code'] })
+                    : null;
+
+                /** One frame through whichever decoder this browser has. */
+                const decode = async video => {
+                    if (native) {
+                        const found = await native.detect(video);
+                        return found[0]?.rawValue ?? null;
+                    }
+
+                    // jsQR reads pixels, so the frame goes through a canvas.
+                    const canvas = canvasRef.current;
+                    const { videoWidth: w, videoHeight: h } = video;
+
+                    // Zero until the stream's metadata arrives.
+                    if (!canvas || !w || !h) return null;
+
+                    canvas.width = w;
+                    canvas.height = h;
+
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    ctx.drawImage(video, 0, 0, w, h);
+
+                    return jsQR(ctx.getImageData(0, 0, w, h).data, w, h, {
+                        // The card is held up to the camera, so only the normal
+                        // orientation needs trying — half the work per frame.
+                        inversionAttempts: 'dontInvert',
+                    })?.data ?? null;
+                };
 
                 const read = async () => {
                     if (cancelled || !videoRef.current) return;
 
                     try {
-                        const found = await detector.detect(videoRef.current);
+                        const value = await decode(videoRef.current);
 
-                        if (found.length > 0 && found[0].rawValue) {
+                        if (value) {
                             // One scan per opening: the card stays in frame for
                             // several frames after it is read, and firing on
                             // each would look up the same farmer repeatedly.
                             stop();
-                            onScan(found[0].rawValue);
+                            onScan(value);
                             return;
                         }
                     } catch {
@@ -91,7 +126,7 @@ export default function QrScanner({ open, onClose, onScan }) {
         })();
 
         return stop;
-    }, [open, supported, onScan]);
+    }, [open, onScan]);
 
     if (!open) return null;
 
@@ -108,18 +143,7 @@ export default function QrScanner({ open, onClose, onScan }) {
                 </button>
             }
         >
-            {!supported ? (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-                    <div className="text-sm text-amber-900">
-                        <p className="font-semibold">This browser cannot use the camera to scan.</p>
-                        <p className="mt-1 text-amber-800">
-                            Chrome or Edge can. A handheld barcode scanner works here either
-                            way — point it at the card with the farmer box focused.
-                        </p>
-                    </div>
-                </div>
-            ) : error ? (
+            {error ? (
                 <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
                     <p className="text-sm text-red-900">{error}</p>
@@ -128,6 +152,9 @@ export default function QrScanner({ open, onClose, onScan }) {
                 <div>
                     <div className="relative overflow-hidden rounded-xl bg-black">
                         <video ref={videoRef} playsInline muted className="h-64 w-full object-cover" />
+                        {/* Never shown. jsQR reads pixels, and this is where
+                            each frame is put for it to read. */}
+                        <canvas ref={canvasRef} className="hidden" />
                         {/* A frame to aim with. Purely a guide — the detector
                             reads the whole picture. */}
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
