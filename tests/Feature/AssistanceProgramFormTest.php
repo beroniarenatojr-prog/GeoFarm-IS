@@ -140,14 +140,60 @@ class AssistanceProgramFormTest extends TestCase
         $this->assertSame(0, FinancialAssistance::count());
     }
 
-    public function test_a_new_type_needs_to_say_what_it_hands_out(): void
+    public function test_a_new_type_no_longer_has_to_say_what_it_hands_out(): void
     {
-        // It decides whether the programme gets an item list to deduct stock
-        // from, so it cannot be guessed.
+        /*
+         * The form stopped asking. isMaterial() already treats an attached
+         * item list as the deciding factor, so the programme being created
+         * answers the question: no items means it is not handing out goods.
+         */
         $this->submit([
             'assistance_type_id' => '__other__',
             'new_type_name'      => 'Fishery Support',
-        ])->assertSessionHasErrors('new_type_distribution');
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            'financial',
+            AssistanceType::where('type_name', 'Fishery Support')->value('distribution_type'),
+        );
+    }
+
+    public function test_a_new_type_carrying_items_is_recorded_as_handing_out_goods(): void
+    {
+        $item = \App\Models\InventoryItem::create([
+            'item_name' => 'Urea 46-0-0',
+            'unit'      => 'bag',
+            'quantity'  => 100,
+        ]);
+
+        $this->submit([
+            'assistance_type_id' => '__other__',
+            'new_type_name'      => 'Fertilizer Drive',
+            'items'              => [
+                ['inventory_item_id' => $item->id, 'quantity_per_farmer' => 2],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            'material',
+            AssistanceType::where('type_name', 'Fertilizer Drive')->value('distribution_type'),
+        );
+    }
+
+    public function test_an_explicit_distribution_type_is_still_honoured(): void
+    {
+        // Nothing sends it now, but the field stays accepted so an import or a
+        // future screen can state it outright rather than be guessed at.
+        $this->submit([
+            'assistance_type_id'    => '__other__',
+            'new_type_name'         => 'Skills Training',
+            'new_type_distribution' => 'training',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            'training',
+            AssistanceType::where('type_name', 'Skills Training')->value('distribution_type'),
+        );
     }
 
     public function test_a_missing_type_is_rejected(): void

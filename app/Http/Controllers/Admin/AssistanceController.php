@@ -70,6 +70,27 @@ class AssistanceController extends Controller
      * an item list at all. Creating the row instead keeps the foreign key
      * intact and makes the new type reusable next time.
      */
+    /**
+     * What a new type hands out, worked out rather than asked.
+     *
+     * The form used to ask, and the answer earned almost nothing: the item
+     * list is offered whatever the type says, and isMaterial() already treats
+     * an attached item list as the deciding factor — a "financial" type with
+     * items on it is a mixed programme either way. So the programme being
+     * created answers the question itself.
+     *
+     * A guess, and only that. It is one field on a lookup row, visible and
+     * correctable under Lookups, and nothing downstream reads it without the
+     * item list beside it.
+     */
+    private function distributionFrom(Request $request): string
+    {
+        $items = collect($request->input('items', []))
+            ->filter(fn ($line) => filled($line['inventory_item_id'] ?? null));
+
+        return $items->isNotEmpty() ? 'material' : 'financial';
+    }
+
     private function resolveCustomType(Request $request): void
     {
         if ($request->input('assistance_type_id') !== self::CUSTOM_TYPE) {
@@ -78,7 +99,8 @@ class AssistanceController extends Controller
 
         $data = $request->validate([
             'new_type_name'         => 'required|string|max:100',
-            'new_type_distribution' => 'required|in:' . implode(',', AssistanceType::DISTRIBUTION_TYPES),
+            // Optional now. The form no longer asks — see below.
+            'new_type_distribution' => 'nullable|in:' . implode(',', AssistanceType::DISTRIBUTION_TYPES),
         ]);
 
         /*
@@ -100,7 +122,8 @@ class AssistanceController extends Controller
             // typed it next.
             'type_name'         => $name,
             'category'          => AssistanceType::CUSTOM_CATEGORY,
-            'distribution_type' => $data['new_type_distribution'],
+            'distribution_type' => $data['new_type_distribution']
+                ?? $this->distributionFrom($request),
         ]);
 
         $request->merge(['assistance_type_id' => $type->id]);

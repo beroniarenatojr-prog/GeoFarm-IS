@@ -36,9 +36,9 @@ export function useProgramForm(program) {
         end_date:           toDateInput(program?.end_date),
         status:             program?.status ?? 'draft',
         barangay_ids:       program?.barangays?.map(b => b.id) ?? [],
-        // Only sent when the type dropdown is set to "Other".
+        // Only sent when a type is being added. What it hands out is settled
+        // server-side from the item list rather than asked for.
         new_type_name:         '',
-        new_type_distribution: 'material',
         // What a material programme hands out. Empty for cash-only assistance.
         items: (program?.program_items ?? []).map(i => ({
             inventory_item_id:   i.inventory_item_id,
@@ -73,11 +73,9 @@ export function ProgramFormFields({
     const isCustomType = data.assistance_type_id === CUSTOM_TYPE;
     const selectedType = assistanceTypes.find(t => String(t.id) === String(data.assistance_type_id));
 
-    // While "Other" is selected the type does not exist yet, so what it hands
-    // out comes from the select the user is filling in.
-    const distribution = isCustomType
-        ? data.new_type_distribution
-        : selectedType?.distribution_type;
+    // A type still being added has no distribution yet — the server works it
+    // out from the item list on save — so there is nothing to read here.
+    const distribution = isCustomType ? null : selectedType?.distribution_type;
 
     // Always offered, whatever the type says it hands out.
     //
@@ -150,42 +148,15 @@ export function ProgramFormFields({
                 />
             </Field>
 
-            {isCustomType && (
-                <div className="sm:col-span-2 rounded-lg border border-green-200 bg-green-50/40 p-3">
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#006400]">
-                        New assistance type
-                    </p>
+            {/* A new type asks nothing further.
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                        {/* Shown, not re-typed. The name came from the box
-                            above; a second field holding the same thing is
-                            one more place for the two to disagree. To change
-                            it, type again in Assistance Type. */}
-                        <div>
-                            <p className={label}>Name</p>
-                            <p className="px-2.5 py-1.5 text-sm font-semibold text-gray-900">
-                                {data.new_type_name}
-                            </p>
-                            {errors.new_type_name && <p className={errorText}>{errors.new_type_name}</p>}
-                        </div>
-
-                        <Field label="What does it hand out?" error={errors.new_type_distribution}>
-                            <select className={field} value={data.new_type_distribution}
-                                onChange={e => setData('new_type_distribution', e.target.value)}>
-                                <option value="material">Goods from the warehouse</option>
-                                <option value="financial">Cash</option>
-                                <option value="training">Training</option>
-                                <option value="service">A service</option>
-                            </select>
-                        </Field>
-                    </div>
-
-                    <p className="mt-2 text-[11px] text-gray-500">
-                        This becomes a permanent type you can pick again next time.
-                        Choosing “Goods from the warehouse” is what gives the program an
-                        item list to deduct from stock.
-                    </p>
-                </div>
+                It used to also ask what the type hands out, but that answer
+                changed almost nothing: the item list below is offered whatever
+                the type says, and isMaterial() already treats an attached item
+                list as the deciding factor. The server settles it from the
+                items instead, and it stays correctable under Lookups. */}
+            {isCustomType && errors.new_type_name && (
+                <p className={`sm:col-span-2 ${errorText}`}>{errors.new_type_name}</p>
             )}
 
             <Field label="Total Budget (₱)" error={errors.total_budget}>
