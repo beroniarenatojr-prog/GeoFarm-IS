@@ -382,7 +382,7 @@ export default function AssistanceShow({
             {recording && !program.is_locked && (
             <ModalShell
                 title={`${label.record} — ${program.program_name}`}
-                size="lg"
+                size="xl"
                 onClose={() => setRecording(false)}
                 as="form"
                 onSubmit={submit}
@@ -410,13 +410,19 @@ export default function AssistanceShow({
                         </ul>
                     </div>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <FarmerPicker
-                        label={null}
-                        value={data.farmer_id}
-                        onChange={id => setData('farmer_id', id)}
-                        error={errors.farmer_id}
-                    />
+                {/* Four columns, with the farmer taking two of them. Split
+                    evenly, the search box shared its third with the scan
+                    button and showed about eight characters — too narrow to
+                    read back the name you had just typed. */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                    <div className="sm:col-span-2">
+                        <FarmerPicker
+                            label={null}
+                            value={data.farmer_id}
+                            onChange={id => setData('farmer_id', id)}
+                            error={errors.farmer_id}
+                        />
+                    </div>
                     <div>
                         <input type="date" value={data.distribution_date}
                             onChange={e => setData('distribution_date', e.target.value)}

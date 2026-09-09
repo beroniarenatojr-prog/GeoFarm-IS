@@ -135,7 +135,9 @@ export default function QrScanner({ open, onClose, onScan }) {
             open
             onClose={onClose}
             title="Scan the farmer's ID card"
-            size="md"
+            // Large deliberately: a bigger picture is a bigger QR in frame,
+            // and the decoder reads it from further away and in worse light.
+            size="xl"
             footer={
                 <button type="button" onClick={onClose}
                     className="rounded-xl border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -151,14 +153,15 @@ export default function QrScanner({ open, onClose, onScan }) {
             ) : (
                 <div>
                     <div className="relative overflow-hidden rounded-xl bg-black">
-                        <video ref={videoRef} playsInline muted className="h-64 w-full object-cover" />
+                        <video ref={videoRef} playsInline muted
+                            className="h-[60vh] max-h-[520px] min-h-[320px] w-full object-cover" />
                         {/* Never shown. jsQR reads pixels, and this is where
                             each frame is put for it to read. */}
                         <canvas ref={canvasRef} className="hidden" />
                         {/* A frame to aim with. Purely a guide — the detector
                             reads the whole picture. */}
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                            <div className="h-40 w-40 rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+                            <div className="h-56 w-56 rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)] sm:h-64 sm:w-64" />
                         </div>
                     </div>
                     <p className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-500">
