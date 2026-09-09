@@ -386,7 +386,7 @@ export default function AssistanceShow({
                 onClose={() => setRecording(false)}
                 as="form"
                 onSubmit={submit}
-                bodyClass="px-5 py-4"
+                bodyClass="px-6 py-6 sm:px-8 sm:py-7"
                 footer={
                     <>
                         <button type="button" onClick={() => setRecording(false)}
@@ -410,35 +410,65 @@ export default function AssistanceShow({
                         </ul>
                     </div>
                 )}
-                {/* Four columns, with the farmer taking two of them. Split
-                    evenly, the search box shared its third with the scan
-                    button and showed about eight characters — too narrow to
-                    read back the name you had just typed. */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                    <div className="sm:col-span-2">
+                {/* Labelled and full size.
+
+                    This row used to be three placeholder-only boxes squeezed
+                    onto one line: a clerk serving a queue had to infer that
+                    the middle one was the distribution date and the last the
+                    amount, and the farmer box showed about eight characters.
+                    A placeholder also disappears the moment you type, so the
+                    only clue to what a field held vanished as it was filled.
+
+                    The farmer gets a row of its own — it is the field with the
+                    search, the scan button and the suggestion list under it. */}
+                <div className="space-y-5">
+                    <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+                            Farmer <span className="text-red-500">*</span>
+                        </label>
                         <FarmerPicker
                             label={null}
                             value={data.farmer_id}
                             onChange={id => setData('farmer_id', id)}
                             error={errors.farmer_id}
                         />
+                        <p className="mt-1.5 text-xs text-gray-500">
+                            Type a name or RSBSA number, or scan the QR on the back of the farmer&apos;s ID card.
+                        </p>
                     </div>
-                    <div>
-                        <input type="date" value={data.distribution_date}
-                            onChange={e => setData('distribution_date', e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm w-full focus:ring-2 focus:ring-green-500 outline-none ${errors.distribution_date ? 'border-red-500' : ''}`}
-                            required />
-                        {errors.distribution_date && <p className="text-xs text-red-500 mt-1">{errors.distribution_date}</p>}
-                    </div>
-                    <div>
-                        <input placeholder={label.amount} type="number" value={data.amount_given}
-                            onChange={e => setData('amount_given', e.target.value)}
-                            className={`border rounded-lg px-3 py-2 text-sm w-full focus:ring-2 focus:ring-green-500 outline-none ${errors.amount_given ? 'border-red-500' : ''}`} />
-                        {errors.amount_given && <p className="text-xs text-red-500 mt-1">{errors.amount_given}</p>}
+
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <div>
+                            <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+                                Date of distribution <span className="text-red-500">*</span>
+                            </label>
+                            <input type="date" value={data.distribution_date}
+                                onChange={e => setData('distribution_date', e.target.value)}
+                                className={`w-full rounded-lg border px-4 py-3 text-base outline-none focus:ring-2 focus:ring-green-500 ${errors.distribution_date ? 'border-red-500' : 'border-gray-300'}`}
+                                required />
+                            {errors.distribution_date && <p className="mt-1 text-xs text-red-500">{errors.distribution_date}</p>}
+                        </div>
+                        <div>
+                            <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+                                {label.amount}
+                            </label>
+                            <input type="number" step="0.01" min="0" value={data.amount_given}
+                                onChange={e => setData('amount_given', e.target.value)}
+                                placeholder="0.00"
+                                className={`w-full rounded-lg border px-4 py-3 text-base tabular-nums outline-none focus:ring-2 focus:ring-green-500 ${errors.amount_given ? 'border-red-500' : 'border-gray-300'}`} />
+                            {/* Reads the figure back grouped, so a slipped zero
+                                is caught before the money is recorded. */}
+                            {data.amount_given !== '' && !isNaN(Number(data.amount_given)) && (
+                                <p className="mt-1 text-xs font-medium tabular-nums text-[#006400]">
+                                    ₱{Number(data.amount_given).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                            )}
+                            {errors.amount_given && <p className="mt-1 text-xs text-red-500">{errors.amount_given}</p>}
+                        </div>
                     </div>
 
                     {(programItems.length > 0 || program.standard_cash_amount) && (
-                        <div className="sm:col-span-3 space-y-3">
+                        <div className="space-y-3">
                             {/* Read-only unless customised: the common case is
                                 confirming the package, not editing it. */}
                             <div className="rounded-lg border border-green-200 bg-green-50/50 p-3">
