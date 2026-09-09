@@ -240,6 +240,32 @@ class AssistanceProgramFormTest extends TestCase
         $this->assertSame('500000.00', FinancialAssistance::firstOrFail()->total_budget);
     }
 
+    public function test_editing_an_older_programme_keeps_its_budget(): void
+    {
+        // The form no longer asks for a budget, but one recorded before that
+        // must survive an unrelated edit rather than being quietly dropped.
+        $type = AssistanceType::create([
+            'type_name'         => 'Cash Assistance',
+            'category'          => 'Financial & Credit',
+            'distribution_type' => 'financial',
+        ]);
+
+        $this->submit(['assistance_type_id' => $type->id, 'total_budget' => 500000]);
+        $programme = FinancialAssistance::firstOrFail();
+
+        $this->actingAs($this->staff())
+            ->put(route('admin.assistance.update', $programme), [
+                'program_name'       => 'Renamed Programme',
+                'assistance_type_id' => $type->id,
+                'total_budget'       => $programme->total_budget,
+                'start_date'         => '2026-01-01',
+                'end_date'           => '2026-12-31',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('500000.00', $programme->fresh()->total_budget);
+    }
+
     // --------------------------------------------------------- barangays
 
     private function typedProgramme(array $overrides = [])

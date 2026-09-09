@@ -30,6 +30,9 @@ export function useProgramForm(program) {
         program_name:       program?.program_name ?? '',
         assistance_type_id: program?.assistance_type_id ?? '',
         description:        program?.description ?? '',
+        // No field asks for this any more, but it is still carried so editing
+        // an older programme sends its budget back unchanged rather than
+        // quietly dropping a figure the office recorded.
         total_budget:       program?.total_budget ?? '',
         standard_cash_amount: program?.standard_cash_amount ?? '',
         start_date:         toDateInput(program?.start_date),
@@ -123,12 +126,14 @@ export function ProgramFormFields({
         // Two columns: the short fields pair up instead of each claiming a full
         // row, which is what made this form so tall.
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-            <Field label="Program Name" span error={errors.program_name}>
+            {/* Half-width each: two short fields side by side rather than two
+                full rows, which is most of what made this form need scrolling. */}
+            <Field label="Program Name" error={errors.program_name}>
                 <input value={data.program_name} onChange={e => setData('program_name', e.target.value)}
                     className={field} required />
             </Field>
 
-            <Field label="Assistance Type" span error={errors.assistance_type_id}>
+            <Field label="Assistance Type" error={errors.assistance_type_id}>
                 {/* Typing filters the list; typing something that is not on it
                     offers to add it. The pending new type is carried as an
                     option of its own so the box keeps showing what was typed
@@ -143,7 +148,7 @@ export function ProgramFormFields({
                         new_type_name: name,
                     }))}
                     createLabel={name => `Add new type: ${name}`}
-                    placeholder="Type to search, or type a new one…"
+                    placeholder="Search or add…"
                     className={field}
                 />
             </Field>
@@ -159,16 +164,9 @@ export function ProgramFormFields({
                 <p className={`sm:col-span-2 ${errorText}`}>{errors.new_type_name}</p>
             )}
 
-            <Field label="Status" error={errors.status}>
-                <select value={data.status} onChange={e => setData('status', e.target.value)} className={field}>
-                    <option value="draft">Draft</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive (paused)</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-            </Field>
-
+            {/* The two dates pair with each other, not with Status. Removing
+                Total Budget left End Date stranded alone on its own row; this
+                puts a whole row back. */}
             <Field label="Start Date" error={errors.start_date}>
                 <input type="date" value={data.start_date}
                     onChange={e => setData('start_date', e.target.value)} className={field} required />
@@ -177,6 +175,16 @@ export function ProgramFormFields({
             <Field label="End Date" error={errors.end_date}>
                 <input type="date" value={data.end_date}
                     onChange={e => setData('end_date', e.target.value)} className={field} required />
+            </Field>
+
+            <Field label="Status" error={errors.status}>
+                <select value={data.status} onChange={e => setData('status', e.target.value)} className={field}>
+                    <option value="draft">Draft</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive (paused)</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
             </Field>
 
             <Field label="Description" span>
@@ -198,9 +206,11 @@ export function ProgramFormFields({
                             value={data.standard_cash_amount}
                             onChange={e => setData('standard_cash_amount', e.target.value)} />
                     </Field>
+                    {/* No longer contrasts this with a Total Budget field —
+                        that field is gone, and the sentence was left pointing
+                        at something the form no longer shows. */}
                     <div className="self-end pb-1.5 text-[11px] text-gray-500">
-                        Pre-filled for every beneficiary. The Total Budget above is the
-                        whole programme; this is what one farmer receives.
+                        What one farmer receives, pre-filled on every distribution.
                     </div>
                 </div>
             </div>
