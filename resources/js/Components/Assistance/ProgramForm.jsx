@@ -157,11 +157,17 @@ export function ProgramFormFields({
                     </p>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                        <Field label="Type name" error={errors.new_type_name}>
-                            <input className={field} value={data.new_type_name}
-                                onChange={e => setData('new_type_name', e.target.value)}
-                                placeholder="e.g. Fishery Support" required />
-                        </Field>
+                        {/* Shown, not re-typed. The name came from the box
+                            above; a second field holding the same thing is
+                            one more place for the two to disagree. To change
+                            it, type again in Assistance Type. */}
+                        <div>
+                            <p className={label}>Name</p>
+                            <p className="px-2.5 py-1.5 text-sm font-semibold text-gray-900">
+                                {data.new_type_name}
+                            </p>
+                            {errors.new_type_name && <p className={errorText}>{errors.new_type_name}</p>}
+                        </div>
 
                         <Field label="What does it hand out?" error={errors.new_type_distribution}>
                             <select className={field} value={data.new_type_distribution}
