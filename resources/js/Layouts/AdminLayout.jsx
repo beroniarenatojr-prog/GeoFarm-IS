@@ -3,6 +3,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import NotificationBell from '@/Components/ui/NotificationBell';
 import GlobalSearch from '@/Components/ui/GlobalSearch';
+import FarmerScanButton from '@/Components/ui/FarmerScanButton';
 import UserMenu from '@/Components/ui/UserMenu';
 import {
     LayoutDashboard,
@@ -388,6 +389,12 @@ export default function AdminLayout({
                         </div>
 
                         <div className="flex flex-shrink-0 items-center gap-2">
+                            {/* Between the search and the bell: the two ways of
+                                finding a farmer sit together — type the name,
+                                or scan the card when you have it in hand.
+                                Behind "view farmers", the same permission the
+                                profile it opens is behind. */}
+                            {can('view farmers') && <FarmerScanButton />}
                             <NotificationBell />
                         </div>
                     </div>
