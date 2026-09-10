@@ -53,7 +53,7 @@ Route::get('/farmer-registration/submitted', [FarmerRegistrationController::clas
     ->name('farmer-registration.submitted');
 
 // Admin routes (excluding farmers)
-Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->name('admin.')->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -91,8 +91,7 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
         ->middleware('permission:edit farmers')->name('farmer-verification.reject');
     // Staff writing to a farmer directly. Behind "edit farmers" rather than a
     // new permission: sending an official message on the office's behalf is
-    // the same level of trust as changing the record it is about, and Viewer
-    // deliberately holds neither.
+    // the same level of trust as changing the record it is about.
     Route::get('farmer-email', [FarmerEmailController::class, 'create'])
         ->middleware('permission:edit farmers')->name('farmer-email.create');
 
@@ -109,8 +108,7 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff|Viewer'])->prefix('admi
     Route::get('farmers/{farmer}/edit', [FarmerController::class, 'edit'])->middleware('permission:edit farmers')->name('farmers.edit');
     // Staff writing to a farmer directly. Behind "edit farmers" rather than a
     // new permission: sending an official message on the office's behalf is
-    // the same level of trust as changing the record it is about, and Viewer
-    // deliberately holds neither.
+    // the same level of trust as changing the record it is about.
     //
     // Throttled because this is the one staff action that can put mail on the
     // wire, and the office's own Gmail account is what gets rate-limited

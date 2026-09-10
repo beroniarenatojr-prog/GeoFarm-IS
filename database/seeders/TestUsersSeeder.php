@@ -24,22 +24,9 @@ class TestUsersSeeder extends Seeder
             $staff->assignRole('Staff');
         }
 
-        // Create Viewer user
-        $viewer = User::firstOrCreate(
-            ['email' => 'viewer@geofarm.test'],
-            [
-                'name' => 'Viewer User',
-                'password' => Hash::make('password'),
-                'is_active' => true,
-            ]
-        );
-        
-        if (!$viewer->hasRole('Viewer')) {
-            $viewer->assignRole('Viewer');
-        }
+        // The Viewer account went with the role it held.
 
         $this->command->info('Test users created:');
         $this->command->info('Staff: staff@geofarm.test / password');
-        $this->command->info('Viewer: viewer@geofarm.test / password');
     }
 }

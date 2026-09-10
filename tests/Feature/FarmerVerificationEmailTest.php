@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Notifications\FarmerRegistrationSubmitted;
 use App\Notifications\FarmerVerificationDecided;
 use Database\Seeders\RolePermissionSeeder;
+use Spatie\Permission\Models\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -43,15 +44,29 @@ class FarmerVerificationEmailTest extends TestCase
         return $user;
     }
 
+    /**
+     * Somebody who can open the queue but not act on it.
+     *
+     * This used to be the Viewer role, which has been retired — and every
+     * remaining staff role holds "edit farmers", so no real role sits on the
+     * wrong side of this gate any more.
+     *
+     * So the actor is a Staff member with that one permission taken away. The
+     * role still has to be one the admin route group admits, or the refusal
+     * would come from the role middleware instead and the test would prove
+     * nothing about the permission it is named for.
+     */
     private function staffWhoCanOnlyLook(): User
     {
+        Role::findByName('Staff')->revokePermissionTo('edit farmers');
+
         $user = User::create([
-            'name'      => 'Viewer',
-            'email'     => 'viewer@example.test',
+            'name'      => 'Looker',
+            'email'     => 'looker@example.test',
             'password'  => bcrypt('secret-for-test-only'),
             'is_active' => true,
         ]);
-        $user->assignRole('Viewer');  // can see the queue, cannot approve or reject
+        $user->assignRole('Staff');
 
         return $user;
     }

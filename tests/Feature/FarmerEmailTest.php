@@ -245,14 +245,25 @@ class FarmerEmailTest extends TestCase
         Notification::assertNothingSent();
     }
 
-    public function test_a_viewer_cannot_send_email(): void
+    public function test_someone_without_edit_farmers_cannot_send_email(): void
     {
+        /*
+         * A Staff member with that one permission taken away.
+         *
+         * This used to be the Viewer role, which has been retired — and every
+         * remaining staff role holds "edit farmers", so nothing real sits on
+         * the wrong side of this gate now. The role still has to be one the
+         * admin route group admits, or the refusal would come from the role
+         * middleware and prove nothing about the permission.
+         */
+        \Spatie\Permission\Models\Role::findByName('Staff')->revokePermissionTo('edit farmers');
+
         $farmer = $this->farmer();
 
         $this->send($farmer, [
             'subject' => 'Hello',
             'message' => 'Body text.',
-        ], $this->staff('Viewer'))->assertForbidden();
+        ], $this->staff('Staff'))->assertForbidden();
 
         Notification::assertNothingSent();
     }

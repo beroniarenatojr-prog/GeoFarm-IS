@@ -47,10 +47,10 @@ class RolePermissionSeeder extends Seeder
             
             // User Management - Granular permissions
             'view users',
-            'create staff users',      // Admin can create Staff/Viewer
+            'create staff users',      // Admin can create Staff accounts
             'create admin users',      // Only Super Admin can create Admin
             'edit users',
-            'delete staff users',      // Admin can delete Staff/Viewer
+            'delete staff users',      // Admin can delete Staff accounts
             'delete admin users',      // Only Super Admin can delete Admin
             
             // System Settings / Lookups
@@ -89,19 +89,9 @@ class RolePermissionSeeder extends Seeder
             'view predictive',
         ]);
 
-        // Viewer Role - Read-only access
-        $viewer = Role::firstOrCreate(['name' => 'Viewer']);
-        $viewer->syncPermissions([
-            'view farmers',
-            'view parcels',
-            'view inventory',
-            'view supplies',
-            'view seasonal',
-            'view assistance',
-            'view reports', 'export reports',
-            'view maps',
-            'view predictive',
-        ]);
+        // Viewer, the read-only tier, was retired — the office never used it,
+        // and every account is Super Admin, Admin, Staff or Farmer. The role
+        // itself is removed by 2026_09_13_000001_remove_viewer_role.
 
         // Farmer Role - Can view their own data
         $farmer = Role::firstOrCreate(['name' => 'Farmer']);

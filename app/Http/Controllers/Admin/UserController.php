@@ -178,8 +178,8 @@ class UserController extends Controller
             // Super Admin can see all roles
             return Role::all();
         } else {
-            // Regular Admin can only see Staff and Viewer roles
-            return Role::whereIn('name', ['Staff', 'Viewer'])->get();
+            // Regular Admin can only create Staff. Viewer was retired.
+            return Role::whereIn('name', ['Staff'])->get();
         }
     }
 }

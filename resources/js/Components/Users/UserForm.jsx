@@ -50,7 +50,7 @@ export function UserFormFields({ form, roles = [], isEdit = false }) {
                 </select>
                 {errors.role && <p className={errorText}>{errors.role}</p>}
                 {/* Which roles appear is decided server-side: an Admin may
-                    create Staff and Viewer, only a Super Admin may create
+                    create Staff, only a Super Admin may create
                     another Super Admin. The list is not filtered here. */}
             </div>
 
