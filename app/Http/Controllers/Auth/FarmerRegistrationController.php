@@ -10,6 +10,7 @@ use App\Models\Farmer;
 use App\Models\User;
 use App\Notifications\FarmerRegistrationSubmitted;
 use App\Services\AuditService;
+use App\Services\CommodityCatalogue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,7 @@ class FarmerRegistrationController extends Controller
     {
         return Inertia::render('Admin/Farmers/FormRSBSA', [
             'farmTypes'  => FarmType::all(),
+            'commodities' => app(CommodityCatalogue::class)->all(),
             'publicMode' => true,
             // Suggestions for the address fields. Farmers registering
             // themselves are the ones most likely to spell their barangay a

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Observers\FarmParcelObserver;
+use App\Services\CommodityCatalogue;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Model;
 
@@ -71,6 +72,42 @@ class FarmParcel extends Model
             $value = $row[$key] ?? null;
 
             $row[$key] = is_numeric($value) ? $value : null;
+        }
+
+        return static::applyCommodityRules($row);
+    }
+
+    /**
+     * A parcel cannot be both a field and a herd.
+     *
+     * Heads belong to livestock; a cropping schedule describes planting. The
+     * form disables whichever does not apply, but a disabled input is a
+     * courtesy to the person typing — it stops nothing that is posted
+     * directly, and the register would end up holding "Rice, 50 heads".
+     *
+     * Enforced by clearing rather than by rejecting. The incompatible value is
+     * always the stale one left behind by changing the commodity, never
+     * something the user meant; refusing the save would block a correction
+     * over a field they cannot even see.
+     *
+     * An unrecognised commodity clears nothing. The register holds free text
+     * entered over years, and a name this system does not know is not licence
+     * to discard the figures recorded beside it.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    public static function applyCommodityRules(array $row): array
+    {
+        $catalogue = app(CommodityCatalogue::class);
+        $kind = $catalogue->kindOf($row['commodity'] ?? null);
+
+        if ($kind === CommodityCatalogue::KIND_CROP) {
+            $row['no_of_heads_trees'] = null;
+        }
+
+        if ($kind === CommodityCatalogue::KIND_LIVESTOCK) {
+            $row['cropping_schedule'] = null;
         }
 
         return $row;

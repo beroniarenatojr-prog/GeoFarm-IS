@@ -1,13 +1,14 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import PublicFormShell from '@/Layouts/PublicFormShell';
 import { useForm, router } from '@inertiajs/react';
-import { User, MapPin, Users, Briefcase, Map, Image as ImageIcon, FileCheck, ChevronLeft, ChevronRight, Check, Info, X, Plus } from 'lucide-react';
+import { User, MapPin, Users, Briefcase, Map, Image as ImageIcon, FileCheck, ChevronLeft, ChevronRight, Check, Info, X, Plus, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { formatRsbsa, formatMobile, titleCaseName, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
 import SuggestInput from '@/Components/ui/SuggestInput';
+import SuggestSelect from '@/Components/ui/SuggestSelect';
 
-export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMode = false }) {
+export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], barangays = [], publicMode = false }) {
     const isEdit = !!farmer;
     const [currentStep, setCurrentStep] = useState(1);
     const [photoPreview, setPhotoPreview] = useState(farmer?.photo_url || null);
@@ -200,6 +201,65 @@ export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMod
         ));
     };
 
+    /*
+     * Commodity decides what the rest of the parcel row means.
+     *
+     * The kind is not guessed from the word — it comes from which lookup table
+     * the office already keeps the name in, resolved once here into a lookup
+     * the render can hit per parcel without touching the server on every
+     * keystroke. Same answer the backend reaches, from the same two tables.
+     */
+    const commodityNames = useMemo(
+        () => commodities.map(c => c.name).filter(Boolean),
+        [commodities],
+    );
+
+    const kindByName = useMemo(() => {
+        const map = new Map();
+        for (const c of commodities) {
+            if (c?.name) map.set(String(c.name).trim().toLowerCase(), c.kind);
+        }
+        return map;
+    }, [commodities]);
+
+    /**
+     * 'crop', 'livestock', or 'unknown' for a name the lookups do not hold.
+     *
+     * Unknown locks nothing. The register is full of commodities typed by hand
+     * over years, and a name this list has never seen is not a reason to grey
+     * out the figures recorded beside it.
+     */
+    const kindOf = parcel =>
+        kindByName.get(String(parcel?.commodity ?? '').trim().toLowerCase()) ?? 'unknown';
+
+    const farmTypeOptions = useMemo(
+        () => farmTypes.map(t => ({ id: t.id, label: t.type_name, meta: t.description })),
+        [farmTypes],
+    );
+
+    /**
+     * Change the commodity and drop whatever no longer applies.
+     *
+     * Both fields go in the same update: "Cow, 20 heads" changed to "Rice" has
+     * to lose the 20 in the same render that disables the box, or the form
+     * carries a value the user can no longer see or correct. Cleared on the
+     * way in as well as on the way out — see FarmParcel::applyCommodityRules.
+     */
+    const setCommodity = (index, value) => {
+        const kind = kindByName.get(String(value ?? '').trim().toLowerCase()) ?? 'unknown';
+
+        setData('parcels', data.parcels.map((parcel, i) => (
+            i === index
+                ? {
+                    ...parcel,
+                    commodity: value,
+                    ...(kind === 'crop'      ? { no_of_heads_trees: '' } : {}),
+                    ...(kind === 'livestock' ? { cropping_schedule: '' } : {}),
+                }
+                : parcel
+        )));
+    };
+
     /**
      * Which step each field lives on, so a server-side rejection can put the
      * user in front of the offending field.
@@ -274,9 +334,10 @@ export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMod
          *
          * farm_type_id is an integer foreign key, so the string reached MySQL
          * as an integer value and every farmer save carrying an N/A parcel
-         * died with "Incorrect integer value: 'N/A'". The option keeps its
-         * value in the form so the box still reads N/A once chosen; what goes
-         * over the wire is the null it actually means.
+         * died with "Incorrect integer value: 'N/A'". The option no longer
+         * exists — the field is a lookup search now, and an empty box is how
+         * "not applicable" is said — but a record saved before that still
+         * loads its old value back into the form, so the guard stays.
          *
          * The server normalises this too — a browser is never the only thing
          * standing between a typed value and the database.
@@ -1489,32 +1550,66 @@ export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMod
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                        Commodity <span className="text-gray-500">(Produkto)</span> <span className="text-red-500">*</span>
+                                                    </label>
+                                                    {/* Asked before the two fields it governs, because it
+                                                        decides which of them applies.
+
+                                                        Free text still, as the column always has been — the
+                                                        list only suggests, so a commodity recorded before
+                                                        this existed remains editable. */}
+                                                    <SuggestInput
+                                                        value={parcel.commodity}
+                                                        onChange={v => setCommodity(index, v)}
+                                                        options={commodityNames}
+                                                        placeholder="Type a crop or animal…"
+                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                                    />
+                                                    {kindOf(parcel) !== 'unknown' && (
+                                                        <p className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                                            kindOf(parcel) === 'livestock'
+                                                                ? 'bg-amber-100 text-amber-800'
+                                                                : 'bg-green-100 text-green-800'
+                                                        }`}>
+                                                            {kindOf(parcel) === 'livestock' ? 'Livestock record' : 'Crop record'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Cropping Schedule <span className="text-gray-500">(Iskedyul ng Tanim)</span>
                                                     </label>
                                                     {/* A parcel is worked in the wet season, the dry season, or
                                                         both. Typed free-hand this arrived as "wet", "Wet season",
-                                                        "WET/DRY" and so on, which cannot be grouped in a report. */}
+                                                        "WET/DRY" and so on, which cannot be grouped in a report.
+
+                                                        Livestock is not planted at all, so for an animal the
+                                                        field locks rather than disappears — a box that vanishes
+                                                        reads as a bug, one that explains itself does not. */}
                                                     <select
                                                         value={parcel.cropping_schedule}
+                                                        disabled={kindOf(parcel) === 'livestock'}
                                                         onChange={e => updateParcel(index, 'cropping_schedule', e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                                                            kindOf(parcel) === 'livestock'
+                                                                ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                                                                : 'border-gray-300 bg-white'
+                                                        }`}
                                                     >
-                                                        <option value="">Select / Pumili</option>
-                                                        <option value="Wet">Wet (Tag-ulan)</option>
-                                                        <option value="Dry">Dry (Tag-araw)</option>
-                                                        <option value="Wet/Dry">Both — Wet/Dry (Pareho)</option>
+                                                        {kindOf(parcel) === 'livestock'
+                                                            ? <option value="">Not applicable to livestock</option>
+                                                            : <>
+                                                                <option value="">Select / Pumili</option>
+                                                                <option value="Wet">Wet (Tag-ulan)</option>
+                                                                <option value="Dry">Dry (Tag-araw)</option>
+                                                                <option value="Wet/Dry">Both — Wet/Dry (Pareho)</option>
+                                                              </>}
                                                     </select>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                        Commodity <span className="text-gray-500">(Produkto)</span> <span className="text-red-500">*</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={parcel.commodity}
-                                                        onChange={e => updateParcel(index, 'commodity', e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                                    />
+                                                    {kindOf(parcel) === 'livestock' && (
+                                                        <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                                            <Lock className="h-3 w-3" /> Livestock has no planting season.
+                                                        </p>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1522,10 +1617,22 @@ export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMod
                                                     </label>
                                                     <input
                                                         type="number"
+                                                        min="0"
                                                         value={parcel.no_of_heads_trees}
+                                                        disabled={kindOf(parcel) === 'crop'}
+                                                        placeholder={kindOf(parcel) === 'crop' ? 'Not applicable' : ''}
                                                         onChange={e => updateParcel(index, 'no_of_heads_trees', e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                                        className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                                                            kindOf(parcel) === 'crop'
+                                                                ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
+                                                                : 'border-gray-300'
+                                                        }`}
                                                     />
+                                                    {kindOf(parcel) === 'crop' && (
+                                                        <p className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                                            <Lock className="h-3 w-3" /> Not applicable to crop commodities.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -1535,18 +1642,23 @@ export default function FormRSBSA({ farmer, farmTypes, barangays = [], publicMod
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         Farm Type <span className="text-gray-500">(Uri ng Sakahan)</span> <span className="text-red-500">*</span>
                                                     </label>
-                                                    <select
-                                                        value={parcel.farm_type_id}
-                                                        onChange={e => updateParcel(index, 'farm_type_id', e.target.value)}
-                                                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                                    >
-                                                        <option value="">Select</option>
-                                                        <option value="1">1 — Irrigated</option>
-                                                        <option value="2">2 — Rainfed Upland</option>
-                                                        <option value="3">3 — Rainfed Lowland</option>
-                                                        <option value="4">4 — Urban/Peri-Urban</option>
-                                                        <option value="N/A">N/A</option>
-                                                    </select>
+                                                    {/* Reads the farm_types table rather than a list
+                                                        written into this file. The hardcoded options it
+                                                        replaces were "Rainfed Upland" and "Urban/Peri-
+                                                        Urban", which are not rows in that table — id 2
+                                                        is Rainfed and id 4 is Lowland, so every parcel
+                                                        picked here was filed under the wrong type.
+                                                        Kept enabled for livestock: Aquaculture is a
+                                                        farm type, and nothing marks any of them as
+                                                        crop-only. */}
+                                                    <SuggestSelect
+                                                        value={parcel.farm_type_id ?? ''}
+                                                        onChange={v => updateParcel(index, 'farm_type_id', v)}
+                                                        options={farmTypeOptions}
+                                                        placeholder="Type to search / Leave blank if N/A"
+                                                        emptyHint="No farm types have been set up yet."
+                                                        className="w-full px-4 py-2.5 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                                    />
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">

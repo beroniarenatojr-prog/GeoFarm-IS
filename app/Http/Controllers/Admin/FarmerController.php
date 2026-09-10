@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Farmer;
 use App\Models\FarmParcel;
 use App\Services\AuditService;
+use App\Services\CommodityCatalogue;
 use App\Services\RsbsaFieldMapper;
 use App\Services\RsbsaFormFiller;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -73,6 +74,9 @@ class FarmerController extends Controller
     {
         return Inertia::render('Admin/Farmers/FormRSBSA', [
             'farmTypes'  => \App\Models\FarmType::all(),
+            // Crops and livestock types as one pickable list; each entry
+            // carries its kind so the form knows which fields apply.
+            'commodities' => app(CommodityCatalogue::class)->all(),
             'barangays'  => $this->barangayNames(),
         ]);
     }
@@ -404,6 +408,7 @@ class FarmerController extends Controller
         return Inertia::render('Admin/Farmers/FormRSBSA', [
             'farmer'    => $farmer,
             'farmTypes' => \App\Models\FarmType::all(),
+            'commodities' => app(CommodityCatalogue::class)->all(),
             'barangays' => $this->barangayNames(),
         ]);
     }

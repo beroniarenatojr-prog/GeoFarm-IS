@@ -4,6 +4,7 @@ import { useForm } from '@inertiajs/react';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
 import SuggestInput from '@/Components/ui/SuggestInput';
+import SuggestSelect from '@/Components/ui/SuggestSelect';
 import BoundaryImport from '@/Components/Parcels/BoundaryImport';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -254,14 +255,17 @@ export default function ParcelForm({ parcel, farmTypes, geojson, barangays = [],
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Farm Type</label>
-            <select
-              value={data.farm_type_id}
-              onChange={(event) => setData('farm_type_id', event.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
-            >
-              <option value="">Select type</option>
-              {farmTypes.map((type) => <option key={type.id} value={type.id}>{type.type_name}</option>)}
-            </select>
+            {/* Typed rather than scrolled, matching the RSBSA form's copy of
+                this field. Still the farm_types table behind it, still the id
+                that gets saved. */}
+            <SuggestSelect
+              value={data.farm_type_id ?? ''}
+              onChange={(v) => setData('farm_type_id', v)}
+              options={farmTypes.map((type) => ({ id: type.id, label: type.type_name, meta: type.description }))}
+              placeholder="Type to search, e.g. Irrig…"
+              emptyHint="No farm types have been set up yet."
+              className="w-full rounded-md border border-slate-300 px-3 py-2 pr-8 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
+            />
           </div>
 
           {[
