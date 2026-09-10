@@ -356,6 +356,18 @@ class FarmerController extends Controller
                 // The login account's address is the fallback recipient for
                 // the Send Email action when the record carries none itself.
                 'user:id,email',
+                /*
+                 * The climate and financial risk questionnaire.
+                 *
+                 * Both the current round and the history: re-assessing adds a
+                 * row rather than replacing one, and a farmer who has moved
+                 * from high to moderate is the thing the office wants to see.
+                 * Until now this was only ever counted on the dashboard, so
+                 * staff advising a farmer at the counter could not read the
+                 * risk level they were advising against.
+                 */
+                'latestRiskAssessment',
+                'riskAssessments',
             ])->append('contact_email'),
         ]);
     }

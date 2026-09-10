@@ -1,7 +1,11 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { User, MapPin, Phone, Mail, Calendar, Map, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard, Pencil, Trash2 } from 'lucide-react';
+// Map is aliased: imported under its own name it shadows the global Map for
+// this whole module, so any `new Map()` added here later would build a lucide
+// icon and throw "is not a constructor" — which blanked the farmer edit page
+// once already this week.
+import { User, MapPin, Phone, Mail, Calendar, Map as MapIcon, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard, Pencil, Trash2, ShieldAlert, CloudRain, TrendingDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '@/Components/ui/DataTable';
 import Tabs from '@/Components/ui/Tabs';
@@ -50,6 +54,176 @@ function Field({ label, value }) {
       <dd className={`col-span-3 ${empty ? 'text-gray-400 italic' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
         {empty ? 'Not provided' : value}
       </dd>
+    </div>
+  );
+}
+
+/* ------------------------------------------- climate & financial risk panel */
+
+const RISK_TONE = {
+  low:      'bg-green-100 text-green-800',
+  moderate: 'bg-amber-100 text-amber-800',
+  high:     'bg-red-100 text-red-700',
+};
+
+/**
+ * Turns an instrument key back into words.
+ *
+ * The questionnaire stores keys — flood_frequency: "very_frequently" — because
+ * the label is display text that gets reworded (it was translated into Tagalog
+ * only this week) while the key is what the score was computed from. Reading
+ * one back means undoing that here rather than storing prose in the column.
+ */
+const readable = (key) =>
+  typeof key !== 'string' || key === ''
+    ? null
+    : key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+const readableList = (keys) =>
+  Array.isArray(keys) && keys.length ? keys.map(readable).join(', ') : null;
+
+const onDate = (value) =>
+  value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+
+/** Null rather than ₱0, so Field renders "Not provided" for an unanswered amount. */
+const peso = (value) =>
+  value === null || value === undefined || value === ''
+    ? null
+    : `₱${Number(value).toLocaleString('en-PH', { maximumFractionDigits: 2 })}`;
+
+/**
+ * What the farmer answered, for the person advising them.
+ *
+ * Read-only on purpose. The questionnaire is the farmer's own account of their
+ * season, and staff editing those answers would quietly turn a survey response
+ * into an office opinion while leaving the risk score attached to it.
+ */
+function RiskAssessmentTab({ latest, history = [] }) {
+  if (!latest) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center">
+        <ShieldAlert className="mx-auto h-8 w-8 text-gray-300" />
+        <p className="mt-3 font-medium text-gray-700">No risk assessment yet</p>
+        <p className="mt-1 text-sm text-gray-500">
+          This farmer has not completed the climate and financial risk questionnaire.
+          They can fill it in from their own portal, or ask them at the counter.
+        </p>
+      </div>
+    );
+  }
+
+  const previous = history.filter((row) => row.id !== latest.id);
+
+  return (
+    <div className="space-y-5">
+      {/* Headline: the level, the score, and how old the answer is */}
+      <div className="rounded-xl border border-gray-200 p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={`rounded-lg px-3 py-1.5 text-sm font-bold uppercase tracking-wide ${RISK_TONE[latest.risk_level] ?? 'bg-gray-100 text-gray-700'}`}>
+            {readable(latest.risk_level) ?? 'Not scored'} risk
+          </span>
+          {/* A score, never a probability — nothing has been fitted against
+              outcomes, so a percentage would claim a precision the rules
+              do not have. Same wording the farmer sees on the portal. */}
+          <span className="text-sm text-gray-500">
+            Risk score {latest.risk_score ?? '—'} of 100
+          </span>
+          {latest.is_stale && (
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
+              Over a year old
+            </span>
+          )}
+          <span className="text-sm text-gray-500">Assessed {onDate(latest.assessed_at) ?? 'date not recorded'}</span>
+        </div>
+
+        {latest.risk_factors?.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Main risk factors</p>
+            <ul className="mt-1.5 space-y-1">
+              {latest.risk_factors.map((factor, i) => (
+                <li key={factor.key ?? i} className="flex items-start gap-2 text-sm text-gray-700">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-500" />
+                  {factor.label ?? readable(factor.key)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {latest.recommendations?.length > 0 && (
+          <div className="mt-4 border-t border-gray-200 pt-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Recommended actions</p>
+            <ul className="mt-1.5 space-y-2">
+              {latest.recommendations.map((item, i) => (
+                <li key={item.key ?? i} className="flex items-start gap-2 text-sm leading-relaxed text-gray-700">
+                  <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-[#006400]" />
+                  {item.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* The answers behind the score */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Section icon={CloudRain} title="Climate and weather">
+          <Field label="Events experienced" value={readableList(latest.climate_events)} />
+          <Field label="Flooding" value={readable(latest.flood_frequency)} />
+          <Field label="Drought" value={readable(latest.drought_frequency)} />
+          <Field label="Extreme heat" value={readable(latest.heat_frequency)} />
+          <Field label="Storms / strong winds" value={readable(latest.storm_frequency)} />
+        </Section>
+
+        <Section icon={TrendingDown} title="Effect on production">
+          <Field label="Worst effect" value={readable(latest.worst_effect)} />
+          <Field label="Losses experienced" value={readableList(latest.loss_types)} />
+          <Field label="Financial loss" value={readable(latest.had_financial_loss)} />
+          <Field label="Estimated loss" value={peso(latest.estimated_loss_amount)} />
+          <Field label="Costs increased" value={readable(latest.had_cost_increase)} />
+          <Field label="Estimated extra cost" value={peso(latest.estimated_extra_cost)} />
+          <Field label="Against last season" value={readable(latest.season_comparison)} />
+        </Section>
+
+        <Section icon={Sprout} title="Adaptation">
+          <Field label="Practices used" value={readableList(latest.adaptation_practices)} />
+          <Field label="How effective" value={readable(latest.adaptation_effectiveness)} />
+          <Field label="Main barrier" value={readable(latest.adaptation_barrier)} />
+        </Section>
+
+        <Section icon={Award} title="Assistance and expectation">
+          <Field label="Received assistance" value={readable(latest.received_assistance)} />
+          <Field label="Type received" value={readableList(latest.assistance_types)} />
+          <Field label="How helpful" value={readable(latest.assistance_helpfulness)} />
+          <Field label="Farmer expects loss" value={readable(latest.perceived_risk)} />
+          <Field label="Factors they expect" value={readableList(latest.anticipated_factors)} />
+        </Section>
+      </div>
+
+      {previous.length > 0 && (
+        <div className="rounded-xl border border-gray-200 p-5">
+          <h4 className="mb-3 font-semibold text-gray-900">Previous assessments</h4>
+          {/* Kept rather than overwritten, so a farmer moving from high to
+              moderate is visible instead of silently replaced. */}
+          <ul className="space-y-2">
+            {previous.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-center gap-3 text-sm">
+                <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase ${RISK_TONE[row.risk_level] ?? 'bg-gray-100 text-gray-700'}`}>
+                  {readable(row.risk_level) ?? 'Not scored'}
+                </span>
+                <span className="text-gray-500">Score {row.risk_score ?? '—'}</span>
+                <span className="text-gray-500">{onDate(row.assessed_at) ?? 'date not recorded'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-gray-400">
+        A preliminary rule-based assessment from the farmer&rsquo;s recorded data and their own
+        questionnaire answers — not a statistical prediction. The suggested actions are general
+        guidance, not a technical prescription.
+      </p>
     </div>
   );
 }
@@ -546,6 +720,28 @@ export default function FarmerShow({ farmer }) {
               content: <DataTable columns={parcelsColumns} data={parcelsData} filename={`farmer-${farmer.id}-parcels`} />
             },
             {
+              // Sits beside the farm record rather than in Reports: staff read
+              // it while advising this farmer, not while compiling figures.
+              id: 'risk',
+              label: (
+                <span className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4" />
+                  Risk
+                  {farmer.latest_risk_assessment?.risk_level && (
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${RISK_TONE[farmer.latest_risk_assessment.risk_level] ?? 'bg-gray-100 text-gray-700'}`}>
+                      {farmer.latest_risk_assessment.risk_level}
+                    </span>
+                  )}
+                </span>
+              ),
+              content: (
+                <RiskAssessmentTab
+                  latest={farmer.latest_risk_assessment}
+                  history={farmer.risk_assessments ?? []}
+                />
+              )
+            },
+            {
               // Directly after Parcels, because a season is planted on one.
               id: 'crops',
               label: (
@@ -573,7 +769,7 @@ export default function FarmerShow({ farmer }) {
               id: 'map',
               label: (
                 <span className="flex items-center gap-2">
-                  <Map className="h-4 w-4" />
+                  <MapIcon className="h-4 w-4" />
                   Farm Map
                 </span>
               ),

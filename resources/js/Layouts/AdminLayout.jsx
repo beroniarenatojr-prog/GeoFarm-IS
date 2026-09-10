@@ -87,11 +87,12 @@ const nav = [
             { label: 'Parcels', href: '/admin/parcels', icon: MapPin, permission: 'view parcels' },
             { label: 'GIS Map', href: '/admin/gis/map', icon: Globe, permission: 'view maps' },
             { label: 'Seasonal Tracking', href: '/admin/seasonal', icon: Calendar, permission: 'view seasonal' },
-            // Hidden from the menu for now, at the office's request. The routes
-            // and controllers are untouched, so anyone with the URL can still
-            // reach them — this only removes them from view.
-            // { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
-            // { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
+            // Back in the menu. These were hidden at the office's request while
+            // the forecasts had too little history to be worth reading; both
+            // pages lead with a readiness indicator now, so a thin forecast
+            // says so rather than looking wrong.
+            { label: 'Crop Estimator', href: '/admin/crop-estimator', icon: TrendingUp, permission: 'view predictive' },
+            { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
             //
             // Inventory is the LGU's own supply store, and it still runs behind
             // Assistance: confirming a distribution deducts stock from it. Only
