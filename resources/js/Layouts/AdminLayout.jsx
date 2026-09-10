@@ -277,9 +277,16 @@ export default function AdminLayout({
                                     </span>
                                 </button>
 
-                                {/* Section Items */}
+                                {/* Section Items
+
+                                    The border-l is the guide line down the left
+                                    of an opened group. It is what tells you at a
+                                    glance which heading these rows belong to
+                                    once two groups are open at the same time —
+                                    without it the items of one run straight into
+                                    the heading of the next. */}
                                 {isOpen && (
-                                    <div className="space-y-0.5">
+                                    <div className="ml-6 space-y-0.5 border-l border-white/20 pl-2">
                                         {section.items.map(item => {
                                             const Icon = item.icon;
                                             const active = isActive(item.href);
@@ -289,7 +296,7 @@ export default function AdminLayout({
                                                     key={item.href}
                                                     href={item.href}
                                                     aria-current={active ? 'page' : undefined}
-                                                    className={`mx-2 flex items-center gap-2.5 rounded px-3 py-2 text-[13px] transition-colors ${
+                                                    className={`mr-2 flex items-center gap-2.5 rounded px-2.5 py-1.5 text-[13px] transition-colors ${
                                                         active
                                                             ? 'bg-white/20 text-white font-semibold'
                                                             : 'text-white/95 hover:text-white hover:bg-white/15'
