@@ -98,9 +98,14 @@ export default function UserMenu({ expanded, onOpenChange }) {
                     open ? 'bg-white/15' : ''
                 } ${expanded ? 'gap-3 px-2 py-2' : 'justify-center py-2'}`}
             >
-                <span className="flex-shrink-0 h-8 w-8 rounded-full bg-white/20 text-white font-bold text-[11px] flex items-center justify-center">
-                    {initials || '?'}
-                </span>
+                {user.avatar_url ? (
+                    <img src={user.avatar_url} alt=""
+                        className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-white/30" />
+                ) : (
+                    <span className="flex-shrink-0 h-8 w-8 rounded-full bg-white/20 text-white font-bold text-[11px] flex items-center justify-center">
+                        {initials || '?'}
+                    </span>
+                )}
 
                 {expanded && (
                     <>
@@ -128,9 +133,14 @@ export default function UserMenu({ expanded, onOpenChange }) {
                     }}
                 >
                     <div className="px-4 py-3 bg-gradient-to-r from-[#006400] to-[#228B22] flex items-center gap-3">
-                        <span className="h-10 w-10 rounded-full bg-white/20 text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
-                            {initials || '?'}
-                        </span>
+                        {user.avatar_url ? (
+                            <img src={user.avatar_url} alt=""
+                                className="h-10 w-10 flex-shrink-0 rounded-full object-cover ring-1 ring-white/30" />
+                        ) : (
+                            <span className="h-10 w-10 rounded-full bg-white/20 text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
+                                {initials || '?'}
+                            </span>
+                        )}
                         <span className="min-w-0">
                             <span className="block text-white font-semibold text-sm truncate">{user.name}</span>
                             <span className="block text-white/75 text-xs truncate">{user.role}</span>

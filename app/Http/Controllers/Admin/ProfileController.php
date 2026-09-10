@@ -27,6 +27,7 @@ class ProfileController extends Controller
             'profile' => [
                 'name'        => $user->name,
                 'email'       => $user->email,
+                'avatar_url'  => $user->avatar_url,
                 'role'        => $user->roles->first()?->name,
                 'is_active'   => (bool) $user->is_active,
                 'last_login'  => $user->last_login?->toIso8601String(),
@@ -47,12 +48,40 @@ class ProfileController extends Controller
         $data = $request->validate([
             'name'  => 'required|string|max:100',
             'email' => ['required', 'email', 'max:100', Rule::unique('users')->ignore($user->id)],
+            // mimes as well as image: "image" alone accepts anything the
+            // server can identify as one, including formats no browser will
+            // render back. 2MB is generous for a face at 200px.
+            'avatar' => 'nullable|image|mimes:jpeg,jpg,png,webp|max:2048',
+            // Ticked by the "Remove photo" control, so clearing a picture does
+            // not require uploading a replacement.
+            'remove_avatar' => 'nullable|boolean',
         ]);
 
-        $before = $user->only(['name', 'email']);
+        $before = $user->only(['name', 'email', 'avatar_path']);
+        $previous = $user->avatar_path;
+
+        if ($request->hasFile('avatar')) {
+            $data['avatar_path'] = $request->file('avatar')->store('users/avatars', 'public');
+        } elseif ($request->boolean('remove_avatar')) {
+            $data['avatar_path'] = null;
+        }
+
+        unset($data['avatar'], $data['remove_avatar']);
+
         $user->update($data);
 
-        AuditService::log('update', 'users', $user->id, $before, $user->only(['name', 'email']));
+        /*
+         * Delete the old file only once the row points somewhere else.
+         *
+         * The other order loses the picture if the update then fails, leaving
+         * a row naming a file that is no longer there.
+         */
+        if ($previous && array_key_exists('avatar_path', $data) && $data['avatar_path'] !== $previous) {
+            Storage::disk('public')->delete($previous);
+        }
+
+        AuditService::log('update', 'users', $user->id, $before,
+            $user->only(['name', 'email', 'avatar_path']));
 
         return back()->with('success', 'Profile updated.');
     }

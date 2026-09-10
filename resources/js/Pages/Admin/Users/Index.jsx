@@ -49,7 +49,15 @@ function RoleChip({ role }) {
     );
 }
 
-function Avatar({ name, active }) {
+function Avatar({ name, active, src }) {
+    // The photo when there is one; the initial is the fallback, not the rule.
+    if (src) {
+        return (
+            <img src={src} alt=""
+                className={`h-9 w-9 flex-shrink-0 rounded-full object-cover ${active ? '' : 'opacity-50 grayscale'}`} />
+        );
+    }
+
     return (
         <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${
             active ? 'bg-[#006400] text-white' : 'bg-gray-200 text-gray-500'
@@ -84,7 +92,7 @@ function DeleteDialog({ user, busy, onCancel, onConfirm }) {
         >
             <div className="px-5 py-4">
                 <div className="flex items-center gap-3">
-                    <Avatar name={user.name} active={user.is_active} />
+                    <Avatar name={user.name} active={user.is_active} src={user.avatar_url} />
                     <div className="min-w-0">
                         <p className="font-semibold text-gray-900 truncate">{user.name}</p>
                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
@@ -319,7 +327,7 @@ export default function UsersIndex({
                                             <tr key={u.id} className="hover:bg-green-50/60 transition-colors">
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-3 min-w-0">
-                                                        <Avatar name={u.name} active={u.is_active} />
+                                                        <Avatar name={u.name} active={u.is_active} src={u.avatar_url} />
                                                         <div className="min-w-0">
                                                             <p className="font-medium text-gray-900 truncate">
                                                                 {u.name}
@@ -392,7 +400,7 @@ export default function UsersIndex({
 
                                 return (
                                     <li key={u.id} className="flex items-start gap-3 p-4">
-                                        <Avatar name={u.name} active={u.is_active} />
+                                        <Avatar name={u.name} active={u.is_active} src={u.avatar_url} />
                                         <div className="min-w-0 flex-1">
                                             <p className="font-medium text-gray-900 truncate">
                                                 {u.name}

@@ -30,6 +30,9 @@ class HandleInertiaRequests extends Middleware
                     'name'  => $user->name,
                     'email' => $user->email,
                     'role'  => $user->roles->first()?->name,
+                    // So the sidebar shows the person's own face rather than
+                    // an initial, on every page.
+                    'avatar_url' => $user->avatar_url,
                 ] : null,
                 'permissions' => $user
                     ? $user->getAllPermissions()->pluck('name')->toArray()

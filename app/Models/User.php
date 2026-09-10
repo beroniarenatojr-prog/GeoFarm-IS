@@ -11,7 +11,23 @@ class User extends Authenticatable
 {
     use Notifiable, HasRoles;
 
-    protected $fillable = ['name', 'email', 'password', 'is_active', 'last_login'];
+    protected $fillable = ['name', 'email', 'password', 'is_active', 'last_login', 'avatar_path'];
+
+    /**
+     * The profile picture's URL, or null for the initial-letter fallback.
+     *
+     * Appended so every screen that renders a user — the sidebar, the audit
+     * log, the user list — gets it without each one remembering to ask. It is
+     * one short string, not the image.
+     */
+    protected $appends = ['avatar_url'];
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->avatar_path
+            ? \Illuminate\Support\Facades\Storage::disk('public')->url($this->avatar_path)
+            : null;
+    }
 
     // lock_password is intentionally absent from $fillable: it is only ever
     // written through setLockPassword(), never mass-assigned from a request.

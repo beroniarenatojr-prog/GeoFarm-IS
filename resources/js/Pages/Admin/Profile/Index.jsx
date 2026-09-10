@@ -1,7 +1,8 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { User, Mail, ShieldCheck, Clock, CalendarDays, KeyRound, Save, Lock } from 'lucide-react';
+import { User, Mail, ShieldCheck, Clock, CalendarDays, KeyRound, Save, Lock, Camera, Trash2 } from 'lucide-react';
 import Card from '@/Components/ui/Card';
 import { formatDate } from '@/utils/dateFormatter';
 
@@ -21,7 +22,39 @@ const input = (hasError) =>
     }`;
 
 export default function ProfileIndex({ profile }) {
-    const details = useForm({ name: profile.name ?? '', email: profile.email ?? '' });
+    /*
+     * _method: 'put' because this form carries a file.
+     *
+     * Inertia only sends multipart on a POST, so a real put() would arrive
+     * with the picture stripped. Laravel reads _method and routes it to the
+     * PUT handler regardless.
+     */
+    const details = useForm({
+        _method: 'put',
+        name: profile.name ?? '',
+        email: profile.email ?? '',
+        avatar: null,
+        remove_avatar: false,
+    });
+
+    // Shown instead of the saved picture while a new one is chosen, so the
+    // face on screen is the one about to be saved.
+    const [preview, setPreview] = useState(null);
+
+    const chooseAvatar = file => {
+        if (!file) return;
+
+        details.setData(d => ({ ...d, avatar: file, remove_avatar: false }));
+        setPreview(URL.createObjectURL(file));
+    };
+
+    const dropAvatar = () => {
+        details.setData(d => ({ ...d, avatar: null, remove_avatar: true }));
+        setPreview(null);
+    };
+
+    // What the header and the picker should show right now.
+    const shownAvatar = details.data.remove_avatar ? null : (preview ?? profile.avatar_url ?? null);
     const password = useForm({ current_password: '', password: '', password_confirmation: '' });
     const lock = useForm({
         current_password: '', current_lock_password: '',
@@ -33,8 +66,14 @@ export default function ProfileIndex({ profile }) {
 
     const saveDetails = e => {
         e.preventDefault();
-        details.put('/admin/profile', {
+        details.post('/admin/profile', {
             preserveScroll: true,
+            // The chosen file has been saved and re-served from the server now,
+            // so the local blob preview would only go stale.
+            onSuccess: () => {
+                setPreview(null);
+                details.setData(d => ({ ...d, avatar: null, remove_avatar: false }));
+            },
             onError: errs => toast.error(Object.values(errs)[0] || 'Could not save your profile.'),
         });
     };
@@ -76,8 +115,34 @@ export default function ProfileIndex({ profile }) {
                 }}
             >
                 <div className="flex items-center gap-5">
-                    <div className="h-20 w-20 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/25 flex items-center justify-center flex-shrink-0">
-                        <span className="text-2xl font-bold text-white tracking-tight">{initials || '?'}</span>
+                    {/* The picture, or the initials if there is none. The
+                        camera button opens the file picker; the whole tile is
+                        the label so the click target is the face itself. */}
+                    <div className="relative h-20 w-20 flex-shrink-0">
+                        <label
+                            htmlFor="avatar"
+                            title="Change your profile picture"
+                            className="flex h-20 w-20 cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-white/25 bg-white/20 backdrop-blur-sm"
+                        >
+                            {shownAvatar
+                                ? <img src={shownAvatar} alt="" className="h-full w-full object-cover" />
+                                : <span className="text-2xl font-bold tracking-tight text-white">{initials || '?'}</span>}
+                        </label>
+
+                        <input
+                            id="avatar"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={e => chooseAvatar(e.target.files?.[0])}
+                        />
+
+                        <label
+                            htmlFor="avatar"
+                            className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-white text-[#006400] shadow-md hover:bg-green-50"
+                        >
+                            <Camera className="h-3.5 w-3.5" />
+                        </label>
                     </div>
                     <div className="min-w-0">
                         <h1 className="text-2xl font-bold text-white truncate">{profile.name}</h1>
@@ -171,7 +236,24 @@ export default function ProfileIndex({ profile }) {
                                 </div>
                             </Field>
 
-                            <div className="flex justify-end">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                {/* Says the picture is editable at all — the
+                                    camera button sits up in the banner, which
+                                    is easy to miss on a form-shaped page. */}
+                                <p className="text-xs text-gray-500">
+                                    {shownAvatar
+                                        ? <>Photo set.{' '}
+                                            <button type="button" onClick={dropAvatar}
+                                                className="inline-flex items-center gap-1 font-medium text-red-600 hover:underline">
+                                                <Trash2 className="h-3 w-3" /> Remove
+                                            </button>
+                                          </>
+                                        : 'Click the photo above to add a profile picture. JPG, PNG or WebP, up to 2MB.'}
+                                    {details.errors.avatar && (
+                                        <span className="ml-1 text-red-600">{details.errors.avatar}</span>
+                                    )}
+                                </p>
+
                                 <button
                                     type="submit"
                                     disabled={details.processing}
