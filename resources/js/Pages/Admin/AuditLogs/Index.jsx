@@ -6,6 +6,7 @@ import {
     ShieldCheck, FileClock,
 } from 'lucide-react';
 import { formatDateTime } from '@/utils/dateFormatter';
+import SuggestSelect from '@/Components/ui/SuggestSelect';
 
 /**
  * Every action gets its own colour. The old page painted anything that was not
@@ -151,10 +152,17 @@ export default function AuditLogsIndex({ logs, users, actions, tables, filters }
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                     <div>
                         <label className={label}>User</label>
-                        <select className={field} value={f.user_id ?? ''} onChange={e => set('user_id', e.target.value)}>
-                            <option value="">Everyone</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
+                        {/* Typed rather than scrolled. The account list grows
+                            with the office, and somebody auditing an action
+                            knows the name they are looking for — clearing the
+                            box is how "Everyone" is chosen again. */}
+                        <SuggestSelect
+                            value={f.user_id ?? ''}
+                            onChange={id => set('user_id', id)}
+                            options={users.map(u => ({ id: u.id, label: u.name }))}
+                            placeholder="Everyone"
+                            className={field}
+                        />
                     </div>
 
                     <div>
