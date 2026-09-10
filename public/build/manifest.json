@@ -12,7 +12,7 @@
     "isDynamicEntry": true
   },
   "resources/css/app.css": {
-    "file": "assets/app-BE4fXhqn.css",
+    "file": "assets/app-CtPznpep.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -21,7 +21,7 @@
     ]
   },
   "resources/js/app.jsx": {
-    "file": "assets/app-B6Z_eYsU.js",
+    "file": "assets/app-DR3KC3sD.js",
     "name": "app",
     "src": "resources/js/app.jsx",
     "isEntry": true,
@@ -31,7 +31,7 @@
     ],
     "css": [
       "assets/app-voBrSrcx.css",
-      "assets/app-BE4fXhqn.css"
+      "assets/app-CtPznpep.css"
     ]
   }
 }
