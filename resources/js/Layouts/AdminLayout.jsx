@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import NotificationBell from '@/Components/ui/NotificationBell';
@@ -25,8 +25,14 @@ import {
     Boxes
 } from 'lucide-react';
 
-/** Which sidebar groups the user left open. Per-browser convenience only. */
-const SECTIONS_KEY = 'geofarm.sidebar.sections';
+/*
+ * Which sidebar groups the user left open. Per-browser convenience only.
+ *
+ * The key carries a version because the default changed: groups now start
+ * closed. Reading the old key would hand every existing user the all-open
+ * state they had saved and the new default would never be seen.
+ */
+const SECTIONS_KEY = 'geofarm.sidebar.sections.v2';
 
 const readOpenSections = () => {
     try {
@@ -114,10 +120,10 @@ export default function AdminLayout({
     const [menuOpen, setMenuOpen] = useState(false);
     const expanded = hovering || menuOpen;
 
-    // Groups start open so nothing is hidden from a first-time user; whatever
-    // they collapse is remembered.
+    // Closed to begin with: the menu opens as three headings, and a group is
+    // expanded when it is wanted. Whatever the user opens is remembered.
     const [openSections, setOpenSections] = useState(
-        () => readOpenSections() ?? Object.fromEntries(nav.map(s => [s.section, true]))
+        () => readOpenSections() ?? Object.fromEntries(nav.map(s => [s.section, false]))
     );
 
     const handleBack = () => {
@@ -156,7 +162,10 @@ export default function AdminLayout({
         href === '/admin' ? page.url === '/admin' : page.url.startsWith(href);
 
     const toggleSection = (name) => setOpenSections(prev => {
-        const next = { ...prev, [name]: prev[name] === false };
+        // !prev[name], not prev[name] === false: a group absent from the saved
+        // state is closed, and comparing against false would leave it closed
+        // no matter how often its heading was clicked.
+        const next = { ...prev, [name]: !prev[name] };
         try {
             localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
         } catch {
@@ -165,16 +174,18 @@ export default function AdminLayout({
         return next;
     });
 
-    // Never leave the user on a page whose group is collapsed — they would
-    // have no visible cue for where they are.
-    useEffect(() => {
-        const active = visibleNav.find(s => s.items.some(i => isActive(i.href)));
-
-        if (active && openSections[active.section] === false) {
-            setOpenSections(prev => ({ ...prev, [active.section]: true }));
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page.url]);
+    /*
+     * The group holding the current page is NOT forced open any more.
+     *
+     * It used to be, so the user always had a cue for where they were. With
+     * groups closed by default that rule undid the default on every single
+     * page load — the current section would spring open and the menu was never
+     * actually collapsed.
+     *
+     * The cue survives without it: a closed group holding the current page
+     * shows a dot beside its heading, and the header breadcrumb names the
+     * section outright.
+     */
 
     return (
         <div className="min-h-screen flex">
@@ -235,7 +246,9 @@ export default function AdminLayout({
                     })}
 
                     {expanded && visibleNav.map(section => {
-                        const isOpen = openSections[section.section] !== false;
+                        // Open only when explicitly opened — an unseen group is
+                        // closed, which is what makes the default hold.
+                        const isOpen = openSections[section.section] === true;
                         const activeCount = section.items.filter(i => isActive(i.href)).length;
 
                         return (
@@ -248,7 +261,7 @@ export default function AdminLayout({
                                     title={isOpen ? `Hide ${section.section}` : `Show ${section.section}`}
                                     className="w-full flex items-center justify-between px-4 py-1.5 mb-1 group"
                                 >
-                                    <h3 className="text-xs font-semibold text-white/50 group-hover:text-white/80 tracking-wider transition-colors">
+                                    <h3 className="text-[10px] font-semibold uppercase tracking-wider text-white/50 transition-colors group-hover:text-white/80">
                                         {section.section}
                                     </h3>
                                     <span className="flex items-center gap-1.5">
@@ -276,13 +289,13 @@ export default function AdminLayout({
                                                     key={item.href}
                                                     href={item.href}
                                                     aria-current={active ? 'page' : undefined}
-                                                    className={`flex items-center gap-3 py-2.5 text-sm rounded mx-2 px-3 transition-colors ${
+                                                    className={`mx-2 flex items-center gap-2.5 rounded px-3 py-2 text-[13px] transition-colors ${
                                                         active
                                                             ? 'bg-white/20 text-white font-semibold'
                                                             : 'text-white/95 hover:text-white hover:bg-white/15'
                                                     }`}
                                                 >
-                                                    <Icon className="h-5 w-5 flex-shrink-0" />
+                                                    <Icon className="h-4 w-4 flex-shrink-0" />
                                                     <span className="whitespace-nowrap">{item.label}</span>
                                                 </Link>
                                             );

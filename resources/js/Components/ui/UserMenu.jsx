@@ -98,15 +98,15 @@ export default function UserMenu({ expanded, onOpenChange }) {
                     open ? 'bg-white/15' : ''
                 } ${expanded ? 'gap-3 px-2 py-2' : 'justify-center py-2'}`}
             >
-                <span className="flex-shrink-0 h-9 w-9 rounded-full bg-white/20 text-white font-bold text-xs flex items-center justify-center">
+                <span className="flex-shrink-0 h-8 w-8 rounded-full bg-white/20 text-white font-bold text-[11px] flex items-center justify-center">
                     {initials || '?'}
                 </span>
 
                 {expanded && (
                     <>
                         <span className="min-w-0 flex-1 text-left">
-                            <span className="block text-white/95 text-sm truncate">{user.name}</span>
-                            <span className="block text-white/60 text-xs truncate">{user.role}</span>
+                            <span className="block truncate text-[13px] text-white/95">{user.name}</span>
+                            <span className="block truncate text-[11px] text-white/60">{user.role}</span>
                         </span>
                         <ChevronRight
                             className={`h-4 w-4 text-white/50 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}

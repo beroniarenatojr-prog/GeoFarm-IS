@@ -23,7 +23,23 @@ export default function FarmerPicker({
     // already has a farmer.
     initial = null,
     placeholder = 'Search name, RSBSA no., barangay, mobile…',
+    /**
+     * Guidance under the box. Passed in rather than written outside the
+     * component so the scan tile can stand beside the whole field — box and
+     * hint together — instead of only the input.
+     */
+    hint = null,
+    /**
+     * 'lg' turns the scan control into a tall tile beside the field.
+     *
+     * Opt-in, because this is only right where scanning is the main way in:
+     * at a distribution counter with a queue. On the parcel and inventory
+     * forms a farmer is picked once while filling a long form, and a tile that
+     * size would shout over every other field.
+     */
+    scanSize = 'sm',
 }) {
+    const bigScan = scanSize === 'lg';
     const [term, setTerm] = useState('');
     const [matches, setMatches] = useState([]);
     const [chosen, setChosen] = useState(initial);
@@ -200,10 +216,9 @@ export default function FarmerPicker({
                 </label>
             )}
 
-            {/* items-stretch, so the scan control is a full-height button
-                beside the box rather than a small square floating next to it. */}
-            <div className="flex items-stretch gap-2">
-            <div ref={anchorRef} className="relative flex-1">
+            <div className="flex items-stretch gap-3">
+            <div className="min-w-0 flex-1">
+            <div ref={anchorRef} className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                     type="text"
@@ -224,6 +239,9 @@ export default function FarmerPicker({
                 )}
             </div>
 
+            {hint && <p className="mt-1.5 text-xs text-gray-500">{hint}</p>}
+            </div>
+
             {/* The camera path. A handheld scanner needs no button — it types
                 into the box beside this one. */}
             {/* Deliberately a real button, not an icon tucked in a corner.
@@ -236,10 +254,16 @@ export default function FarmerPicker({
                 onClick={() => { setScanError(null); setCameraOpen(true); }}
                 title="Scan the QR on the back of the farmer's ID card"
                 aria-label="Scan the farmer's ID card"
-                className="flex shrink-0 items-center gap-2 rounded-lg border-2 border-green-600 bg-green-50 px-4 text-sm font-semibold text-[#006400] transition-colors hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+                className={`flex shrink-0 flex-col items-center justify-center gap-2 rounded-xl border-2 border-green-600 bg-green-50 font-semibold text-[#006400] transition-colors hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                    bigScan
+                        ? 'w-32 gap-3 px-4 text-sm sm:w-44'
+                        : 'flex-row px-4 text-sm'
+                }`}
             >
-                <ScanLine className="h-6 w-6" />
-                <span className="hidden sm:inline">Scan ID</span>
+                <ScanLine className={bigScan ? 'h-12 w-12 sm:h-14 sm:w-14' : 'h-6 w-6'} />
+                <span className={bigScan ? 'text-center leading-tight' : 'hidden sm:inline'}>
+                    {bigScan ? <>Scan ID<br /><span className="text-xs font-normal text-green-800/70">QR on the card back</span></> : 'Scan ID'}
+                </span>
             </button>
             </div>
 

@@ -426,15 +426,17 @@ export default function AssistanceShow({
                         <label className="mb-1.5 block text-sm font-semibold text-gray-700">
                             Farmer <span className="text-red-500">*</span>
                         </label>
+                        {/* The counter's main way in, so the scan control is a
+                            tile beside the whole field rather than an icon
+                            tucked against the box. */}
                         <FarmerPicker
                             label={null}
                             value={data.farmer_id}
                             onChange={id => setData('farmer_id', id)}
                             error={errors.farmer_id}
+                            scanSize="lg"
+                            hint="Type a name or RSBSA number — or scan the farmer's ID card."
                         />
-                        <p className="mt-1.5 text-xs text-gray-500">
-                            Type a name or RSBSA number, or scan the QR on the back of the farmer&apos;s ID card.
-                        </p>
                     </div>
 
                     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

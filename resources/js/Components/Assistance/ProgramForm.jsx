@@ -33,7 +33,6 @@ export function useProgramForm(program) {
         // No field asks for this any more, but it is still carried so editing
         // an older programme sends its budget back unchanged rather than
         // quietly dropping a figure the office recorded.
-        total_budget:       program?.total_budget ?? '',
         standard_cash_amount: program?.standard_cash_amount ?? '',
         start_date:         toDateInput(program?.start_date),
         end_date:           toDateInput(program?.end_date),
@@ -121,6 +120,19 @@ export function ProgramFormFields({
     ];
 
     const barangayOptions = barangays.map(b => ({ id: b.id, label: b.name }));
+
+    /*
+     * Warehouse stock for the item type-ahead.
+     *
+     * What is on hand rides along as the note under each suggestion, so the
+     * figure is visible while choosing rather than only after — the old
+     * dropdown put it in the option text, and it should not be lost.
+     */
+    const itemOptions = stockItems.map(s => ({
+        id:    s.id,
+        label: s.item_name,
+        meta:  `${Number(s.quantity).toLocaleString()} ${s.unit ?? ''} in stock`.trim(),
+    }));
 
     return (
         // Two columns: the short fields pair up instead of each claiming a full
@@ -251,15 +263,20 @@ export function ProgramFormFields({
                                         <div className="flex flex-wrap items-end gap-2">
                                             <div className="min-w-[10rem] flex-1">
                                                 <label className="mb-0.5 block text-[11px] text-gray-500">Item</label>
-                                                <select className={field} value={line.inventory_item_id}
-                                                    onChange={e => setItem(i, 'inventory_item_id', e.target.value)} required>
-                                                    <option value="">Select an item</option>
-                                                    {stockItems.map(s => (
-                                                        <option key={s.id} value={s.id}>
-                                                            {s.item_name} ({Number(s.quantity).toLocaleString()} {s.unit} in stock)
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                {/* Typed, not scrolled. A warehouse list runs to
+                                                    hundreds of lines, and staff know "urea", not
+                                                    where it falls alphabetically. The stock figure
+                                                    stays on each row, since choosing something the
+                                                    store barely has is the mistake worth catching
+                                                    at this point rather than on hand-out day. */}
+                                                <SuggestSelect
+                                                    value={line.inventory_item_id}
+                                                    onChange={id => setItem(i, 'inventory_item_id', id)}
+                                                    options={itemOptions}
+                                                    placeholder="Type an item name…"
+                                                    className={field}
+                                                    emptyHint="No stock items are on file yet. Add them under Farm Assets first."
+                                                />
                                             </div>
 
                                             <div className="w-28">
