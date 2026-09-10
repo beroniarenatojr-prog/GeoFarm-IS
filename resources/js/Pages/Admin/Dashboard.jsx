@@ -7,7 +7,7 @@ import { Link } from '@inertiajs/react';
 import Card from '@/Components/ui/Card';
 import {
     Users, MapPin, Beef, HandHeart, Activity, ClipboardCheck, Sprout, Ruler,
-    AlertTriangle, CheckCircle2, Mail, ArrowRight, ShieldAlert, Coins, Globe,
+    AlertTriangle, Mail, ArrowRight, ShieldAlert, Coins, Globe,
 } from 'lucide-react';
 import { formatDate } from '@/utils/dateFormatter';
 
@@ -202,47 +202,44 @@ export default function Dashboard({
             {/* ── 1. What needs attention ─────────────────────────────── */}
             {/* First, deliberately. The office opens this screen to find out
                 what it has to do, not to admire totals. */}
-            <section aria-labelledby="attention-heading" className="mb-6">
-                <h2 id="attention-heading" className="sr-only">Needs attention</h2>
+            {/* Nothing at all when there is nothing to do.
+                A banner announcing that everything is fine is one more thing
+                to read past every morning, and the KPI tile already carries
+                the count. The section collapses entirely rather than holding
+                empty space. */}
+            {(attention === undefined || todo.length > 0) && (
+                <section aria-labelledby="attention-heading" className="mb-6">
+                    <h2 id="attention-heading" className="sr-only">Needs attention</h2>
 
-                {attention === undefined ? (
-                    <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm"><Loading rows={2} /></div>
-                ) : todo.length === 0 ? (
-                    <div className="flex items-center gap-4 rounded-2xl border border-green-200 bg-green-50/70 px-5 py-4">
-                        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-[#006400]">
-                            <CheckCircle2 className="h-5 w-5 text-white" />
-                        </span>
-                        <div>
-                            <p className="font-semibold text-gray-900">Everything is up to date</p>
-                            <p className="text-sm text-gray-600">No urgent actions require your attention.</p>
+                    {attention === undefined ? (
+                        <div className="rounded-2xl border border-green-100 bg-white p-5 shadow-sm"><Loading rows={2} /></div>
+                    ) : (
+                        <div className="space-y-2">
+                            {todo.map(item => {
+                                const Icon = item.icon;
+                                const tone = TONE[item.tone];
+
+                                return (
+                                    <Link
+                                        key={item.key}
+                                        href={item.href}
+                                        className={`flex items-center gap-4 rounded-2xl border px-5 py-3.5 transition-colors hover:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${tone.ring}`}
+                                    >
+                                        <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${tone.chip}`}>
+                                            <Icon className="h-4 w-4" />
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block font-semibold text-gray-900">{item.label(item.count)}</span>
+                                            <span className="block text-sm text-gray-600">{item.note}</span>
+                                        </span>
+                                        <ArrowRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                                    </Link>
+                                );
+                            })}
                         </div>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {todo.map(item => {
-                            const Icon = item.icon;
-                            const tone = TONE[item.tone];
-
-                            return (
-                                <Link
-                                    key={item.key}
-                                    href={item.href}
-                                    className={`flex items-center gap-4 rounded-2xl border px-5 py-3.5 transition-colors hover:border-green-300 focus:outline-none focus:ring-2 focus:ring-green-500 ${tone.ring}`}
-                                >
-                                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg ${tone.chip}`}>
-                                        <Icon className="h-4 w-4" />
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                        <span className="block font-semibold text-gray-900">{item.label(item.count)}</span>
-                                        <span className="block text-sm text-gray-600">{item.note}</span>
-                                    </span>
-                                    <ArrowRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                                </Link>
-                            );
-                        })}
-                    </div>
-                )}
-            </section>
+                    )}
+                </section>
+            )}
 
             {/* ── 2. The headline figures ─────────────────────────────── */}
             <section aria-labelledby="kpi-heading" className="mb-6">
