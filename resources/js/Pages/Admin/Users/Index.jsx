@@ -113,6 +113,52 @@ function DeleteDialog({ user, busy, onCancel, onConfirm }) {
     );
 }
 
+/**
+ * Editing one account, in place.
+ *
+ * Its own component so useUserForm is seeded with the right user when it
+ * mounts. Held in the parent, the form would have to be re-filled by hand on
+ * every open, and the row you clicked and the data you saw could disagree.
+ */
+function EditDialog({ user, roles, onClose }) {
+    const form = useUserForm(user);
+
+    const submit = e => {
+        e.preventDefault();
+
+        form.put(`/admin/users/${user.id}`, {
+            preserveScroll: true,
+            onSuccess: onClose,
+        });
+    };
+
+    return (
+        <ModalShell
+            open
+            onClose={onClose}
+            title={`Edit ${user.name}`}
+            size="lg"
+            as="form"
+            onSubmit={submit}
+            bodyClass="px-6 py-5"
+            footer={
+                <>
+                    <button type="button" onClick={onClose}
+                        className="rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" disabled={form.processing}
+                        className="rounded-lg bg-[#006400] px-5 py-2 text-sm font-semibold text-white hover:bg-[#228B22] disabled:opacity-50">
+                        {form.processing ? 'Saving…' : 'Update user'}
+                    </button>
+                </>
+            }
+        >
+            <UserFormFields form={form} roles={roles} isEdit />
+        </ModalShell>
+    );
+}
+
 export default function UsersIndex({
     users, roles, canCreateAdmin, canDeleteAdmin, canCreate, currentUserId, filters, stats,
 }) {
@@ -121,6 +167,7 @@ export default function UsersIndex({
     const [pendingDelete, setPendingDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
     const [adding, setAdding] = useState(false);
+    const [editing, setEditing] = useState(null);
 
     const addForm = useUserForm(null);
 
@@ -304,10 +351,10 @@ export default function UsersIndex({
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         {mayEdit ? (
-                                                            <Link href={`/admin/users/${u.id}/edit`} title="Edit"
+                                                            <button type="button" onClick={() => setEditing(u)} title="Edit"
                                                                 className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
                                                                 <Pencil className="h-3.5 w-3.5" />
-                                                            </Link>
+                                                            </button>
                                                         ) : (
                                                             <span aria-disabled="true" title="Only a Super Admin can edit an Admin account"
                                                                 className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-gray-300 cursor-not-allowed">
@@ -364,10 +411,10 @@ export default function UsersIndex({
                                         </div>
                                         <div className="flex flex-shrink-0 items-center gap-1.5">
                                             {mayEdit && (
-                                                <Link href={`/admin/users/${u.id}/edit`} title="Edit"
+                                                <button type="button" onClick={() => setEditing(u)} title="Edit"
                                                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700">
                                                     <Pencil className="h-3.5 w-3.5" />
-                                                </Link>
+                                                </button>
                                             )}
                                             {mayDelete && (
                                                 <button onClick={() => setPendingDelete(u)} title="Delete"
@@ -450,6 +497,14 @@ export default function UsersIndex({
                 >
                     <UserFormFields form={addForm} roles={roles} />
                 </ModalShell>
+            )}
+
+            {editing && (
+                <EditDialog
+                    user={editing}
+                    roles={roles}
+                    onClose={() => setEditing(null)}
+                />
             )}
         </AdminLayout>
     );
