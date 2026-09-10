@@ -1,7 +1,10 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import PublicFormShell from '@/Layouts/PublicFormShell';
 import { useForm, router } from '@inertiajs/react';
-import { User, MapPin, Users, Briefcase, Map, Image as ImageIcon, FileCheck, ChevronLeft, ChevronRight, Check, Info, X, Plus, Lock } from 'lucide-react';
+// Map is aliased deliberately. Imported under its own name it shadows the
+// global Map for this whole module, so `new Map()` builds a lucide icon and
+// throws "is not a constructor" — which is what blanked the farmer edit page.
+import { User, MapPin, Users, Briefcase, Map as MapIcon, Image as ImageIcon, FileCheck, ChevronLeft, ChevronRight, Check, Info, X, Plus, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMemo, useState } from 'react';
 import { formatRsbsa, formatMobile, titleCaseName, RSBSA_MASK, MOBILE_MASK } from '@/utils/registryFormats';
@@ -109,7 +112,7 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
         { number: 2, title: 'Address', subtitle: '', icon: MapPin },
         { number: 3, title: 'Classi‑', subtitle: 'fication', icon: Users },
         { number: 4, title: 'Livelihood', subtitle: '', icon: Briefcase },
-        { number: 5, title: 'Farm', subtitle: 'Parcels', icon: Map },
+        { number: 5, title: 'Farm', subtitle: 'Parcels', icon: MapIcon },
         { number: 6, title: 'Photo', subtitle: '& ID', icon: ImageIcon },
         { number: 7, title: 'Review', subtitle: '& Submit', icon: FileCheck },
     ];
