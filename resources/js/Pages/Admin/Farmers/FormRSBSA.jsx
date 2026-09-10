@@ -1483,8 +1483,15 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                         <div key={index} className="border-2 border-gray-200 rounded-xl p-6 relative">
                                             {/* Parcel Header */}
                                             <div className="flex items-center justify-between mb-4">
-                                                <h3 className="text-lg font-bold text-gray-900">
-                                                    {index + 1} Farm Parcel <span className="text-gray-500">(Sakahan)</span>
+                                                {/* The number saved against the parcel, not just a
+                                                    caption: the rows are numbered by position, so what
+                                                    is shown here is what the register will hold and
+                                                    what Seasonal Tracking and the map will call it. */}
+                                                <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+                                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-600 text-sm font-bold text-white">
+                                                        {index + 1}
+                                                    </span>
+                                                    Farm Parcel <span className="font-normal text-gray-500">(Sakahan {index + 1})</span>
                                                 </h3>
                                                 {data.parcels.length > 1 && (
                                                     <button

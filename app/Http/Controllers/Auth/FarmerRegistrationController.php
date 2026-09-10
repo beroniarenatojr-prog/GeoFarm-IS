@@ -264,6 +264,8 @@ class FarmerRegistrationController extends Controller
             $resolved[] = FarmParcel::sanitiseInput($parcel);
         }
 
-        return $resolved;
+        // Numbered after the blank rows are gone, so the numbers match what
+        // the farmer actually declared rather than the rows on screen.
+        return FarmParcel::numberSequentially($resolved);
     }
 }

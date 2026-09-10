@@ -113,6 +113,39 @@ class FarmParcel extends Model
         return $row;
     }
 
+    /**
+     * Number a farmer's parcels 1, 2, 3 … in the order they were declared.
+     *
+     * Part 3 of the RSBSA form numbers the parcels down the page and the
+     * office refers to them that way, but the form never filled the column —
+     * which is why Seasonal Tracking labels parcels "No parcel no." and the
+     * GIS popup reads "Parcel N/A".
+     *
+     * Applied to the parcels that survive the blank-row filter, never to the
+     * raw rows: a discarded empty row must not leave a hole, or staff go
+     * looking for a parcel 2 that was never declared.
+     *
+     * The number is a position on one person's form, not a serial number
+     * across the municipality — two farmers both have a parcel 1. It is also
+     * reassigned on every save, because the RSBSA flow replaces a farmer's
+     * parcels wholesale; deleting the second of three has to renumber the
+     * third rather than leave 1, 3.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    public static function numberSequentially(array $rows): array
+    {
+        $rows = array_values($rows);
+
+        foreach ($rows as $position => $row) {
+            $row['parcel_number'] = (string) ($position + 1);
+            $rows[$position] = $row;
+        }
+
+        return $rows;
+    }
+
     public function farmer()   { return $this->belongsTo(Farmer::class); }
     public function farmType() { return $this->belongsTo(FarmType::class); }
     public function seasons()  { return $this->hasMany(CropSeason::class, 'parcel_id'); }
