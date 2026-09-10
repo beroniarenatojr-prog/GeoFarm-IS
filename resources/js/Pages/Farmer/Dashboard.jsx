@@ -123,47 +123,86 @@ const RISK_TONE = {
  * No risk level is shown yet - the scorer is a later phase, and printing a
  * level here before one exists would be inventing it.
  */
-function RiskAssessmentCard({ assessment }) {
+function RiskAssessmentPanel({ assessment }) {
     const stale = assessment?.is_stale;
 
+    /*
+     * Tones for a green ground, not a white one.
+     *
+     * The card this replaces sat on white, where a pale grey chip reads fine.
+     * On the banner the same chip disappears, so "not yet assessed" — the
+     * state that most needs acting on — becomes the easiest one to miss.
+     */
     const status = !assessment
-        ? { label: 'Not yet assessed', tone: 'bg-gray-100 text-gray-700' }
+        ? { label: 'Not yet assessed', tone: 'bg-white/20 text-white ring-1 ring-white/30' }
         : stale
-            ? { label: 'Assessment needs updating', tone: 'bg-amber-100 text-amber-800' }
-            : { label: 'Assessment completed', tone: 'bg-green-100 text-green-800' };
+            ? { label: 'Needs updating', tone: 'bg-amber-300 text-amber-950' }
+            : { label: 'Completed', tone: 'bg-white text-[#006400]' };
 
     return (
-        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
-            <SectionHeading icon={ShieldAlert} title="Climate & Financial Risk Assessment" />
+        <div className="w-full flex-none rounded-2xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm sm:p-5 lg:w-[19rem]">
+            <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 flex-none text-white/80" />
+                <h2 className="text-sm font-bold leading-tight text-white">
+                    Climate &amp; Financial Risk
+                </h2>
+            </div>
 
-            <p className="mt-1 text-sm text-gray-600">
-                Assess climate-related risks, farming conditions and financial performance to
-                identify potential financial-loss risks and receive appropriate agricultural
-                recommendations.
-            </p>
+            {assessment?.risk_level ? (
+                <div className="mt-3 flex items-baseline gap-2">
+                    <span className="text-2xl font-bold uppercase tracking-tight text-white">
+                        {assessment.risk_level}
+                    </span>
+                    {/* Called a score, never a probability — see the results card. */}
+                    <span className="text-xs text-white/70">
+                        risk · {assessment.risk_score} of 100
+                    </span>
+                </div>
+            ) : (
+                <p className="mt-2 text-xs leading-relaxed text-white/75">
+                    Check your climate and financial risk to get recommendations for your farm.
+                </p>
+            )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status.tone}`}>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.tone}`}>
                     {status.label}
                 </span>
                 {assessment?.assessed_at && (
-                    <span className="text-sm text-gray-500">
-                        Last assessment:{' '}
+                    <span className="text-[11px] text-white/60">
                         {new Date(assessment.assessed_at).toLocaleDateString('en-PH', {
-                            year: 'numeric', month: 'long', day: 'numeric',
+                            year: 'numeric', month: 'short', day: 'numeric',
                         })}
                     </span>
                 )}
             </div>
 
-            {!assessment && (
-                <p className="mt-3 text-sm text-gray-500">
-                    No risk assessment completed yet.
-                </p>
-            )}
+            <a
+                href="/farmer/risk-assessment"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-[#006400] shadow-sm transition hover:bg-green-50"
+            >
+                {assessment ? 'Update assessment' : 'Start assessment'}
+            </a>
+        </div>
+    );
+}
 
-            {assessment?.risk_level && (
-                <div className="mt-4 rounded-xl border border-gray-200 p-4">
+/**
+ * The findings, once there are some.
+ *
+ * Only the summary and the call to action moved into the banner. Factors,
+ * recommendations and the disclaimer stay down here on white — they are
+ * several paragraphs of reading, and a banner that grows to hold them stops
+ * being a banner.
+ */
+function RiskAssessmentResults({ assessment }) {
+    if (!assessment?.risk_level) return null;
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 sm:p-6 mb-8">
+            <SectionHeading icon={ShieldAlert} title="Your Risk Assessment Results" />
+
+            <div className="mt-4 rounded-xl border border-gray-200 p-4">
                     <div className="flex flex-wrap items-center gap-3">
                         <span className={`rounded-lg px-3 py-1.5 text-sm font-bold uppercase tracking-wide ${RISK_TONE[assessment.risk_level]}`}>
                             {assessment.risk_level} risk
@@ -225,15 +264,7 @@ function RiskAssessmentCard({ assessment }) {
                         actions are general guidance, not a technical prescription. Discuss both
                         with the Municipal Agriculture Office.
                     </p>
-                </div>
-            )}
-
-            <a
-                href="/farmer/risk-assessment"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#006400] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800"
-            >
-                {assessment ? 'Update assessment' : 'Start assessment'}
-            </a>
+            </div>
         </div>
     );
 }
@@ -359,43 +390,53 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                     </svg>
 
                     <div className="relative p-5 sm:p-9">
-                        {/* Avatar beside the name on phones rather than above it;
-                            stacked, the two claimed most of the first screen. */}
-                        <div className="flex flex-row items-center gap-4 sm:gap-6">
-                            {/* avatar */}
-                            <div className={`flex-shrink-0 h-16 w-16 sm:h-24 sm:w-24 rounded-2xl ring-4 ${status.ring} overflow-hidden bg-white/15 backdrop-blur-sm flex items-center justify-center shadow-lg`}>
-                                {farmer.photo_path ? (
-                                    <img
-                                        src={`/storage/${farmer.photo_path}`}
-                                        alt=""
-                                        className="h-full w-full object-cover"
-                                    />
-                                ) : (
-                                    <span className="text-xl sm:text-3xl font-bold text-white tracking-tight">{initials || '—'}</span>
-                                )}
-                            </div>
+                        {/* Identity on the left, risk on the right.
+                            The assessment is the one thing on this page a farmer
+                            is meant to act on, so it belongs beside their name
+                            rather than below the fold. Below lg it stacks under
+                            the identity, because side by side on a phone would
+                            leave neither readable. */}
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-8">
+                            {/* Avatar beside the name on phones rather than above it;
+                                stacked, the two claimed most of the first screen. */}
+                            <div className="flex flex-row items-center gap-4 sm:gap-6">
+                                {/* avatar */}
+                                <div className={`flex-shrink-0 h-16 w-16 sm:h-24 sm:w-24 rounded-2xl ring-4 ${status.ring} overflow-hidden bg-white/15 backdrop-blur-sm flex items-center justify-center shadow-lg`}>
+                                    {farmer.photo_path ? (
+                                        <img
+                                            src={`/storage/${farmer.photo_path}`}
+                                            alt=""
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <span className="text-xl sm:text-3xl font-bold text-white tracking-tight">{initials || '—'}</span>
+                                    )}
+                                </div>
 
-                            <div className="min-w-0 flex-1">
-                                <p className="text-white/70 text-xs sm:text-sm font-medium mb-0.5 sm:mb-1">Welcome back,</p>
-                                <h1 className="text-xl sm:text-4xl font-bold text-white tracking-tight mb-3 sm:mb-4 break-words leading-tight">
-                                    {farmer.full_name || farmer.first_name}
-                                </h1>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-white/70 text-xs sm:text-sm font-medium mb-0.5 sm:mb-1">Welcome back,</p>
+                                    <h1 className="text-xl sm:text-4xl font-bold text-white tracking-tight mb-3 sm:mb-4 break-words leading-tight">
+                                        {farmer.full_name || farmer.first_name}
+                                    </h1>
 
-                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs sm:text-sm font-medium">
-                                        <BadgeCheck className="h-4 w-4" />
-                                        RSBSA {farmer.rsbsa_no || 'not yet assigned'}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs sm:text-sm font-medium">
-                                        <MapPin className="h-4 w-4" />
-                                        {farmer.barangay || 'No barangay'}
-                                    </span>
-                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border text-xs sm:text-sm font-semibold ${status.chip}`}>
-                                        <StatusIcon className="h-4 w-4" />
-                                        {status.label}
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs sm:text-sm font-medium">
+                                            <BadgeCheck className="h-4 w-4" />
+                                            RSBSA {farmer.rsbsa_no || 'not yet assigned'}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white text-xs sm:text-sm font-medium">
+                                            <MapPin className="h-4 w-4" />
+                                            {farmer.barangay || 'No barangay'}
+                                        </span>
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border text-xs sm:text-sm font-semibold ${status.chip}`}>
+                                            <StatusIcon className="h-4 w-4" />
+                                            {status.label}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
+
+                            <RiskAssessmentPanel assessment={farmer.latest_risk_assessment} />
                         </div>
                     </div>
                 </div>
@@ -625,7 +666,9 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                 )}
 
                 {/* ------------------------------------------- climate & financial risk */}
-                <RiskAssessmentCard assessment={farmer.latest_risk_assessment} />
+                {/* The summary and the button live in the banner above. This
+                    renders nothing until there is an assessment to report. */}
+                <RiskAssessmentResults assessment={farmer.latest_risk_assessment} />
 
                 {/* -------------------------------------------------------- crops */}
                 {seasons.length > 0 && (
