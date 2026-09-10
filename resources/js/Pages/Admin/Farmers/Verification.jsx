@@ -80,6 +80,20 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                         >
                             Pending ({counts.pending})
                         </button>
+                        {/* The decisions already made. Approved submissions used
+                            to disappear from this screen the moment they were
+                            cleared, so there was nowhere to answer who approved
+                            an account, or when. */}
+                        <button
+                            onClick={() => applyFilter('verified')}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+                                status === 'verified'
+                                    ? 'bg-[#006400] text-white shadow-md'
+                                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                            Approved ({counts.approved ?? 0})
+                        </button>
                         <button
                             onClick={() => applyFilter('rejected')}
                             className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
@@ -96,11 +110,15 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                 {submissions.data.length === 0 ? (
                     <div className="text-center py-16">
                         <ClipboardCheck className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">Nothing to review</h3>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                            {status === 'pending' ? 'Nothing to review' : 'Nothing here yet'}
+                        </h3>
                         <p className="text-gray-500">
                             {status === 'pending'
                                 ? 'No farmers are waiting for verification right now.'
-                                : 'No rejected submissions.'}
+                                : status === 'verified'
+                                    ? 'No online registration has been approved yet.'
+                                    : 'No rejected submissions.'}
                         </p>
                     </div>
                 ) : (
@@ -122,7 +140,22 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                                                     REJECTED
                                                 </span>
                                             )}
+                                            {farmer.verification_status === 'verified' && (
+                                                <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-semibold text-[#006400]">
+                                                    APPROVED
+                                                </span>
+                                            )}
                                         </div>
+
+                                        {/* Who decided, and when. The whole point of
+                                            keeping decided submissions on this screen. */}
+                                        {farmer.verification_status !== 'pending' && (farmer.verified_at || farmer.verifier) && (
+                                            <p className="mb-2 text-xs text-gray-500">
+                                                {farmer.verification_status === 'verified' ? 'Approved' : 'Decided'}
+                                                {farmer.verifier?.name ? ` by ${farmer.verifier.name}` : ''}
+                                                {farmer.verified_at ? ` on ${formatDate(farmer.verified_at)}` : ''}
+                                            </p>
+                                        )}
 
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                             <div>

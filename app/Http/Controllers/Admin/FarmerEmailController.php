@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Farmer;
+use App\Models\FarmerMessage;
 use App\Notifications\FarmerManualEmail;
 use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Builder;
@@ -53,6 +54,28 @@ class FarmerEmailController extends Controller
                     'barangay' => $farmer->barangay,
                 ])
                 ->values(),
+
+            /*
+             * What has already been sent, newest first.
+             *
+             * Paginated rather than capped: this is correspondence, and the
+             * office will want to look back further than the last screenful
+             * once it has been running a while.
+             */
+            'messages' => FarmerMessage::with(['farmer:id,first_name,middle_name,last_name,suffix', 'sender:id,name'])
+                ->latest()
+                ->paginate(15)
+                ->withQueryString()
+                ->through(fn (FarmerMessage $message) => [
+                    'id'      => $message->id,
+                    'farmer'  => $message->farmer?->full_name ?? 'Deleted farmer',
+                    'sent_to' => $message->sent_to,
+                    'sent_by' => $message->sender?->name ?? 'Removed account',
+                    'sent_at' => $message->created_at,
+                    'subject' => $message->subject,
+                    'preview' => $message->preview,
+                    'body'    => $message->body,
+                ]),
         ]);
     }
 
@@ -88,6 +111,26 @@ class FarmerEmailController extends Controller
         // it, which keeps a slow SMTP handshake out of the staff request.
         Notification::route('mail', $address)
             ->notify(new FarmerManualEmail($farmer, $data['subject'], $data['message']));
+
+        /*
+         * Kept so the office can read back what it said.
+         *
+         * Recorded alongside the audit entry rather than instead of it: the
+         * audit log answers "who wrote to whom, when" and stays free of the
+         * text; this answers "what did we actually tell them", which is the
+         * question staff ask when a farmer turns up quoting a message.
+         *
+         * The address is stored as it resolved now — a farmer's email may
+         * change, and the history should say where the message went, not
+         * where it would go today.
+         */
+        FarmerMessage::create([
+            'farmer_id' => $farmer->id,
+            'sent_by'   => $request->user()->id,
+            'sent_to'   => $address,
+            'subject'   => $data['subject'],
+            'body'      => $data['message'],
+        ]);
 
         AuditService::log('email', 'farmers', $farmer->id, null, [
             'farmer_name' => $farmer->full_name,

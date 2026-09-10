@@ -1,9 +1,10 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { router, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
-import { Mail, Search, Send, User, AtSign, ShieldCheck } from 'lucide-react';
+import { Mail, Search, Send, User, AtSign, ShieldCheck, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Card from '@/Components/ui/Card';
+import { formatDate } from '@/utils/dateFormatter';
 
 /**
  * Staff writing to one farmer.
@@ -16,7 +17,8 @@ import Card from '@/Components/ui/Card';
  * server resolves the address from that record, so nothing the browser sends
  * can change where the mail lands.
  */
-export default function SendEmail({ farmers = [], filters = {} }) {
+export default function SendEmail({ farmers = [], filters = {}, messages = { data: [], links: [], last_page: 1, current_page: 1 } }) {
+    const [expanded, setExpanded] = useState(null);
     const [search, setSearch] = useState(filters.search ?? '');
 
     // farmer_id steers the picker only. It is never posted: the chosen farmer
@@ -193,6 +195,96 @@ export default function SendEmail({ farmers = [], filters = {} }) {
                         </div>
                     </form>
                 </Card>
+
+                {/* Sent messages — the record of what the office actually said.
+                    Full width beneath the form, since it grows and the form
+                    above it does not. */}
+                <div className="lg:col-span-3">
+                    <Card title="Sent messages">
+                        {messages.data.length === 0 ? (
+                            <p className="py-8 text-center text-sm text-gray-500">
+                                Nothing sent yet. Messages you send appear here so you can read
+                                back what a farmer was told.
+                            </p>
+                        ) : (
+                            <>
+                                <ul className="divide-y divide-green-50">
+                                    {messages.data.map(message => {
+                                        const open = expanded === message.id;
+
+                                        return (
+                                            <li key={message.id}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setExpanded(open ? null : message.id)}
+                                                    aria-expanded={open}
+                                                    className="flex w-full items-start gap-3 px-1 py-3 text-left hover:bg-green-50/40"
+                                                >
+                                                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-[#006400]" />
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="flex flex-wrap items-baseline justify-between gap-2">
+                                                            <span className="font-semibold text-gray-900">{message.farmer}</span>
+                                                            <span className="text-xs text-gray-400">
+                                                                {formatDate(message.sent_at)}
+                                                            </span>
+                                                        </span>
+                                                        <span className="mt-0.5 block truncate text-sm text-gray-800">
+                                                            {message.subject}
+                                                        </span>
+                                                        {!open && (
+                                                            <span className="mt-0.5 block truncate text-xs text-gray-500">
+                                                                {message.preview}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <ChevronDown className={`mt-0.5 h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                                </button>
+
+                                                {open && (
+                                                    <div className="mb-3 ml-7 rounded-xl border border-green-100 bg-green-50/40 p-4">
+                                                        <p className="mb-2 text-xs text-gray-500">
+                                                            Sent by {message.sent_by} to{' '}
+                                                            <span className="break-all">{message.sent_to}</span>
+                                                        </p>
+                                                        {/* whitespace-pre-line: the message was
+                                                            written with line breaks and arrived
+                                                            with them, so it is read with them. */}
+                                                        <p className="whitespace-pre-line text-sm leading-relaxed text-gray-800">
+                                                            {message.body}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+
+                                {messages.last_page > 1 && (
+                                    <div className="mt-4 flex items-center justify-between border-t border-green-50 pt-3">
+                                        <p className="text-xs text-gray-500">
+                                            Page {messages.current_page} of {messages.last_page}
+                                        </p>
+                                        <div className="flex gap-2">
+                                            {messages.links.map((link, i) => (
+                                                <button
+                                                    key={i}
+                                                    disabled={!link.url}
+                                                    onClick={() => link.url && router.get(link.url, {}, { preserveScroll: true })}
+                                                    className={`rounded-lg px-2.5 py-1 text-xs ${
+                                                        link.active
+                                                            ? 'bg-[#006400] text-white'
+                                                            : link.url ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300'
+                                                    }`}
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </Card>
+                </div>
             </div>
         </AdminLayout>
     );

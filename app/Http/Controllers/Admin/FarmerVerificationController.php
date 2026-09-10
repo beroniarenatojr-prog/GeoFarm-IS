@@ -24,25 +24,42 @@ class FarmerVerificationController extends Controller
     {
         $status = $request->input('status', Farmer::STATUS_PENDING);
 
+        /*
+         * Every decision, not only the ones still outstanding.
+         *
+         * Approved farmers used to be excluded outright, so the moment a
+         * submission was cleared it vanished from the only screen that ever
+         * showed it — leaving no way to answer "who approved this, and when"
+         * without going to the audit log. The queue still opens on Pending;
+         * the other two are history.
+         */
         $submissions = Farmer::query()
-            ->with('parcels')
-            ->whereIn('verification_status', [Farmer::STATUS_PENDING, Farmer::STATUS_REJECTED])
+            ->with(['parcels', 'verifier:id,name'])
+            // Only accounts that actually went through this workflow. A farmer
+            // encoded at the counter was never submitted online and would read
+            // as an approval nobody made.
+            ->whereNotNull('submitted_online_at')
             ->when($status, fn ($q, $s) => $q->where('verification_status', $s))
             ->when($request->search, fn ($q, $s) => $q->where(function ($query) use ($s) {
                 $query->where('first_name', 'like', "%$s%")
                     ->orWhere('last_name', 'like', "%$s%")
                     ->orWhere('reference_code', 'like', "%$s%");
             }))
-            ->orderByDesc('submitted_online_at')
+            // Approved and rejected read newest-decision-first; pending has no
+            // decision yet, so it falls back to when it arrived.
+            ->orderByDesc($status === Farmer::STATUS_VERIFIED ? 'verified_at' : 'submitted_online_at')
             ->paginate(20)
             ->withQueryString();
+
+        $submitted = fn () => Farmer::whereNotNull('submitted_online_at');
 
         return Inertia::render('Admin/Farmers/Verification', [
             'submissions' => $submissions,
             'filters'     => $request->only(['search', 'status']),
             'counts'      => [
-                'pending'  => Farmer::pending()->count(),
-                'rejected' => Farmer::where('verification_status', Farmer::STATUS_REJECTED)->count(),
+                'pending'  => $submitted()->where('verification_status', Farmer::STATUS_PENDING)->count(),
+                'approved' => $submitted()->where('verification_status', Farmer::STATUS_VERIFIED)->count(),
+                'rejected' => $submitted()->where('verification_status', Farmer::STATUS_REJECTED)->count(),
             ],
         ]);
     }
