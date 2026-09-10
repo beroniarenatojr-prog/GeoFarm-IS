@@ -7,6 +7,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDateTime } from '@/utils/dateFormatter';
 import ModalShell from '@/Components/ui/ModalShell';
+import { useUserForm, UserFormFields } from '@/Components/Users/UserForm';
 
 /**
  * Roles carry different weight, so they do not all look alike. The two that can
@@ -119,6 +120,18 @@ export default function UsersIndex({
     const [f, setF] = useState(filters ?? {});
     const [pendingDelete, setPendingDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [adding, setAdding] = useState(false);
+
+    const addForm = useUserForm(null);
+
+    const submitAdd = e => {
+        e.preventDefault();
+
+        addForm.post('/admin/users', {
+            preserveScroll: true,
+            onSuccess: () => { addForm.reset(); setAdding(false); },
+        });
+    };
 
     const set = (key, value) => setF(prev => ({ ...prev, [key]: value }));
 
@@ -215,10 +228,12 @@ export default function UsersIndex({
 
                     {/* Gated on being able to create, not merely to look. */}
                     {canCreate && (
-                        <Link href="/admin/users/create"
+                        <button
+                            type="button"
+                            onClick={() => setAdding(true)}
                             className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[#006400] px-5 py-2 text-sm font-semibold text-white hover:bg-[#228B22]">
                             <Plus className="h-4 w-4" /> Add User
-                        </Link>
+                        </button>
                     )}
                 </div>
             </div>
@@ -405,6 +420,36 @@ export default function UsersIndex({
                     onCancel={() => setPendingDelete(null)}
                     onConfirm={confirmDelete}
                 />
+            )}
+
+            {/* Adding happens here rather than on a page of its own: a new
+                account is a short form, and leaving the list to fill it in
+                loses whatever search or filter was set. The same fields are
+                shared with /admin/users/create, so the two cannot disagree. */}
+            {adding && (
+                <ModalShell
+                    open
+                    onClose={() => setAdding(false)}
+                    title="Add user"
+                    size="lg"
+                    as="form"
+                    onSubmit={submitAdd}
+                    bodyClass="px-6 py-5"
+                    footer={
+                        <>
+                            <button type="button" onClick={() => setAdding(false)}
+                                className="rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" disabled={addForm.processing}
+                                className="rounded-lg bg-[#006400] px-5 py-2 text-sm font-semibold text-white hover:bg-[#228B22] disabled:opacity-50">
+                                {addForm.processing ? 'Creating…' : 'Create user'}
+                            </button>
+                        </>
+                    }
+                >
+                    <UserFormFields form={addForm} roles={roles} />
+                </ModalShell>
             )}
         </AdminLayout>
     );
