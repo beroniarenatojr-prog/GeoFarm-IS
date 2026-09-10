@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
-import NotificationBell from '@/Components/ui/NotificationBell';
+
 import GlobalSearch from '@/Components/ui/GlobalSearch';
 import FarmerScanButton from '@/Components/ui/FarmerScanButton';
 import UserMenu from '@/Components/ui/UserMenu';
@@ -9,6 +9,7 @@ import {
     LayoutDashboard,
     Users,
     Mail,
+    Bell,
     MapPin,
     Globe,
     Calendar,
@@ -59,8 +60,30 @@ const nav = [
         icon: FolderOpen,
         items: [
             { label: 'Farmers', href: '/admin/farmers', icon: Users, permission: 'view farmers' },
-            { label: 'Send Email', href: '/admin/farmer-email', icon: Mail, permission: 'edit farmers' },
-            // Verification lives in the header notification bell, not here.
+            /*
+             * Everything that reaches a farmer, in one place.
+             *
+             * The verification queue used to live only behind the header bell,
+             * which meant the one screen with a number on it was also the one
+             * screen not in the menu. It sits here now, beside the other way
+             * the office contacts somebody, and the header no longer carries a
+             * bell at all.
+             */
+            {
+                label: 'Notifications',
+                icon: Bell,
+                children: [
+                    { label: 'Send Email', href: '/admin/farmer-email', icon: Mail, permission: 'edit farmers' },
+                    {
+                        label: 'Notifications',
+                        href: '/admin/farmer-verification',
+                        icon: Bell,
+                        permission: 'view farmers',
+                        // Reads the same live count the bell did.
+                        badge: 'pendingFarmers',
+                    },
+                ],
+            },
             { label: 'Parcels', href: '/admin/parcels', icon: MapPin, permission: 'view parcels' },
             { label: 'GIS Map', href: '/admin/gis/map', icon: Globe, permission: 'view maps' },
             { label: 'Seasonal Tracking', href: '/admin/seasonal', icon: Calendar, permission: 'view seasonal' },
@@ -148,19 +171,52 @@ export default function AdminLayout({
 
     const backTitle = backLocked ? 'This page is locked — unlock it to leave' : backLabel;
 
-    // Filter navigation items based on permissions
+    /*
+     * Filter navigation by permission, children included.
+     *
+     * A group whose every child is hidden is itself hidden — an empty
+     * "Notifications" that opens onto nothing would be worse than no entry.
+     */
+    const allowed = item => !item.permission || can(item.permission);
+
     const visibleNav = nav.map(section => ({
         ...section,
-        items: section.items.filter(item => !item.permission || can(item.permission))
+        items: section.items
+            .map(item => (item.children
+                ? { ...item, children: item.children.filter(allowed) }
+                : item))
+            .filter(item => (item.children ? item.children.length > 0 : allowed(item))),
     })).filter(section => section.items.length > 0);
 
     // Which sidebar group owns this page, for the header breadcrumb.
-    const crumb = visibleNav.find(s => s.items.some(i =>
-        i.href === '/admin' ? page.url === '/admin' : page.url.startsWith(i.href)
-    ))?.section;
 
     const isActive = (href) =>
         href === '/admin' ? page.url === '/admin' : page.url.startsWith(href);
+
+    /*
+     * The number on a menu item, read from the shared notification props.
+     *
+     * Derived live on every request rather than stored, which is why it cannot
+     * drift and why a refresh cannot double it — the same reason the header
+     * bell it replaces was left alone when Laravel's notifications table was
+     * considered.
+     */
+    const badgeCount = (key) => (key ? page.props.notifications?.[key]?.count ?? 0 : 0);
+
+    /*
+     * Whether a menu entry owns the current page, nesting included.
+     *
+     * A group has no href of its own, so asking isActive(item.href) about one
+     * compares the URL against undefined and always says no — the section
+     * marker and the breadcrumb would both go blank on the pages inside it.
+     */
+    const entryActive = (item) => (item.children
+        ? item.children.some(child => isActive(child.href))
+        : isActive(item.href));
+
+    // Which sidebar group owns this page, for the header breadcrumb. Declared
+    // after entryActive, which it calls.
+    const crumb = visibleNav.find(s => s.items.some(entryActive))?.section;
 
     const toggleSection = (name) => setOpenSections(prev => {
         // !prev[name], not prev[name] === false: a group absent from the saved
@@ -231,7 +287,7 @@ export default function AdminLayout({
                         the sidebar opens the full categorised menu. */}
                     {!expanded && visibleNav.map(section => {
                         const SectionIcon = section.icon ?? FolderOpen;
-                        const hasActive = section.items.some(i => isActive(i.href));
+                        const hasActive = section.items.some(entryActive);
 
                         return (
                             <div
@@ -250,7 +306,7 @@ export default function AdminLayout({
                         // Open only when explicitly opened — an unseen group is
                         // closed, which is what makes the default hold.
                         const isOpen = openSections[section.section] === true;
-                        const activeCount = section.items.filter(i => isActive(i.href)).length;
+                        const activeCount = section.items.filter(entryActive).length;
 
                         return (
                             <div key={section.section} className="mb-4">
@@ -290,6 +346,77 @@ export default function AdminLayout({
                                     <div className="ml-6 space-y-0.5 border-l border-white/20 pl-2">
                                         {section.items.map(item => {
                                             const Icon = item.icon;
+
+                                            // A group of its own, one level in.
+                                            if (item.children) {
+                                                const key = `${section.section}/${item.label}`;
+                                                const subOpen = openSections[key] === true;
+                                                const subActive = item.children.some(c => isActive(c.href));
+                                                const subCount = item.children
+                                                    .reduce((n, c) => n + badgeCount(c.badge), 0);
+
+                                                return (
+                                                    <div key={key}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleSection(key)}
+                                                            aria-expanded={subOpen}
+                                                            className={`mr-2 flex w-full items-center gap-2.5 rounded px-2.5 py-1.5 text-[13px] transition-colors ${
+                                                                subActive
+                                                                    ? 'bg-white/20 font-semibold text-white'
+                                                                    : 'text-white/95 hover:bg-white/15 hover:text-white'
+                                                            }`}
+                                                        >
+                                                            <Icon className="h-4 w-4 flex-shrink-0" />
+                                                            <span className="whitespace-nowrap">{item.label}</span>
+                                                            {/* The count rides on the closed group, so a
+                                                                queue waiting is visible without opening it. */}
+                                                            {!subOpen && subCount > 0 && (
+                                                                <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                                                    {subCount > 99 ? '99+' : subCount}
+                                                                </span>
+                                                            )}
+                                                            <ChevronDown
+                                                                className={`h-3.5 w-3.5 text-white/40 transition-transform duration-200 ${
+                                                                    subCount > 0 && !subOpen ? 'ml-1.5' : 'ml-auto'
+                                                                } ${subOpen ? '' : '-rotate-90'}`}
+                                                            />
+                                                        </button>
+
+                                                        {subOpen && (
+                                                            <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/20 pl-2">
+                                                                {item.children.map(child => {
+                                                                    const ChildIcon = child.icon;
+                                                                    const childActive = isActive(child.href);
+                                                                    const count = badgeCount(child.badge);
+
+                                                                    return (
+                                                                        <Link
+                                                                            key={child.href}
+                                                                            href={child.href}
+                                                                            aria-current={childActive ? 'page' : undefined}
+                                                                            className={`mr-2 flex items-center gap-2.5 rounded px-2.5 py-1.5 text-[13px] transition-colors ${
+                                                                                childActive
+                                                                                    ? 'bg-white/20 font-semibold text-white'
+                                                                                    : 'text-white/95 hover:bg-white/15 hover:text-white'
+                                                                            }`}
+                                                                        >
+                                                                            <ChildIcon className="h-4 w-4 flex-shrink-0" />
+                                                                            <span className="whitespace-nowrap">{child.label}</span>
+                                                                            {count > 0 && (
+                                                                                <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                                                                    {count > 99 ? '99+' : count}
+                                                                                </span>
+                                                                            )}
+                                                                        </Link>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+
                                             const active = isActive(item.href);
 
                                             return (
@@ -394,8 +521,12 @@ export default function AdminLayout({
                                 or scan the card when you have it in hand.
                                 Behind "view farmers", the same permission the
                                 profile it opens is behind. */}
+                            {/* The bell is gone from here. Its queue is a menu
+                                item now — Records › Notifications — carrying
+                                the same live count, so the one screen with a
+                                number on it is no longer the one screen
+                                missing from the menu. */}
                             {can('view farmers') && <FarmerScanButton />}
-                            <NotificationBell />
                         </div>
                     </div>
                 </header>
