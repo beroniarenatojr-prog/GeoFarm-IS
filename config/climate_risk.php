@@ -128,6 +128,79 @@ return [
     ],
 
     /*
+    |--------------------------------------------------------------------------
+    | Activity-specific wording
+    |--------------------------------------------------------------------------
+    |
+    | The same condition means different things on different activities, and
+    | the advice has to follow. "No water" on a rice parcel is about irrigating
+    | a field; on a carabao it is about the animals drinking; on a pond it is
+    | about the pond holding its level at all. One sentence covering all three
+    | would be wrong for at least two of them.
+    |
+    | Keyed by factor, then by assessment scope. Anything not listed here falls
+    | back to the general wording above, which stays correct for crops — so
+    | this map holds only the cases that genuinely differ rather than a fourth
+    | copy of every line.
+    |
+    | DRAFT WORDING — FOR MAO / ADVISER REVIEW, to the same standard as the
+    | rest of this file: no variety, chemical, rate or schedule is named.
+    */
+    'scoped_recommendations' => [
+
+        'frequent_flooding' => [
+            'livestock' => 'Flooding is a recurring problem where these animals are kept. Ask the Municipal Agriculture Office about raising or relocating shelter, and about keeping feed and water clean during floods.',
+            'aquaculture' => 'Flooding is a recurring problem at this pond. Ask the Municipal Agriculture Office about dyke and overflow management, and about reducing stock loss when water rises.',
+        ],
+
+        'frequent_drought' => [
+            'livestock' => 'Dry periods are a recurring problem for these animals. Consult the Municipal Agriculture Office about drinking-water supply and about feed when pasture is short.',
+            'aquaculture' => 'Dry periods are a recurring problem at this pond. Consult the Municipal Agriculture Office about maintaining water level and quality when supply is short.',
+        ],
+
+        'severe_climate_damage' => [
+            'livestock' => 'Climate events have caused severe losses to these animals. Coordinate with the Municipal Agriculture Office for a veterinary or husbandry assessment and to ask what assistance is available.',
+            'aquaculture' => 'Climate events have caused severe losses at this pond. Coordinate with the Municipal Agriculture Office for a technical assessment and to ask what assistance is available.',
+        ],
+
+        'no_adaptation' => [
+            'livestock' => 'No adaptation practices are recorded for these animals. Ask the Municipal Agriculture Office which shelter, water and feed measures suit this holding.',
+            'aquaculture' => 'No adaptation practices are recorded for this pond. Ask the Municipal Agriculture Office which water-management and stocking measures suit it.',
+        ],
+
+        'reported_financial_loss' => [
+            'livestock' => 'Coordinate with the Municipal Agriculture Office regarding assistance available to farmers who have lost livestock to climate-related events.',
+            'aquaculture' => 'Coordinate with the Municipal Agriculture Office regarding assistance available to fishpond operators affected by climate-related events.',
+        ],
+    ],
+
+    /*
+    | Advice that exists because the records do NOT.
+    |
+    | Raised by the analysis rather than by the scorer: a farm nobody has
+    | recorded is not a risky farm, but it is a farm nothing can yet be said
+    | about, and saying so is more useful than silence. Worded per activity
+    | because what needs recording differs.
+    */
+    'evidence_recommendations' => [
+        'crop' => [
+            'title' => 'Keep recording each harvest',
+            'category' => 'planning',
+            'text' => 'No comparable season is recorded for this parcel yet. Continue recording planting, harvest weight and cost each season so future analyses can compare actual results rather than relying on the questionnaire alone.',
+        ],
+        'livestock' => [
+            'title' => 'Start recording livestock outcomes',
+            'category' => 'livestock',
+            'text' => 'No historical livestock production is recorded. Keeping a record of herd numbers, losses and health events over time would let future analyses draw on what actually happened rather than on current counts.',
+        ],
+        'aquaculture' => [
+            'title' => 'Start recording pond harvests',
+            'category' => 'aquaculture',
+            'text' => 'No historical harvest is recorded for this pond. Keeping a record of stocking, harvest weight and losses over time would let future analyses draw on what actually happened rather than on current pond information.',
+        ],
+    ],
+
+    /*
     | Shown when the assessment raises no factors.
     |
     | A farmer at lower risk still gets advice - the point of the assessment is
@@ -321,6 +394,61 @@ return [
         'declining_yield' => [
             'type' => 'soil_testing',
             'reason' => 'Yield per hectare has fallen across comparable recorded seasons',
+        ],
+    ],
+
+    /*
+    | Activity-specific office work.
+    |
+    | Same principle as the scoped recommendations: assessing water access on a
+    | rice field is a different visit from checking that a herd can drink, and
+    | from checking a pond holds its level. Keyed by factor, then by scope;
+    | anything unlisted falls back to the general plan above.
+    */
+    'scoped_interventions' => [
+
+        'frequent_flooding' => [
+            'livestock' => [
+                'type' => 'livestock_monitoring',
+                'reason' => 'Flooding reported as frequent where livestock are kept',
+            ],
+            'aquaculture' => [
+                'type' => 'pond_monitoring',
+                'reason' => 'Flooding reported as frequent at this pond',
+            ],
+        ],
+
+        'frequent_drought' => [
+            'livestock' => [
+                'type' => 'livestock_monitoring',
+                'reason' => 'Dry periods reported as frequent — livestock water supply to be assessed',
+            ],
+            'aquaculture' => [
+                'type' => 'pond_monitoring',
+                'reason' => 'Dry periods reported as frequent — pond water level to be assessed',
+            ],
+        ],
+
+        'severe_climate_damage' => [
+            'livestock' => [
+                'type' => 'livestock_monitoring',
+                'reason' => 'Climate events have caused severe livestock losses',
+            ],
+            'aquaculture' => [
+                'type' => 'pond_monitoring',
+                'reason' => 'Climate events have caused severe losses at this pond',
+            ],
+        ],
+
+        'no_adaptation' => [
+            'livestock' => [
+                'type' => 'livestock_monitoring',
+                'reason' => 'No adaptation practices recorded for this livestock holding',
+            ],
+            'aquaculture' => [
+                'type' => 'pond_monitoring',
+                'reason' => 'No adaptation practices recorded for this pond',
+            ],
         ],
     ],
 

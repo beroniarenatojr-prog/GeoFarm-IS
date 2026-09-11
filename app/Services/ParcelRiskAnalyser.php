@@ -103,19 +103,32 @@ class ParcelRiskAnalyser
             ? $this->upcomingPeriod()
             : $this->period($season, $year ?? (int) Carbon::now()->format('Y'));
 
+        /*
+         * One assessment per activity, not one per farm.
+         *
+         * Each unit asks for the newest assessment written about IT, falling
+         * back to the farmer's whole-farm assessment and to nothing else. That
+         * fallback is deliberate and narrow: a whole-farm assessment genuinely
+         * describes the whole farm, and every assessment recorded before
+         * scoping existed is one.
+         *
+         * What no unit ever receives is another activity's answers. A rice
+         * grower reporting frequent flooding used to have that counted against
+         * their carabao, because a single assessment was applied to everything
+         * — which is the fault this resolution exists to fix.
+         */
         $assessment = $farmer->latestRiskAssessment;
-        $shared = $this->sharedFactors($assessment);
 
         $units = [];
 
         // Eager-loaded together: a farmer with a dozen parcels would otherwise
         // fetch a farm type per row while the page waits.
         foreach ($farmer->parcels()->with('farmType')->get() as $parcel) {
-            $units[] = $this->parcelUnit($parcel, $period, $shared);
+            $units[] = $this->parcelUnit($parcel, $period, $farmer);
         }
 
         foreach ($farmer->fishponds()->get() as $pond) {
-            $units[] = $this->pondUnit($pond, $shared);
+            $units[] = $this->pondUnit($pond, $farmer);
         }
 
         $overall = $this->overallOf($units);
@@ -137,7 +150,9 @@ class ParcelRiskAnalyser
             // them: every line traces to a factor with a weight behind it.
             'why' => $affected['factors'] ?? [],
 
-            'recommendations' => $this->recommendations->for($affected['factors'] ?? []),
+            // The affected unit's own advice, already worded for its activity.
+            'recommendations' => $affected['recommendations']
+                ?? $this->recommendations->for($affected['factors'] ?? []),
 
             /*
              * The farmer's own answers, verbatim.
@@ -253,7 +268,7 @@ class ParcelRiskAnalyser
     }
 
     /** One parcel, typed by what it produces. */
-    private function parcelUnit(FarmParcel $parcel, array $period, array $shared): array
+    private function parcelUnit(FarmParcel $parcel, array $period, Farmer $farmer): array
     {
         $kind = $this->commodities->kindOf($parcel->commodity);
 
@@ -264,6 +279,10 @@ class ParcelRiskAnalyser
         // Livestock declared on a parcel is still livestock: heads today, with
         // no dated production behind it.
         if ($kind === CommodityCatalogue::KIND_LIVESTOCK) {
+            $assessment = ClimateRiskAssessment::bestFor(
+                $farmer->id, ClimateRiskAssessment::SCOPE_LIVESTOCK, $parcel->id,
+            );
+
             return $this->unmeasured(
                 id: "parcel-{$parcel->id}",
                 kind: self::KIND_LIVESTOCK,
@@ -271,10 +290,16 @@ class ParcelRiskAnalyser
                 commodity: $parcel->commodity,
                 size: ['value' => (float) ($parcel->no_of_heads_trees ?? 0), 'unit' => 'heads'],
                 barangay: $parcel->barangay,
-                shared: $shared,
+                assessment: $assessment,
                 historyKind: 'livestock',
             );
         }
+
+        $assessment = ClimateRiskAssessment::bestFor(
+            $farmer->id, ClimateRiskAssessment::SCOPE_PARCEL, $parcel->id,
+        );
+
+        $shared = $this->sharedFactors($assessment);
 
         $history = $this->history->forParcel($parcel, $period['season']);
         $factors = array_merge($this->historyFactors($parcel, $history), $shared);
@@ -291,13 +316,50 @@ class ParcelRiskAnalyser
             'history'           => $history,
             'data_sufficiency'  => $history['sufficiency'],
             'factors'           => $factors,
-            'level'             => $this->levelFor($factors, $history, hasAssessment: $shared !== []),
-            'score'             => $this->scoreFor($factors, $history, hasAssessment: $shared !== []),
+            // hasAssessment asks whether one EXISTS, not whether it raised
+            // anything. A farmer who answered every question "never" has been
+            // assessed and is genuinely low risk; a farmer nobody has asked is
+            // neither, and must not be banded as though they were.
+            'level'             => $this->levelFor($factors, $history, hasAssessment: $assessment !== null),
+            'score'             => $this->scoreFor($factors, $history, hasAssessment: $assessment !== null),
+            'assessment'        => $this->assessmentSummary($assessment),
+            'recommendations'   => $this->adviceFor($factors, ClimateRiskAssessment::SCOPE_PARCEL, self::KIND_CROP, $history),
             'note'              => null,
         ];
     }
 
-    private function pondUnit(Fishpond $pond, array $shared): array
+    /**
+     * What to do about this unit, in this unit's own words.
+     *
+     * Per activity rather than per farm, because the same factor calls for
+     * different action on a rice field and on a herd. An empty record adds one
+     * line about starting to keep one — advice about the record, never a
+     * factor, and it carries no weight into any score.
+     */
+    private function adviceFor(array $factors, string $scope, string $kind, array $history): array
+    {
+        /*
+         * Always through the engine, even with no factors.
+         *
+         * It answers an empty list with maintenance advice, and that is the
+         * point: a farmer at lower risk still gets told what to keep doing. An
+         * early return here would hand a clean result an empty page, which
+         * reads as the system having nothing to offer.
+         */
+        $advice = $this->recommendations->for($factors, $scope);
+
+        if ($history['records'] === []) {
+            $missing = $this->recommendations->forMissingEvidence($kind);
+
+            if ($missing) {
+                $advice[] = $missing;
+            }
+        }
+
+        return $advice;
+    }
+
+    private function pondUnit(Fishpond $pond, Farmer $farmer): array
     {
         return $this->unmeasured(
             id: "pond-{$pond->id}",
@@ -306,9 +368,35 @@ class ParcelRiskAnalyser
             commodity: $pond->species,
             size: ['value' => (float) ($pond->area_hectares ?? 0), 'unit' => 'ha'],
             barangay: null,
-            shared: $shared,
+            assessment: ClimateRiskAssessment::bestFor(
+                $farmer->id, ClimateRiskAssessment::SCOPE_AQUACULTURE, null, $pond->id,
+            ),
             historyKind: 'aquaculture',
         );
+    }
+
+    /**
+     * Which assessment stood behind a unit's result.
+     *
+     * Named on every unit so a reader can tell whether a verdict rests on an
+     * assessment of this very activity or on the farmer's general one. "Current
+     * assessment" alone would hide that difference, and the difference is the
+     * whole point of scoping.
+     */
+    private function assessmentSummary(?ClimateRiskAssessment $assessment): ?array
+    {
+        if (! $assessment) {
+            return null;
+        }
+
+        return [
+            'id'          => $assessment->id,
+            'scope_type'  => $assessment->scope_type,
+            'scope_label' => $assessment->scope_label,
+            'is_scoped'   => $assessment->is_scoped,
+            'assessed_at' => $assessment->assessed_at,
+            'is_stale'    => $assessment->is_stale,
+        ];
     }
 
     /**
@@ -327,7 +415,7 @@ class ParcelRiskAnalyser
         ?string $commodity,
         array $size,
         ?string $barangay,
-        array $shared,
+        ?ClimateRiskAssessment $assessment,
         string $historyKind,
     ): array {
         return [
@@ -340,10 +428,26 @@ class ParcelRiskAnalyser
             'history'          => $this->history->none($historyKind),
             'data_sufficiency' => ProductionHistory::SUFFICIENCY_NONE,
 
-            // Context, not a score. Nothing below sums these into a level.
-            'factors'          => $shared,
+            // Context, not a score. Nothing below sums these into a level, and
+            // they come only from an assessment written about THIS activity or
+            // about the whole farm — never from another one.
+            'factors'          => $this->sharedFactors($assessment),
             'level'            => null,
             'score'            => null,
+            'assessment'       => $this->assessmentSummary($assessment),
+
+            // Advice still applies even though no level does. A farm that
+            // floods over its animals warrants saying so, and the reason it
+            // carries no level is missing history, not missing concern.
+            'recommendations'  => $this->adviceFor(
+                $this->sharedFactors($assessment),
+                $kind === self::KIND_LIVESTOCK
+                    ? ClimateRiskAssessment::SCOPE_LIVESTOCK
+                    : ClimateRiskAssessment::SCOPE_AQUACULTURE,
+                $kind,
+                ['records' => []],
+            ),
+
             'note'             => $kind === self::KIND_LIVESTOCK
                 ? 'Insufficient historical livestock data'
                 : 'Insufficient historical aquaculture data',

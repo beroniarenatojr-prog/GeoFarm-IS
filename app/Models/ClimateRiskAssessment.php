@@ -19,6 +19,40 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ClimateRiskAssessment extends Model
 {
+    /**
+     * What this assessment is about.
+     *
+     * A farmer works several activities and each meets the weather
+     * differently. A rice grower's "no water" barrier is about irrigation; the
+     * same words against a carabao are about drinking water, and they call for
+     * different advice and a different visit. Recording which activity was
+     * being described is what stops one answer being counted against all of
+     * them — which is exactly what happened before this existed.
+     *
+     * SCOPE_LIVESTOCK points at farm_parcel_id rather than at a column of its
+     * own: a livestock holding is declared on farm_parcels with a commodity, a
+     * barangay and a head count, and a second reference to the same thing
+     * would create two answers to "which herd is this".
+     */
+    public const SCOPE_FARMER      = 'farmer';
+    public const SCOPE_PARCEL      = 'parcel';
+    public const SCOPE_LIVESTOCK   = 'livestock';
+    public const SCOPE_AQUACULTURE = 'aquaculture';
+
+    public const SCOPES = [
+        self::SCOPE_FARMER,
+        self::SCOPE_PARCEL,
+        self::SCOPE_LIVESTOCK,
+        self::SCOPE_AQUACULTURE,
+    ];
+
+    /** Scopes that name one activity rather than the whole holding. */
+    public const ACTIVITY_SCOPES = [
+        self::SCOPE_PARCEL,
+        self::SCOPE_LIVESTOCK,
+        self::SCOPE_AQUACULTURE,
+    ];
+
     /** How often something happened over the past three years (Q2-Q5). */
     public const FREQUENCIES = ['never', 'rarely', 'sometimes', 'frequently', 'very_frequently'];
 
@@ -107,7 +141,8 @@ class ClimateRiskAssessment extends Model
     public const STALE_AFTER_MONTHS = 12;
 
     protected $fillable = [
-        'farmer_id', 'farm_parcel_id', 'crop_season_id', 'assessed_by', 'assessed_at',
+        'farmer_id', 'scope_type', 'farm_parcel_id', 'fishpond_id', 'crop_season_id',
+        'assessed_by', 'assessed_at',
         'climate_events', 'flood_frequency', 'drought_frequency', 'heat_frequency', 'storm_frequency',
         'worst_effect', 'loss_types', 'had_financial_loss', 'estimated_loss_amount',
         'had_cost_increase', 'estimated_extra_cost', 'season_comparison',
@@ -128,7 +163,7 @@ class ClimateRiskAssessment extends Model
         'recommendations'      => 'array',
     ];
 
-    protected $appends = ['is_stale'];
+    protected $appends = ['is_stale', 'is_scoped', 'scope_label'];
 
     /**
      * Whether this assessment is old enough that conditions may have moved on.
@@ -143,7 +178,75 @@ class ClimateRiskAssessment extends Model
             && $this->assessed_at->lt(now()->subMonths(self::STALE_AFTER_MONTHS));
     }
 
+    /**
+     * The newest assessment that legitimately describes one activity.
+     *
+     * Preference, not merger: an assessment written about this very parcel
+     * beats a whole-farm one, and when neither exists the answer is none. The
+     * farmer-level fallback is deliberate and narrow — a farmer who has only
+     * ever taken the general assessment should still get an analysis, and
+     * before scoping existed that is what every assessment was.
+     *
+     * What it will NOT do is reach sideways. Another parcel's assessment, or a
+     * livestock assessment, never stands in for this one: those answers
+     * describe different land and different animals, and lending them across
+     * is the precise fault scoping was added to fix.
+     *
+     * @param  string  $scope     one of ACTIVITY_SCOPES
+     * @param  int|null  $parcelId    for parcel and livestock scopes
+     * @param  int|null  $fishpondId  for aquaculture
+     */
+    public static function bestFor(
+        int $farmerId,
+        string $scope,
+        ?int $parcelId = null,
+        ?int $fishpondId = null,
+    ): ?self {
+        $specific = static::query()
+            ->where('farmer_id', $farmerId)
+            ->where('scope_type', $scope)
+            ->when($scope === self::SCOPE_AQUACULTURE,
+                fn ($q) => $q->where('fishpond_id', $fishpondId),
+                fn ($q) => $q->where('farm_parcel_id', $parcelId),
+            )
+            ->latest('assessed_at')
+            ->first();
+
+        if ($specific) {
+            return $specific;
+        }
+
+        return static::query()
+            ->where('farmer_id', $farmerId)
+            ->where('scope_type', self::SCOPE_FARMER)
+            ->latest('assessed_at')
+            ->first();
+    }
+
+    /** Whether this assessment was written about one named activity. */
+    public function getIsScopedAttribute(): bool
+    {
+        return in_array($this->scope_type, self::ACTIVITY_SCOPES, true);
+    }
+
+    /**
+     * How the analysis names the assessment it used.
+     *
+     * Shown on the page so a reader can tell whether a result rests on an
+     * assessment of this very activity or on the farmer's general one.
+     */
+    public function getScopeLabelAttribute(): string
+    {
+        return match ($this->scope_type) {
+            self::SCOPE_PARCEL      => 'Crop Parcel Assessment',
+            self::SCOPE_LIVESTOCK   => 'Livestock Assessment',
+            self::SCOPE_AQUACULTURE => 'Aquaculture Assessment',
+            default                 => 'Whole-Farm Assessment',
+        };
+    }
+
     public function farmer(): BelongsTo     { return $this->belongsTo(Farmer::class); }
+    public function fishpond(): BelongsTo   { return $this->belongsTo(Fishpond::class); }
     public function parcel(): BelongsTo     { return $this->belongsTo(FarmParcel::class, 'farm_parcel_id'); }
     public function season(): BelongsTo     { return $this->belongsTo(CropSeason::class, 'crop_season_id'); }
     public function assessor(): BelongsTo   { return $this->belongsTo(User::class, 'assessed_by'); }

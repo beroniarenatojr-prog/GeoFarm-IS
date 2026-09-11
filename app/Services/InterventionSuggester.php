@@ -34,7 +34,7 @@ class InterventionSuggester
      * @return array<int, array{factor_key: string, type: string, type_label: string,
      *                          icon: string, reason: string, priority: string, target_days: int}>
      */
-    public function for(array $factors): array
+    public function for(array $factors, ?string $scope = null): array
     {
         $plans = config('climate_risk.interventions');
         $types = config('climate_risk.intervention_types');
@@ -53,7 +53,16 @@ class InterventionSuggester
                 continue;
             }
 
-            $plan = $plans[$key];
+            /*
+             * The activity's own plan where the office has written one.
+             *
+             * Assessing water access on a rice field is a different visit from
+             * checking that a herd can drink. Falling back to the general plan
+             * is safe because it was written for crops.
+             */
+            $plan = ($scope !== null ? config("climate_risk.scoped_interventions.{$key}.{$scope}") : null)
+                ?? $plans[$key];
+
             $type = $plan['type'];
 
             // One visit per kind of visit. Two cost factors on one farm are

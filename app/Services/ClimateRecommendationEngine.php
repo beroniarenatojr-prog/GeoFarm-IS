@@ -35,7 +35,7 @@ class ClimateRecommendationEngine
      * @return array<int, array{key: string, title: string, text: string, category: string,
      *                          category_label: string, icon: string, priority: string}>
      */
-    public function for(array $factors): array
+    public function for(array $factors, ?string $scope = null): array
     {
         $advice = config('climate_risk.recommendations');
         $meta   = config('climate_risk.recommendation_meta');
@@ -54,7 +54,15 @@ class ClimateRecommendationEngine
             $matched[] = $this->present(
                 key: $key,
                 title: $for['title'] ?? $key,
-                text: $advice[$key],
+                /*
+                 * The activity's own wording where the office has written one.
+                 *
+                 * "No water" on a rice parcel is about irrigating a field; on
+                 * a carabao it is about the animals drinking. Falling back to
+                 * the general line is safe because that line was written for
+                 * crops — the map above holds only what genuinely differs.
+                 */
+                text: $this->wordingFor($key, $scope) ?? $advice[$key],
                 category: $for['category'] ?? 'assistance',
                 priority: $for['priority'] ?? 'medium',
                 weight: (int) ($factor['weight'] ?? 0),
@@ -90,6 +98,47 @@ class ClimateRecommendationEngine
     public function topOf(array $recommendations, ?int $limit = null): array
     {
         return array_slice($recommendations, 0, $limit ?? (int) config('climate_risk.top_actions', 3));
+    }
+
+    /** The activity's own wording for a factor, or null to use the general one. */
+    private function wordingFor(string $key, ?string $scope): ?string
+    {
+        if ($scope === null) {
+            return null;
+        }
+
+        return config("climate_risk.scoped_recommendations.{$key}.{$scope}");
+    }
+
+    /**
+     * Advice that exists because the records do not.
+     *
+     * A farm nobody has recorded is not a risky farm, but it is one nothing
+     * can yet be said about — and saying that plainly is more use than
+     * silence. Worded per activity, because what needs recording differs.
+     *
+     * Deliberately separate from for(): this is not a factor, carries no
+     * weight, and must never reach the scorer. It is advice about the record,
+     * not about the farm.
+     */
+    public function forMissingEvidence(string $kind): ?array
+    {
+        $item = config("climate_risk.evidence_recommendations.{$kind}");
+
+        if (! $item) {
+            return null;
+        }
+
+        return $this->present(
+            key: "missing_evidence_{$kind}",
+            title: $item['title'],
+            text: $item['text'],
+            category: $item['category'],
+            // Low: there is nothing wrong to put right, only something to
+            // start writing down.
+            priority: 'low',
+            weight: 0,
+        );
     }
 
     /** Maintenance advice, shown when nothing was raised against the farm. */
