@@ -201,6 +201,82 @@ class FarmAnalysisPageTest extends TestCase
         });
     }
 
+    public function test_the_farmers_own_answers_travel_with_the_analysis(): void
+    {
+        // The adviser needs to read what was actually reported, not infer it
+        // backwards from the score it produced.
+        $this->parcel();
+
+        ClimateRiskAssessment::create([
+            'farmer_id'            => $this->farmer->id,
+            'assessed_at'          => now(),
+            'flood_frequency'      => 'very_frequently',
+            'drought_frequency'    => 'rarely',
+            'worst_effect'         => 'severe',
+            'climate_events'       => ['flooding', 'strong_winds'],
+            'loss_types'           => ['reduced_yield'],
+            'had_financial_loss'   => 'yes',
+            'estimated_loss_amount' => 15000,
+            'adaptation_practices' => ['improve_drainage'],
+            'perceived_risk'       => 'likely',
+        ]);
+
+        $this->open()->assertInertia(fn ($page) => $page
+            ->where('analysis.assessment.answers.flood_frequency', 'very_frequently')
+            ->where('analysis.assessment.answers.drought_frequency', 'rarely')
+            ->where('analysis.assessment.answers.worst_effect', 'severe')
+            ->where('analysis.assessment.answers.climate_events', ['flooding', 'strong_winds'])
+            ->where('analysis.assessment.answers.loss_types', ['reduced_yield'])
+            ->where('analysis.assessment.answers.had_financial_loss', 'yes')
+            ->where('analysis.assessment.answers.adaptation_practices', ['improve_drainage'])
+            ->where('analysis.assessment.answers.perceived_risk', 'likely'));
+    }
+
+    public function test_the_answers_are_stored_as_instrument_keys_not_prose(): void
+    {
+        // Keys, because the labels get reworded — they were translated into
+        // Tagalog this week — while the key is what the score was computed
+        // from. The screen turns them back into words at display time.
+        $this->parcel();
+
+        ClimateRiskAssessment::create([
+            'farmer_id' => $this->farmer->id, 'assessed_at' => now(),
+            'flood_frequency' => 'very_frequently',
+        ]);
+
+        $this->open()->assertInertia(fn ($page) => $page
+            ->where('analysis.assessment.answers.flood_frequency', 'very_frequently'));
+    }
+
+    public function test_there_is_no_route_to_edit_a_farmers_answers_from_the_office(): void
+    {
+        // The questionnaire is the farmer's account of their own season. An
+        // office edit would turn a survey response into an office opinion
+        // while leaving the risk score attached to it.
+        $routes = collect(app('router')->getRoutes())
+            ->map(fn ($route) => $route->uri() . '|' . implode(',', $route->methods()))
+            ->filter(fn (string $signature) => str_contains($signature, 'risk-assessment')
+                || str_contains($signature, 'climate_risk'));
+
+        foreach ($routes as $signature) {
+            [$uri, $methods] = explode('|', $signature);
+
+            if (str_starts_with($uri, 'admin/')) {
+                $this->fail("The office has a route touching assessments: {$uri} ({$methods})");
+            }
+        }
+
+        $this->assertTrue(true);
+    }
+
+    public function test_a_farmer_who_never_answered_shows_no_answers_rather_than_blanks(): void
+    {
+        $this->parcel();
+
+        $this->open()->assertInertia(fn ($page) => $page
+            ->where('analysis.assessment', null));
+    }
+
     public function test_it_lists_what_was_used_and_what_was_missing(): void
     {
         $this->parcel();

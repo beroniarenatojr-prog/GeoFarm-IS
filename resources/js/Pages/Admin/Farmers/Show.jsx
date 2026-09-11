@@ -20,6 +20,9 @@ import FishpondForm from '@/Components/AgriAssets/FishpondForm';
 import LivestockForm from '@/Components/AgriAssets/LivestockForm';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
+// Shared with the farm analysis page, so the same answer never reads
+// differently on two screens about the same farmer.
+import { readable, readableList, peso, onDate } from '@/utils/instrument';
 
 /* ------------------------------------------------- profile display helpers */
 
@@ -65,31 +68,6 @@ const RISK_TONE = {
   moderate: 'bg-amber-100 text-amber-800',
   high:     'bg-red-100 text-red-700',
 };
-
-/**
- * Turns an instrument key back into words.
- *
- * The questionnaire stores keys — flood_frequency: "very_frequently" — because
- * the label is display text that gets reworded (it was translated into Tagalog
- * only this week) while the key is what the score was computed from. Reading
- * one back means undoing that here rather than storing prose in the column.
- */
-const readable = (key) =>
-  typeof key !== 'string' || key === ''
-    ? null
-    : key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
-
-const readableList = (keys) =>
-  Array.isArray(keys) && keys.length ? keys.map(readable).join(', ') : null;
-
-const onDate = (value) =>
-  value ? new Date(value).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
-
-/** Null rather than ₱0, so Field renders "Not provided" for an unanswered amount. */
-const peso = (value) =>
-  value === null || value === undefined || value === ''
-    ? null
-    : `₱${Number(value).toLocaleString('en-PH', { maximumFractionDigits: 2 })}`;
 
 /**
  * What the farmer answered, for the person advising them.

@@ -139,12 +139,49 @@ class ParcelRiskAnalyser
 
             'recommendations' => $this->recommendations->for($affected['factors'] ?? []),
 
+            /*
+             * The farmer's own answers, verbatim.
+             *
+             * Carried in full rather than only as the score they produced, so
+             * the person advising can read what was actually reported instead
+             * of inferring it backwards from a number. Read-only wherever it is
+             * shown: the questionnaire is the farmer's account of their own
+             * season, and an office edit would quietly turn a survey response
+             * into an office opinion while leaving the score attached to it.
+             *
+             * Stored as instrument keys, not prose, because the labels get
+             * reworded — they were translated into Tagalog this week — while
+             * the key is what the score was computed from.
+             */
             'assessment' => $assessment ? [
                 'id'          => $assessment->id,
                 'assessed_at' => $assessment->assessed_at,
                 'is_stale'    => $assessment->is_stale,
                 'risk_level'  => $assessment->risk_level,
                 'risk_score'  => $assessment->risk_score,
+
+                'answers' => [
+                    'climate_events'          => $assessment->climate_events,
+                    'flood_frequency'         => $assessment->flood_frequency,
+                    'drought_frequency'       => $assessment->drought_frequency,
+                    'heat_frequency'          => $assessment->heat_frequency,
+                    'storm_frequency'         => $assessment->storm_frequency,
+                    'worst_effect'            => $assessment->worst_effect,
+                    'loss_types'              => $assessment->loss_types,
+                    'had_financial_loss'      => $assessment->had_financial_loss,
+                    'estimated_loss_amount'   => $assessment->estimated_loss_amount,
+                    'had_cost_increase'       => $assessment->had_cost_increase,
+                    'estimated_extra_cost'    => $assessment->estimated_extra_cost,
+                    'season_comparison'       => $assessment->season_comparison,
+                    'adaptation_practices'    => $assessment->adaptation_practices,
+                    'adaptation_effectiveness' => $assessment->adaptation_effectiveness,
+                    'adaptation_barrier'      => $assessment->adaptation_barrier,
+                    'received_assistance'     => $assessment->received_assistance,
+                    'assistance_types'        => $assessment->assistance_types,
+                    'assistance_helpfulness'  => $assessment->assistance_helpfulness,
+                    'perceived_risk'          => $assessment->perceived_risk,
+                    'anticipated_factors'     => $assessment->anticipated_factors,
+                ],
             ] : null,
 
             'data_used' => $this->dataUsed($units, $assessment),

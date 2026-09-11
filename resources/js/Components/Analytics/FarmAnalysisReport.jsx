@@ -3,8 +3,11 @@ import { useState } from 'react';
 import {
     ShieldAlert, TrendingDown, TrendingUp, Minus, Sprout, Beef, Fish,
     MapPin, Calendar, BarChart3, ChevronRight, Building2, ArrowLeft,
-    CheckCircle2, Circle, Layers, HelpCircle,
+    CheckCircle2, Circle, Layers, HelpCircle, ClipboardList, Lock, CloudRain,
 } from 'lucide-react';
+// Shared with the farmer profile's Risk tab, so the same answer never reads
+// differently on two screens about the same farmer.
+import { readable, readableList, peso, onDate } from '@/utils/instrument';
 
 /**
  * One farmer's farm, analysed parcel by parcel.
@@ -373,6 +376,8 @@ export default function FarmAnalysisReport({ analysis, topActions = [], allActio
                             <HistoryPanel units={units} />
                         </Panel>
 
+                        <AnswersPanel assessment={assessment} audience={audience} />
+
                         <Panel title="Analysis based on" icon={HelpCircle}>
                             <div className="grid gap-5 sm:grid-cols-2">
                                 <div>
@@ -630,5 +635,131 @@ function HistoryPanel({ units }) {
                 );
             })}
         </div>
+    );
+}
+
+/**
+ * The farmer's own answers, exactly as given.
+ *
+ * Read-only, and labelled as such. The questionnaire is the farmer's account
+ * of their own season; an office edit would quietly turn a survey response
+ * into an office opinion while leaving the risk score attached to it. If an
+ * answer is wrong, the farmer reassesses — which adds a row rather than
+ * overwriting one, so the correction is visible as a correction.
+ *
+ * Shown beneath the analysis rather than above it: the reader wants the result
+ * first and the raw responses when they start asking where it came from.
+ */
+function AnswersPanel({ assessment, audience }) {
+    const [open, setOpen] = useState(false);
+
+    if (!assessment) {
+        return (
+            <Panel title="The farmer's answers" icon={ClipboardList}>
+                <Empty>
+                    {audience === 'farmer'
+                        ? 'You have not completed the climate and financial risk questionnaire yet. Your answers will appear here once you do.'
+                        : 'This farmer has not completed the climate and financial risk questionnaire, so there are no answers to show.'}
+                </Empty>
+            </Panel>
+        );
+    }
+
+    const a = assessment.answers ?? {};
+
+    const groups = [
+        {
+            title: 'Climate and weather',
+            icon: CloudRain,
+            rows: [
+                ['Events experienced', readableList(a.climate_events)],
+                ['Flooding', readable(a.flood_frequency)],
+                ['Drought', readable(a.drought_frequency)],
+                ['Extreme heat', readable(a.heat_frequency)],
+                ['Storms / strong winds', readable(a.storm_frequency)],
+            ],
+        },
+        {
+            title: 'Effect on production',
+            icon: TrendingDown,
+            rows: [
+                ['Worst effect', readable(a.worst_effect)],
+                ['Losses experienced', readableList(a.loss_types)],
+                ['Financial loss', readable(a.had_financial_loss)],
+                ['Estimated loss', peso(a.estimated_loss_amount)],
+                ['Costs increased', readable(a.had_cost_increase)],
+                ['Estimated extra cost', peso(a.estimated_extra_cost)],
+                ['Against last season', readable(a.season_comparison)],
+            ],
+        },
+        {
+            title: 'Adaptation',
+            icon: Sprout,
+            rows: [
+                ['Practices used', readableList(a.adaptation_practices)],
+                ['How effective', readable(a.adaptation_effectiveness)],
+                ['Main barrier', readable(a.adaptation_barrier)],
+            ],
+        },
+        {
+            title: 'Assistance and expectation',
+            icon: Building2,
+            rows: [
+                ['Received assistance', readable(a.received_assistance)],
+                ['Type received', readableList(a.assistance_types)],
+                ['How helpful', readable(a.assistance_helpfulness)],
+                [audience === 'farmer' ? 'You expect loss' : 'Farmer expects loss', readable(a.perceived_risk)],
+                ['Factors expected', readableList(a.anticipated_factors)],
+            ],
+        },
+    ];
+
+    return (
+        <Panel title="The farmer's answers" icon={ClipboardList}>
+            <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+                    <Lock className="h-3 w-3" />
+                    Read-only
+                </span>
+                <span className="text-xs text-gray-500">
+                    Answered {onDate(assessment.assessed_at) ?? 'on a date not recorded'}
+                    {assessment.is_stale && ' — over a year ago'}.
+                    {' '}{audience === 'farmer'
+                        ? 'To change an answer, take the assessment again.'
+                        : 'Only the farmer can change these, by reassessing.'}
+                </span>
+            </div>
+
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="mb-4 w-full rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+            >
+                {open ? 'Hide the answers' : 'Show all 20 answers'}
+            </button>
+
+            {open && (
+                <div className="grid gap-5 lg:grid-cols-2">
+                    {groups.map((group) => (
+                        <div key={group.title} className="rounded-xl border border-gray-200 p-4">
+                            <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-900">
+                                <group.icon className="h-4 w-4 text-[#006400]" />
+                                {group.title}
+                            </h3>
+                            <dl className="space-y-2">
+                                {group.rows.map(([label, value]) => (
+                                    <div key={label} className="grid grid-cols-5 gap-3 text-sm">
+                                        <dt className="col-span-2 text-gray-500">{label}</dt>
+                                        <dd className={`col-span-3 ${value ? 'font-medium text-gray-900' : 'italic text-gray-400'}`}>
+                                            {value ?? 'Not answered'}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </Panel>
     );
 }
