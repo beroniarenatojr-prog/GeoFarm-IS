@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm, Link } from '@inertiajs/react';
-import { CloudRain, TrendingDown, Sprout, HandHeart, AlertTriangle, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { CloudRain, TrendingDown, Sprout, HandHeart, AlertTriangle, ChevronLeft, ChevronRight, Check, Layers } from 'lucide-react';
 
 /**
  * The climate and financial risk questionnaire.
@@ -334,9 +334,50 @@ function Peso({ value, onChange, error }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RiskAssessment({ farmer, seasons = [], latest }) {
+/**
+ * What a farmer can assess, and what each choice is called.
+ *
+ * A farm is several activities and each meets the weather differently, so the
+ * first question is which one this assessment is about. Before this step
+ * existed every submission landed on the whole farm, and a rice answer was
+ * counted against a carabao.
+ */
+const SCOPES = [
+    {
+        key: 'farmer',
+        icon: '🏡',
+        label: 'My entire farm',
+        tagalog: 'Buong sakahan',
+        hint: 'General conditions affecting everything you farm.',
+    },
+    {
+        key: 'parcel',
+        icon: '🌾',
+        label: 'A specific crop parcel',
+        tagalog: 'Isang partikular na sakahan',
+        hint: 'Answers apply to that parcel only.',
+    },
+    {
+        key: 'livestock',
+        icon: '🐄',
+        label: 'Livestock',
+        tagalog: 'Alagang hayop',
+        hint: 'Answers apply to those animals only.',
+    },
+    {
+        key: 'aquaculture',
+        icon: '🐟',
+        label: 'Fishpond',
+        tagalog: 'Palaisdaan',
+        hint: 'Answers apply to that pond only.',
+    },
+];
+
+export default function RiskAssessment({ farmer, seasons = [], latest, activities = {}, scopeOptions = {} }) {
     const { data, setData, post, processing, errors } = useForm({
+        scope_type: 'farmer',
         farm_parcel_id: '',
+        fishpond_id: '',
         crop_season_id: '',
         climate_events: [],
         flood_frequency: '', drought_frequency: '', heat_frequency: '', storm_frequency: '',
@@ -366,6 +407,49 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
         }));
     }
 
+    /**
+     * Changing scope clears the activity chosen under the old one.
+     *
+     * Left behind, a parcel id would travel with an assessment that says it is
+     * about a pond. The server clears it too — this is so the farmer sees the
+     * choice reset rather than finding out later.
+     */
+    function pickScope(scope) {
+        setData((current) => ({
+            ...current,
+            scope_type: scope,
+            farm_parcel_id: '',
+            fishpond_id: '',
+            crop_season_id: '',
+            // Answers the new scope does not offer would be rejected on
+            // submit; clearing them means the farmer never loses work at the
+            // end of a long form.
+            loss_types: [],
+            adaptation_practices: [],
+            anticipated_factors: [],
+            season_comparison: '',
+        }));
+
+        setSeason(null);
+    }
+
+    const narrowing = scopeOptions[data.scope_type] ?? {};
+
+    /** The options this activity actually offers for one question. */
+    const optionsFor = (question, full) => {
+        const allowed = narrowing[question];
+
+        return allowed ? full.filter(([key]) => allowed.includes(key)) : full;
+    };
+
+    const asks = (question) => !(narrowing.hidden ?? []).includes(question);
+
+    // The activities a farmer can pick under the chosen scope.
+    const choices = activities[data.scope_type] ?? [];
+    const needsActivity = data.scope_type !== 'farmer';
+    const activityKey = data.scope_type === 'aquaculture' ? 'fishpond_id' : 'farm_parcel_id';
+    const chosen = choices.find((a) => String(a.id) === String(data[activityKey])) ?? null;
+
     function submit(e) {
         e.preventDefault();
         post('/farmer/risk-assessment');
@@ -387,7 +471,108 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
                 </div>
 
                 <form onSubmit={submit} className="space-y-6">
-                    {/* Which cropping this is about — and the money already on file */}
+
+                    {/* ---------------------------------- what is being assessed */}
+                    <Section
+                        icon={Layers}
+                        title="What are you assessing?"
+                        tagalogTitle="Ano ang inyong sinusuri?"
+                        subtitle="Your answers will be recorded against this activity only."
+                        tagalogSubtitle="Ang inyong mga sagot ay itatala para lamang sa napiling gawain."
+                    >
+                        <div className="grid gap-2 sm:grid-cols-2">
+                            {SCOPES.map((scope) => {
+                                // A scope with nothing under it is not offered: a
+                                // farmer with no pond should not be asked to pick one.
+                                const available = scope.key === 'farmer' || (activities[scope.key] ?? []).length > 0;
+
+                                if (!available) return null;
+
+                                const on = data.scope_type === scope.key;
+
+                                return (
+                                    <button
+                                        key={scope.key}
+                                        type="button"
+                                        onClick={() => pickScope(scope.key)}
+                                        className={`rounded-xl border-2 p-3 text-left transition ${
+                                            on
+                                                ? 'border-[#006400] bg-green-50'
+                                                : 'border-gray-200 bg-white hover:border-green-300'
+                                        }`}
+                                    >
+                                        <p className="font-semibold text-gray-900">
+                                            <span className="mr-1.5">{scope.icon}</span>
+                                            {scope.label}
+                                        </p>
+                                        <p className="text-sm font-medium text-[#006400]">{scope.tagalog}</p>
+                                        <p className="mt-1 text-xs text-gray-500">{scope.hint}</p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {errors.scope_type && (
+                            <p className="mt-2 text-xs font-medium text-red-600">{errors.scope_type}</p>
+                        )}
+
+                        {needsActivity && (
+                            <div className="mt-4">
+                                <p className="mb-2 text-sm font-semibold text-gray-900">
+                                    Which one?
+                                    <span className="ml-1 font-normal text-[#006400]">Alin dito?</span>
+                                </p>
+
+                                <div className="space-y-2">
+                                    {choices.map((activity) => {
+                                        const on = String(data[activityKey]) === String(activity.id);
+
+                                        return (
+                                            <button
+                                                key={activity.id}
+                                                type="button"
+                                                onClick={() => setData(activityKey, activity.id)}
+                                                className={`flex w-full items-center justify-between gap-3 rounded-xl border-2 p-3 text-left transition ${
+                                                    on
+                                                        ? 'border-[#006400] bg-green-50'
+                                                        : 'border-gray-200 bg-white hover:border-green-300'
+                                                }`}
+                                            >
+                                                <span className="min-w-0">
+                                                    <span className="block truncate font-semibold text-gray-900">
+                                                        {activity.commodity || 'Not recorded'}
+                                                    </span>
+                                                    <span className="block truncate text-sm text-gray-500">
+                                                        {[activity.label, activity.barangay].filter(Boolean).join(' · ')}
+                                                    </span>
+                                                </span>
+
+                                                <span className="flex-none text-sm font-semibold text-gray-700">
+                                                    {activity.size.value} {activity.size.unit}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {(errors.farm_parcel_id || errors.fishpond_id) && (
+                                    <p className="mt-2 text-xs font-medium text-red-600">
+                                        {errors.farm_parcel_id || errors.fishpond_id}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {chosen && (
+                            <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-[#006400]">
+                                <strong>Assessment target:</strong> {chosen.commodity} — {chosen.label}
+                                {chosen.barangay && ` — ${chosen.barangay}`} — {chosen.size.value} {chosen.size.unit}
+                            </p>
+                        )}
+                    </Section>
+
+                    {/* The harvest question only makes sense for a crop. */}
+                    {(data.scope_type === 'farmer' || data.scope_type === 'parcel') && (
                     <Section
                         icon={Sprout}
                         title="Which harvest is this about?"
@@ -451,6 +636,7 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
                             </>
                         )}
                     </Section>
+                    )}
 
                     <Section
                         icon={CloudRain}
@@ -524,7 +710,7 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
                             tagalogHint="Piliin lahat ng naaangkop."
                             error={errors.loss_types}
                         >
-                            <MultiChoice options={LOSS_TYPES} values={data.loss_types} onChange={(v) => setData('loss_types', v)} />
+                            <MultiChoice options={optionsFor('loss_types', LOSS_TYPES)} values={data.loss_types} onChange={(v) => setData('loss_types', v)} />
                         </Question>
                         <Question
                             number="8"
@@ -556,14 +742,18 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
                                 </div>
                             )}
                         </Question>
-                        <Question
-                            number="12"
-                            label="Compared with your previous season, how did the most recent one perform financially?"
-                            tagalog="Kumpara sa nakaraang anihan, kumusta ang kita ng pinakahuling anihan?"
-                            error={errors.season_comparison}
-                        >
-                            <Choice options={SEASON_COMPARISONS} value={data.season_comparison} onChange={(v) => setData('season_comparison', v)} />
-                        </Question>
+                        {/* A cropping season is not a unit of livestock keeping
+                            or of pond operation, so those scopes are not asked. */}
+                        {asks('season_comparison') && (
+                            <Question
+                                number="12"
+                                label="Compared with your previous season, how did the most recent one perform financially?"
+                                tagalog="Kumpara sa nakaraang anihan, kumusta ang kita ng pinakahuling anihan?"
+                                error={errors.season_comparison}
+                            >
+                                <Choice options={SEASON_COMPARISONS} value={data.season_comparison} onChange={(v) => setData('season_comparison', v)} />
+                            </Question>
+                        )}
                     </Section>
 
                     <Section
@@ -579,7 +769,7 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
                             tagalogHint="Piliin lahat ng naaangkop."
                             error={errors.adaptation_practices}
                         >
-                            <MultiChoice options={ADAPTATION_PRACTICES} values={data.adaptation_practices} onChange={(v) => setData('adaptation_practices', v)} />
+                            <MultiChoice options={optionsFor('adaptation_practices', ADAPTATION_PRACTICES)} values={data.adaptation_practices} onChange={(v) => setData('adaptation_practices', v)} />
                         </Question>
                         <Question
                             number="14"
@@ -659,7 +849,7 @@ export default function RiskAssessment({ farmer, seasons = [], latest }) {
                             tagalogHint={`Pumili ng hanggang ${MAX_FACTORS}. ${data.anticipated_factors.length}/${MAX_FACTORS} ang napili.`}
                             error={errors.anticipated_factors}
                         >
-                            <MultiChoice options={ANTICIPATED_FACTORS} values={data.anticipated_factors} onChange={(v) => setData('anticipated_factors', v)} max={MAX_FACTORS} exclusive={null} />
+                            <MultiChoice options={optionsFor('anticipated_factors', ANTICIPATED_FACTORS)} values={data.anticipated_factors} onChange={(v) => setData('anticipated_factors', v)} max={MAX_FACTORS} exclusive={null} />
                         </Question>
                     </Section>
 

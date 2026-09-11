@@ -53,6 +53,81 @@ class ClimateRiskAssessment extends Model
         self::SCOPE_AQUACULTURE,
     ];
 
+    /**
+     * Which answers a question offers, per activity.
+     *
+     * The columns are the same for every scope — "what losses did you have"
+     * fits a field, a herd and a pond alike — but the ANSWERS are not. Asking
+     * a carabao owner about seed cost, or a fishpond operator about their
+     * planting schedule, is how a questionnaire teaches people it was not
+     * written for them.
+     *
+     * Listed here rather than in the page, because the server has to enforce
+     * the same narrowing. A form that merely hid seed cost from a livestock
+     * assessment would still store it for anyone who posted it directly, and
+     * the whole point of scoping is that a livestock record holds livestock
+     * answers.
+     *
+     * A question absent from a scope's map offers its full list. A question in
+     * that scope's 'hidden' list is not asked at all.
+     */
+    public const SCOPE_OPTIONS = [
+
+        self::SCOPE_LIVESTOCK => [
+            'loss_types' => [
+                'livestock_death', 'livestock_illness',
+                'additional_expenses', 'lost_income', 'other', 'none',
+            ],
+            'adaptation_practices' => [
+                'livestock_shelter', 'improve_drainage', 'use_irrigation',
+                'crop_insurance', 'farm_infrastructure', 'other', 'none',
+            ],
+            'anticipated_factors' => [
+                'labour_cost', 'transport_cost', 'low_price',
+                'extreme_heat', 'typhoon', 'flooding', 'drought',
+                'pests_disease', 'no_irrigation', 'no_capital', 'other',
+            ],
+            // A cropping season is not a unit of livestock keeping.
+            'hidden' => ['season_comparison'],
+        ],
+
+        self::SCOPE_AQUACULTURE => [
+            'loss_types' => [
+                'total_crop_loss', 'reduced_yield',
+                'additional_expenses', 'lost_income', 'other', 'none',
+            ],
+            'adaptation_practices' => [
+                'improve_drainage', 'use_irrigation', 'farm_infrastructure',
+                'crop_insurance', 'other', 'none',
+            ],
+            'anticipated_factors' => [
+                'labour_cost', 'transport_cost', 'low_price',
+                'extreme_heat', 'typhoon', 'flooding', 'drought',
+                'pests_disease', 'no_irrigation', 'no_capital', 'other',
+            ],
+            'hidden' => ['season_comparison'],
+        ],
+    ];
+
+    /**
+     * The answers one question may take under one scope.
+     *
+     * @param  array<int, string>  $full  the question's complete option list
+     * @return array<int, string>
+     */
+    public static function optionsFor(string $scope, string $question, array $full): array
+    {
+        $narrowed = self::SCOPE_OPTIONS[$scope][$question] ?? null;
+
+        return $narrowed === null ? $full : array_values(array_intersect($full, $narrowed));
+    }
+
+    /** Questions this scope does not ask at all. */
+    public static function hiddenFor(string $scope): array
+    {
+        return self::SCOPE_OPTIONS[$scope]['hidden'] ?? [];
+    }
+
     /** How often something happened over the past three years (Q2-Q5). */
     public const FREQUENCIES = ['never', 'rarely', 'sometimes', 'frequently', 'very_frequently'];
 

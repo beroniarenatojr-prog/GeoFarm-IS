@@ -7,6 +7,7 @@ use App\Models\ClimateRiskAssessment;
 use App\Models\Farmer;
 use App\Services\AuditService;
 use App\Services\ClimateRecommendationEngine;
+use App\Services\CommodityCatalogue;
 use App\Services\ClimateRiskScorer;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -56,7 +57,66 @@ class ClimateRiskAssessmentController extends Controller
                     'outcome'         => $season->financial_outcome,
                 ])->values(),
             'latest'  => $farmer->latestRiskAssessment,
+
+            /*
+             * What this farmer actually works, for the "what are you
+             * assessing?" step.
+             *
+             * Built from their own records, so the choices are their real
+             * parcels and ponds rather than a generic list. Without this step
+             * every assessment landed on the whole farm, and a rice answer was
+             * counted against a carabao.
+             */
+            'activities' => $this->activitiesFor($farmer),
+
+            // The answers each scope offers, so the page narrows its lists the
+            // same way the validator does.
+            'scopeOptions' => ClimateRiskAssessment::SCOPE_OPTIONS,
         ]);
+    }
+
+    /**
+     * The farmer's assessable activities, grouped by what they are.
+     *
+     * A livestock holding is a farm parcel whose commodity is an animal —
+     * that is how the register records it, with a barangay and a head count —
+     * so livestock and crop parcels come from the same table and are told
+     * apart by their commodity.
+     */
+    private function activitiesFor(Farmer $farmer): array
+    {
+        $catalogue = app(CommodityCatalogue::class);
+
+        $parcels = $farmer->parcels->map(fn ($parcel) => [
+            'id'        => $parcel->id,
+            'kind'      => $catalogue->kindOf($parcel->commodity) === CommodityCatalogue::KIND_LIVESTOCK
+                ? ClimateRiskAssessment::SCOPE_LIVESTOCK
+                : ClimateRiskAssessment::SCOPE_PARCEL,
+            'commodity' => $parcel->commodity,
+            'barangay'  => $parcel->barangay,
+            'label'     => $parcel->parcel_number ? "Parcel #{$parcel->parcel_number}" : 'Parcel',
+            'size'      => $catalogue->kindOf($parcel->commodity) === CommodityCatalogue::KIND_LIVESTOCK
+                ? ['value' => (float) ($parcel->no_of_heads_trees ?? 0), 'unit' => 'heads']
+                : ['value' => (float) ($parcel->total_area_ha ?? 0), 'unit' => 'ha'],
+        ]);
+
+        return [
+            ClimateRiskAssessment::SCOPE_PARCEL => $parcels
+                ->where('kind', ClimateRiskAssessment::SCOPE_PARCEL)->values()->all(),
+
+            ClimateRiskAssessment::SCOPE_LIVESTOCK => $parcels
+                ->where('kind', ClimateRiskAssessment::SCOPE_LIVESTOCK)->values()->all(),
+
+            ClimateRiskAssessment::SCOPE_AQUACULTURE => $farmer->fishponds
+                ->map(fn ($pond) => [
+                    'id'        => $pond->id,
+                    'kind'      => ClimateRiskAssessment::SCOPE_AQUACULTURE,
+                    'commodity' => $pond->species,
+                    'barangay'  => null,
+                    'label'     => $pond->pond_type ? "Fish Pond ({$pond->pond_type})" : 'Fish Pond',
+                    'size'      => ['value' => (float) ($pond->area_hectares ?? 0), 'unit' => 'ha'],
+                ])->values()->all(),
+        ];
     }
 
     public function store(
@@ -66,9 +126,41 @@ class ClimateRiskAssessmentController extends Controller
     ) {
         $farmer = $this->farmerFor($request);
 
-        $data = $request->validate($this->rules($farmer));
+        /*
+         * The scope decides which answers are even acceptable, so it is read
+         * before the rest is validated. Anything unrecognised falls back to a
+         * whole-farm assessment — which is what an assessment naming no
+         * activity actually is — and the scope_type rule then rejects it.
+         */
+        $scope = in_array($request->input('scope_type'), ClimateRiskAssessment::SCOPES, true)
+            ? $request->input('scope_type')
+            : ClimateRiskAssessment::SCOPE_FARMER;
+
+        $data = $request->validate($this->rules($farmer, $scope));
 
         $this->rejectContradictoryChoices($request);
+
+        /*
+         * A whole-farm assessment names no activity.
+         *
+         * Cleared rather than trusted: a form that changed scope after a
+         * parcel was picked would otherwise leave the parcel id behind, and
+         * the record would claim to be about land it was not written for.
+         */
+        if ($scope === ClimateRiskAssessment::SCOPE_FARMER) {
+            $data['farm_parcel_id'] = null;
+            $data['fishpond_id'] = null;
+        }
+
+        if ($scope === ClimateRiskAssessment::SCOPE_AQUACULTURE) {
+            $data['farm_parcel_id'] = null;
+        } else {
+            $data['fishpond_id'] = null;
+        }
+
+        // Written explicitly rather than left to the column default, so the
+        // stored row says what it is instead of relying on the schema to.
+        $data['scope_type'] = $scope;
 
         $assessment = ClimateRiskAssessment::create($data + [
             'farmer_id'   => $farmer->id,
@@ -95,7 +187,9 @@ class ClimateRiskAssessmentController extends Controller
             // Kept with the score, not worked out again when the page is
             // opened: what the farmer was actually advised, on the day they
             // were advised it, is the part that matters if anyone asks later.
-            'recommendations' => $recommendations->for($result['factors']),
+            // Worded for the activity this assessment was about, so a herd is
+            // never advised about planting schedules.
+            'recommendations' => $recommendations->for($result['factors'], $assessment->scope_type),
         ]);
 
         AuditService::log('create', 'climate_risk_assessments', $assessment->id, null, [
@@ -122,14 +216,57 @@ class ClimateRiskAssessmentController extends Controller
             ->firstOrFail();
     }
 
-    private function rules(Farmer $farmer): array
+    private function rules(Farmer $farmer, string $scope = ClimateRiskAssessment::SCOPE_FARMER): array
     {
         $in = fn (array $options) => ['nullable', Rule::in($options)];
 
+        /*
+         * Answers narrowed to the ones this activity actually offers.
+         *
+         * Enforced here and not only in the form: hiding seed cost from a
+         * livestock assessment on screen would still let it be posted
+         * directly, and a livestock record holding a seed-cost answer is the
+         * very mixing scoping exists to prevent.
+         */
+        $scoped = fn (string $question, array $full) => [
+            'nullable',
+            Rule::in(ClimateRiskAssessment::optionsFor($scope, $question, $full)),
+        ];
+
         return [
-            // Both must belong to this farmer, or the assessment would attach
-            // to someone else's land.
-            'farm_parcel_id' => ['nullable', Rule::exists('farm_parcels', 'id')->where('farmer_id', $farmer->id)],
+            /*
+             * Optional, and absent means the whole farm.
+             *
+             * That is not leniency: an assessment naming no activity IS a
+             * whole-farm assessment, which is what every one recorded before
+             * scoping existed was. Requiring it would break those callers to
+             * no benefit. A value that is present but unrecognised is still
+             * refused.
+             */
+            'scope_type' => ['nullable', Rule::in(ClimateRiskAssessment::SCOPES)],
+
+            /*
+             * The activity must belong to this farmer, and must match the
+             * scope claimed for it. Required for an activity scope, because an
+             * assessment that names no activity is a whole-farm assessment
+             * however it is labelled.
+             */
+            'farm_parcel_id' => [
+                Rule::requiredIf(fn () => in_array(
+                    request('scope_type'),
+                    [ClimateRiskAssessment::SCOPE_PARCEL, ClimateRiskAssessment::SCOPE_LIVESTOCK],
+                    true,
+                )),
+                'nullable',
+                Rule::exists('farm_parcels', 'id')->where('farmer_id', $farmer->id),
+            ],
+
+            'fishpond_id' => [
+                Rule::requiredIf(fn () => request('scope_type') === ClimateRiskAssessment::SCOPE_AQUACULTURE),
+                'nullable',
+                Rule::exists('fishponds', 'id')->where('farmer_id', $farmer->id),
+            ],
+
             'crop_season_id' => ['nullable', Rule::exists('crop_seasons', 'id')
                 ->whereIn('parcel_id', $farmer->parcels->pluck('id')->all() ?: [0])],
 
@@ -142,7 +279,7 @@ class ClimateRiskAssessmentController extends Controller
 
             'worst_effect' => $in(ClimateRiskAssessment::EFFECTS),
             'loss_types'   => 'nullable|array',
-            'loss_types.*' => Rule::in(ClimateRiskAssessment::LOSS_TYPES),
+            'loss_types.*' => $scoped('loss_types', ClimateRiskAssessment::LOSS_TYPES),
 
             'had_financial_loss' => $in(ClimateRiskAssessment::YES_NO_UNSURE),
             // The amount is only meaningful once a loss is claimed, and is
@@ -155,7 +292,7 @@ class ClimateRiskAssessmentController extends Controller
             'season_comparison' => $in(ClimateRiskAssessment::SEASON_COMPARISONS),
 
             'adaptation_practices'   => 'nullable|array',
-            'adaptation_practices.*' => Rule::in(ClimateRiskAssessment::ADAPTATION_PRACTICES),
+            'adaptation_practices.*' => $scoped('adaptation_practices', ClimateRiskAssessment::ADAPTATION_PRACTICES),
             'adaptation_effectiveness' => $in(ClimateRiskAssessment::EFFECTIVENESS),
             'adaptation_barrier'       => $in(ClimateRiskAssessment::ADAPTATION_BARRIERS),
 
@@ -166,7 +303,7 @@ class ClimateRiskAssessmentController extends Controller
 
             'perceived_risk'       => $in(ClimateRiskAssessment::PERCEIVED_RISKS),
             'anticipated_factors'  => 'nullable|array|max:' . ClimateRiskAssessment::MAX_ANTICIPATED_FACTORS,
-            'anticipated_factors.*' => Rule::in(ClimateRiskAssessment::ANTICIPATED_FACTORS),
+            'anticipated_factors.*' => $scoped('anticipated_factors', ClimateRiskAssessment::ANTICIPATED_FACTORS),
         ];
     }
 
