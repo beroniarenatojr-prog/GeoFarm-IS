@@ -299,61 +299,77 @@ function AssessableActivities({ activities = [] }) {
         return null;
     }
 
+    /*
+     * Tones for the banner's green ground, not for white.
+     *
+     * The same trap as the risk chip beside it: a pale slate "not assessed"
+     * disappears against green, and that is the one state a farmer most needs
+     * to notice.
+     */
     const tone = {
         high: 'bg-red-100 text-red-800',
-        moderate: 'bg-amber-100 text-amber-800',
-        low: 'bg-green-100 text-green-800',
+        moderate: 'bg-amber-200 text-amber-950',
+        low: 'bg-white text-[#006400]',
     };
 
-    return (
-        <div className="mb-8 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-6">
-            <SectionHeading icon={ClipboardList} title="Assess each part of your farm" />
+    const waiting = activities.filter((a) => !a.own_assessment).length;
 
-            <p className="mt-1 text-sm text-gray-600">
-                Each parcel, herd and pond can be assessed separately, because each one meets the
-                weather differently. Answers you give for one are never applied to another.
+    return (
+        <div className="mt-5 rounded-2xl border border-white/25 bg-white/10 p-4 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+                    <ClipboardList className="h-4 w-4 flex-none text-white/80" />
+                    Your farm activities
+                </h2>
+
+                {waiting > 0 && (
+                    <span className="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white ring-1 ring-white/30">
+                        {waiting} still to assess
+                    </span>
+                )}
+            </div>
+
+            <p className="mt-1 text-xs leading-relaxed text-white/75">
+                Each parcel, herd and pond is assessed on its own — what you answer for one is never
+                applied to another.
             </p>
 
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-3 space-y-2">
                 {activities.map((activity) => (
                     <li
                         key={`${activity.scope}-${activity.id}`}
-                        className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 p-3"
+                        className="flex flex-wrap items-center gap-3 rounded-xl bg-white/10 p-3 ring-1 ring-white/15"
                     >
-                        <span className="text-xl" aria-hidden="true">{activity.icon}</span>
+                        <span className="text-lg" aria-hidden="true">{activity.icon}</span>
 
                         <span className="min-w-0 flex-1">
-                            <span className="block truncate font-semibold text-gray-900">
+                            <span className="block truncate font-semibold text-white">
                                 {activity.commodity}
                             </span>
-                            <span className="block truncate text-sm text-gray-500">
+                            <span className="block truncate text-xs text-white/70">
                                 {activity.where} · {activity.size}
                             </span>
                         </span>
 
-                        <span className="flex flex-none items-center gap-2">
+                        <span className="flex flex-none flex-wrap items-center gap-2">
                             {activity.own_assessment ? (
-                                <>
-                                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase ${tone[activity.risk_level] ?? 'bg-gray-100 text-gray-700'}`}>
-                                        {activity.risk_level ?? 'Assessed'}
-                                    </span>
-                                    {activity.is_stale && (
-                                        <span className="text-[11px] font-semibold text-amber-700">Over a year old</span>
-                                    )}
-                                </>
+                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${tone[activity.risk_level] ?? 'bg-white/20 text-white'}`}>
+                                    {activity.risk_level ?? 'Assessed'}
+                                    {activity.is_stale && ' · old'}
+                                </span>
                             ) : (
-                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
                                     activity.covered_by_general
-                                        ? 'bg-sky-50 text-sky-700'
-                                        : 'border border-dashed border-slate-300 bg-slate-50 text-slate-600'
+                                        ? 'bg-white/20 text-white ring-1 ring-white/30'
+                                        : 'bg-amber-300 text-amber-950'
                                 }`}>
-                                    {activity.covered_by_general ? 'Covered generally' : 'Not assessed'}
+                                    {activity.covered_by_general ? 'General only' : 'Not assessed'}
                                 </span>
                             )}
 
                             <a
                                 href={activity.assess_url}
-                                className="rounded-lg bg-[#006400] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-800"
+                                className="rounded-lg bg-white px-3 py-1.5 text-sm font-bold text-[#006400] transition hover:bg-green-50"
                             >
                                 {activity.own_assessment ? 'Update' : 'Assess'}
                             </a>
@@ -534,6 +550,13 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
 
                             <RiskAssessmentPanel assessment={farmer.latest_risk_assessment} />
                         </div>
+
+                        {/* Inside the banner, directly under the name: the first
+                            thing a farmer should see is what has been asked
+                            about and what has not. Below the fold it was
+                            invisible, and a single risk figure gave no hint
+                            that a second parcel was never assessed. */}
+                        <AssessableActivities activities={assessable} />
                     </div>
                 </div>
 
@@ -760,12 +783,6 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                         </div>
                     </div>
                 )}
-
-                {/* --------------------------------- what can still be assessed */}
-                {/* Above the results, because the question "has my other parcel
-                    been asked about?" comes before the detail of the one that
-                    has. */}
-                <AssessableActivities activities={assessable} />
 
                 {/* ------------------------------------------- climate & financial risk */}
                 {/* The summary and the button live in the banner above. This
