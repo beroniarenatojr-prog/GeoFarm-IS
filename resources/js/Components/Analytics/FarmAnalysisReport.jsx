@@ -200,10 +200,23 @@ export default function FarmAnalysisReport({ analysis, topActions = [], allActio
                     />
                 </div>
 
+                {/*
+                    Two columns on a wide screen, one on a phone.
+
+                    The placement is explicit rather than left to flow: "Why"
+                    is short and the action rail beside it is long, so a
+                    full-width band underneath left a large empty gap below
+                    "Why" while the rail ran on. Everything after "Why" now
+                    continues in the same column, closing that gap.
+
+                    On a phone the DOM order does the work instead — why, then
+                    the actions, then the evidence — so the recommendations are
+                    never buried under a technical report.
+                */}
                 <div className="mt-5 grid items-start gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 
                     {/* ------------------------------------------- 3. WHY */}
-                    <section className="space-y-5">
+                    <section className="space-y-5 lg:col-start-1 lg:row-start-1">
                         <Panel title="Why this result?" icon={ShieldAlert}>
                             {why.length === 0 ? (
                                 <Empty>
@@ -245,10 +258,17 @@ export default function FarmAnalysisReport({ analysis, topActions = [], allActio
                                 </ul>
                             )}
                         </Panel>
+
+                        {/* Directly under "why": the reader has just been told
+                            what the rules concluded, and the natural next
+                            question is what the farmer actually said. It also
+                            fills the column beside the action rail, which is
+                            taller than "why" on its own. */}
+                        <AnswersPanel assessment={assessment} audience={audience} />
                     </section>
 
                     {/* -------------------------- 5. WHAT SHOULD BE DONE (rail) */}
-                    <aside className="space-y-5 lg:sticky lg:top-6">
+                    <aside className="space-y-5 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
                         <Panel
                             title={overall.level === 'low' ? 'Recommended maintenance' : 'What should you do?'}
                             icon={CheckCircle2}
@@ -353,7 +373,7 @@ export default function FarmAnalysisReport({ analysis, topActions = [], allActio
                     </aside>
 
                     {/* ------------------ 2b. WHERE / 4. HISTORY / 7. DATA USED */}
-                    <div className="space-y-5 lg:col-span-2">
+                    <div className="space-y-5 lg:col-start-1 lg:row-start-2">
 
                         <Panel title="Farm parcel analysis" icon={Layers}>
                             <div className="space-y-3">
@@ -375,8 +395,6 @@ export default function FarmAnalysisReport({ analysis, topActions = [], allActio
                         <Panel title="Historical performance" icon={BarChart3}>
                             <HistoryPanel units={units} />
                         </Panel>
-
-                        <AnswersPanel assessment={assessment} audience={audience} />
 
                         <Panel title="Analysis based on" icon={HelpCircle}>
                             <div className="grid gap-5 sm:grid-cols-2">
@@ -651,7 +669,10 @@ function HistoryPanel({ units }) {
  * first and the raw responses when they start asking where it came from.
  */
 function AnswersPanel({ assessment, audience }) {
-    const [open, setOpen] = useState(false);
+    // Open by default. The answers are the evidence behind the verdict above
+    // them, and a reader who has to press a button to see the evidence mostly
+    // does not. The toggle stays for anyone who wants the page shorter.
+    const [open, setOpen] = useState(true);
 
     if (!assessment) {
         return (
@@ -735,11 +756,11 @@ function AnswersPanel({ assessment, audience }) {
                 onClick={() => setOpen((v) => !v)}
                 className="mb-4 w-full rounded-lg border border-gray-300 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
             >
-                {open ? 'Hide the answers' : 'Show all 20 answers'}
+                {open ? 'Hide the answers' : 'Show the answers'}
             </button>
 
             {open && (
-                <div className="grid gap-5 lg:grid-cols-2">
+                <div className="grid gap-4 xl:grid-cols-2">
                     {groups.map((group) => (
                         <div key={group.title} className="rounded-xl border border-gray-200 p-4">
                             <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-900">
