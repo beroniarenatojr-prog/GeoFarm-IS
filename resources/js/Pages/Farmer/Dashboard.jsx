@@ -340,8 +340,6 @@ function AssessableActivities({ activities = [] }) {
                         key={`${activity.scope}-${activity.id}`}
                         className="flex flex-wrap items-center gap-3 rounded-xl bg-white/10 p-3 ring-1 ring-white/15"
                     >
-                        <span className="text-lg" aria-hidden="true">{activity.icon}</span>
-
                         <span className="min-w-0 flex-1">
                             <span className="block truncate font-semibold text-white">
                                 {activity.commodity}

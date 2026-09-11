@@ -360,7 +360,6 @@ class FarmerController extends Controller
             $rows[] = $this->activityRow(
                 scope: $scope,
                 id: $parcel->id,
-                icon: $isLivestock ? '🐄' : '🌾',
                 commodity: $parcel->commodity,
                 where: trim(($parcel->parcel_number ? "Parcel #{$parcel->parcel_number}" : 'Parcel')
                     . ($parcel->barangay ? " · {$parcel->barangay}" : '')),
@@ -375,7 +374,6 @@ class FarmerController extends Controller
             $rows[] = $this->activityRow(
                 scope: ClimateRiskAssessment::SCOPE_AQUACULTURE,
                 id: $pond->id,
-                icon: '🐟',
                 commodity: $pond->species,
                 where: $pond->pond_type ? "Fish Pond · {$pond->pond_type}" : 'Fish Pond',
                 size: ((float) ($pond->area_hectares ?? 0)) . ' ha',
@@ -391,7 +389,6 @@ class FarmerController extends Controller
     private function activityRow(
         string $scope,
         int $id,
-        string $icon,
         ?string $commodity,
         string $where,
         string $size,
@@ -404,7 +401,6 @@ class FarmerController extends Controller
         return [
             'scope'      => $scope,
             'id'         => $id,
-            'icon'       => $icon,
             'commodity'  => $commodity ?: 'Not recorded',
             'where'      => $where,
             'size'       => $size,
