@@ -241,4 +241,96 @@ return [
     | Three, because a farmer handed nine things to do does none of them.
     */
     'top_actions' => 3,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Agricultural office interventions
+    |--------------------------------------------------------------------------
+    |
+    | What the OFFICE might do, as distinct from what the farmer is advised to
+    | do. The two are deliberately different sentences: "improve drainage" is
+    | for the farmer; "visit the farm and assess drainage" is the office's own
+    | work, and only the office can do it.
+    |
+    | Nothing here happens on its own. These are suggestions a staff member may
+    | choose to open as a real intervention; until somebody does, no record
+    | exists. A system that opened its own work would fill the queue with
+    | visits nobody agreed to make.
+    |
+    | DRAFT WORDING — FOR MAO / ADVISER REVIEW, to the same standard as the
+    | advice above: no variety, chemical, rate or schedule is named.
+    |
+    */
+    'intervention_types' => [
+        'farm_visit'           => ['label' => 'Farm visit', 'icon' => '🏢'],
+        'drainage_assessment'  => ['label' => 'Drainage and water assessment', 'icon' => '💧'],
+        'water_assessment'     => ['label' => 'Water supply assessment', 'icon' => '💧'],
+        'technical_assistance' => ['label' => 'Technical assistance', 'icon' => '🌱'],
+        'soil_testing'         => ['label' => 'Soil testing', 'icon' => '🌾'],
+        'field_monitoring'     => ['label' => 'Field monitoring', 'icon' => '🦠'],
+        'livestock_monitoring' => ['label' => 'Livestock monitoring', 'icon' => '🐄'],
+        'pond_monitoring'      => ['label' => 'Aquaculture monitoring', 'icon' => '🐟'],
+        'cost_review'          => ['label' => 'Production cost review', 'icon' => '📦'],
+        'assistance_referral'  => ['label' => 'Assistance programme referral', 'icon' => '🏢'],
+    ],
+
+    /*
+    | Which intervention each risk factor suggests.
+    |
+    | Keyed by the same factor keys ClimateRiskScorer and ParcelRiskAnalyser
+    | emit, so an office suggestion is traceable to the identical stated
+    | condition as the farmer's recommendation — one chain, two audiences.
+    |
+    | A factor absent from this map suggests no intervention at all. That is
+    | the honest outcome for a condition the office has not decided how to act
+    | on, and far better than defaulting everything to a farm visit.
+    */
+    'interventions' => [
+        'frequent_flooding' => [
+            'type' => 'drainage_assessment',
+            'reason' => 'Flooding reported as a frequent problem on this farm',
+        ],
+        'frequent_drought' => [
+            'type' => 'water_assessment',
+            'reason' => 'Drought or prolonged dry periods reported as frequent',
+        ],
+        'severe_climate_damage' => [
+            'type' => 'farm_visit',
+            'reason' => 'Climate events have caused severe or total loss of production',
+        ],
+        'no_adaptation' => [
+            'type' => 'technical_assistance',
+            'reason' => 'No climate adaptation practices are currently in use',
+        ],
+        'reported_financial_loss' => [
+            'type' => 'assistance_referral',
+            'reason' => 'Farmer reported financial loss from climate events',
+        ],
+        'previous_season_loss' => [
+            'type' => 'cost_review',
+            'reason' => 'The last comparable season did not cover its costs',
+        ],
+        'cost_per_kilo_above_peers' => [
+            'type' => 'cost_review',
+            'reason' => 'Production cost per kilo is well above comparable nearby farms',
+        ],
+        'yield_below_peers' => [
+            'type' => 'technical_assistance',
+            'reason' => 'Yield per hectare is below comparable nearby farms',
+        ],
+        'declining_yield' => [
+            'type' => 'soil_testing',
+            'reason' => 'Yield per hectare has fallen across comparable recorded seasons',
+        ],
+    ],
+
+    /*
+    | How long after opening an intervention its target date falls, by
+    | priority. A starting point staff can change on the record, not a rule.
+    */
+    'intervention_target_days' => [
+        'high'   => 7,
+        'medium' => 21,
+        'low'    => 60,
+    ],
 ];

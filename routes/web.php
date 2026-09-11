@@ -26,6 +26,7 @@ use App\Http\Controllers\Admin\SwineHybridController;
 use App\Http\Controllers\Admin\TreeCropController;
 use App\Http\Controllers\Admin\FarmerVerificationController;
 use App\Http\Controllers\Admin\FarmAnalysisController;
+use App\Http\Controllers\Admin\InterventionController;
 use App\Http\Controllers\Admin\PredictiveAnalyticsController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\UserController;
@@ -222,6 +223,20 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
     Route::get('analytics/predictive', [PredictiveAnalyticsController::class, 'index'])
         ->middleware('permission:view predictive')->name('analytics.predictive');
 
+    /*
+     * The office's intervention queue.
+     *
+     * Guarded on edit assistance rather than view predictive: opening and
+     * closing interventions is the office committing its own staff time, which
+     * is a heavier permission than reading an analysis.
+     */
+    Route::get('interventions', [InterventionController::class, 'index'])
+        ->middleware('permission:view assistance')->name('interventions.index');
+    Route::post('interventions', [InterventionController::class, 'store'])
+        ->middleware('permission:edit assistance')->name('interventions.store');
+    Route::put('interventions/{intervention}', [InterventionController::class, 'update'])
+        ->middleware('permission:edit assistance')->name('interventions.update');
+
     // Farm Analysis — the entry that replaced the Crop Estimator in the menu.
     // Choosing a farmer comes first, because that is what the office arrives
     // knowing.
@@ -232,6 +247,13 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
     // One farmer's farm, analysed parcel by parcel. Guarded on view farmers as
     // well as view predictive: this shows an individual's records, not the
     // municipality-wide aggregates the page above deals in.
+    // Email the farmer what the analysis found. Guarded on edit farmers, the
+    // same permission the manual email uses — sending on the office's behalf
+    // is a heavier act than reading.
+    Route::post('farmers/{farmer}/analysis/alert', [FarmAnalysisController::class, 'alert'])
+        ->middleware(['permission:view predictive', 'permission:edit farmers'])
+        ->name('farmers.analysis.alert');
+
     Route::get('farmers/{farmer}/analysis', [FarmAnalysisController::class, 'show'])
         ->middleware(['permission:view predictive', 'permission:view farmers'])
         ->name('farmers.analysis');

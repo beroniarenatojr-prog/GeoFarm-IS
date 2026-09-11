@@ -24,7 +24,8 @@ import {
     ChevronDown,
     FolderOpen,
     Settings,
-    Boxes
+    Boxes,
+    ClipboardList
 } from 'lucide-react';
 
 /*
@@ -94,6 +95,10 @@ const nav = [
             // answers. Its route and controller are untouched and still reachable
             // by URL; only the menu entry is replaced.
             { label: 'Farm Analysis', href: '/admin/analytics/farms', icon: TrendingUp, permission: 'view predictive' },
+            // The queue the analysis feeds: work the office opened and has yet
+            // to close. Guarded on assistance rather than predictive because
+            // it commits staff time rather than only reporting.
+            { label: 'Interventions', href: '/admin/interventions', icon: ClipboardList, permission: 'view assistance' },
             { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
             //
             // Inventory is the LGU's own supply store, and it still runs behind

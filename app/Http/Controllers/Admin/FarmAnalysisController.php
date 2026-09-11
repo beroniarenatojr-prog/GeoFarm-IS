@@ -3,14 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgriculturalIntervention;
 use App\Models\Barangay;
 use App\Models\Farmer;
+use App\Models\FarmerMessage;
 use App\Models\FinancialAssistance;
 use App\Models\LivestockType;
+use App\Notifications\FarmRiskAlert;
+use App\Services\AuditService;
 use App\Services\ClimateRecommendationEngine;
+use App\Services\InterventionSuggester;
 use App\Services\ParcelRiskAnalyser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -136,6 +142,7 @@ class FarmAnalysisController extends Controller
         Farmer $farmer,
         ParcelRiskAnalyser $analyser,
         ClimateRecommendationEngine $recommendations,
+        InterventionSuggester $suggester,
     ) {
         /*
          * The season comes from the calendar, not from the query string, unless
@@ -166,12 +173,108 @@ class FarmAnalysisController extends Controller
 
             'periods' => $this->selectablePeriods($analyser),
 
+            /*
+             * What the office might do, as distinct from what the farmer is
+             * advised to do. Suggestions only — nothing is written until a
+             * staff member opens one, so the queue always reflects decisions
+             * people made rather than work the system assigned itself.
+             */
+            'suggestedInterventions' => $suggester->for($analysis['why']),
+
+            // Already-open work for this farmer, so the same visit is not
+            // opened twice by two people reading the same analysis.
+            'openInterventions' => AgriculturalIntervention::where('farmer_id', $farmer->id)
+                ->open()
+                ->inWorkOrder()
+                ->get()
+                ->map(fn (AgriculturalIntervention $row) => [
+                    'id'          => $row->id,
+                    'factor_key'  => $row->factor_key,
+                    'type_label'  => $row->type_label,
+                    'status'      => $row->status,
+                    'priority'    => $row->priority,
+                    'target_date' => $row->target_date?->toDateString(),
+                    'assignee'    => $row->assignee?->name,
+                ]),
+
             // What the office could actually offer. Only programmes that exist
             // — nothing is proposed that staff cannot then go and find.
             'assistance' => $this->availableAssistance(),
 
             'canRecordAssistance' => $request->user()?->can('create assistance') ?? false,
         ]);
+    }
+
+    /**
+     * Email this farmer what the analysis found.
+     *
+     * Composed here from the analysis rather than typed by staff, so the email
+     * cannot say something the screen does not. Two refusals guard it:
+     *
+     *  - nothing is sent when no factor was raised, because there would be no
+     *    risk to alert anyone about;
+     *  - nothing is sent without an address on the farmer's own record, which
+     *    is the same rule the manual email follows and what stops this being a
+     *    way to send mail from the office account to an arbitrary recipient.
+     */
+    public function alert(
+        Request $request,
+        Farmer $farmer,
+        ParcelRiskAnalyser $analyser,
+        ClimateRecommendationEngine $recommendations,
+    ) {
+        $analysis = $analyser->forFarmer($farmer);
+        $factors = $analysis['why'];
+
+        if ($factors === []) {
+            return back()->withErrors([
+                'alert' => 'No risk factor was raised for this farm, so there is nothing to alert the farmer about.',
+            ]);
+        }
+
+        $to = $farmer->contact_email;
+
+        if (! $to) {
+            return back()->withErrors([
+                'alert' => 'This farmer has no email address on record.',
+            ]);
+        }
+
+        $top = $recommendations->topOf($recommendations->for($factors));
+
+        $notification = new FarmRiskAlert(
+            farmer: $farmer,
+            level: (string) ($analysis['overall']['level'] ?? 'low'),
+            period: $analysis['period']['label'],
+            parcel: $analysis['affected']
+                ? trim(($analysis['affected']['label'] ?? '') . ' — ' . ($analysis['affected']['commodity'] ?? ''), ' —')
+                : null,
+            // The heaviest factor's own wording, not a paraphrase of several.
+            concern: collect($factors)->sortByDesc('weight')->first()['label'],
+            actions: array_column($top, 'text'),
+        );
+
+        Notification::route('mail', $to)->notify($notification);
+
+        // Logged beside the manual emails, so the office's correspondence with
+        // a farmer reads as one history rather than two.
+        FarmerMessage::create([
+            'farmer_id' => $farmer->id,
+            'sent_by'   => $request->user()->id,
+            'sent_to'   => $to,
+            'subject'   => 'Farm risk alert — ' . $analysis['period']['label'],
+            'body'      => collect($top)->pluck('text')->prepend(
+                'Main concern: ' . collect($factors)->sortByDesc('weight')->first()['label']
+            )->implode("\n\n"),
+        ]);
+
+        AuditService::log('create', 'farm_risk_alert', $farmer->id, null, [
+            'level'  => $analysis['overall']['level'],
+            'period' => $analysis['period']['label'],
+            'sent_to' => $to,
+        ]);
+
+        return back()->with('success', 'Risk alert sent to the farmer.');
     }
 
     /**

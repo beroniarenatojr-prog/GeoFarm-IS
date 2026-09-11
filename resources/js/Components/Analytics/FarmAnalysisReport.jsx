@@ -1,9 +1,9 @@
-import { Link, router } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ShieldAlert, TrendingDown, TrendingUp, Minus, Sprout, Beef, Fish,
     MapPin, Calendar, BarChart3, ChevronRight, Building2, ArrowLeft,
-    CheckCircle2, Circle, Layers, HelpCircle, ClipboardList, Lock, CloudRain,
+    CheckCircle2, Circle, Layers, HelpCircle, ClipboardList, Lock, CloudRain, Mail,
 } from 'lucide-react';
 // Shared with the farmer profile's Risk tab, so the same answer never reads
 // differently on two screens about the same farmer.
@@ -95,7 +95,18 @@ const number = (v, digits = 2) =>
 
 /* ------------------------------------------------------------------ the page */
 
-export default function FarmAnalysisReport({ analysis, topActions = [], allActions = [], periods = [], assistance = [], audience = 'office', backHref = null, backLabel = null }) {
+export default function FarmAnalysisReport({
+    analysis,
+    topActions = [],
+    allActions = [],
+    periods = [],
+    assistance = [],
+    suggestedInterventions = [],
+    openInterventions = [],
+    audience = 'office',
+    backHref = null,
+    backLabel = null,
+}) {
     const [showAllActions, setShowAllActions] = useState(false);
     const [openUnit, setOpenUnit] = useState(null);
 
@@ -370,6 +381,23 @@ export default function FarmAnalysisReport({ analysis, topActions = [], allActio
                                 </Link>
                             )}
                         </Panel>
+
+                        {audience === 'office' && (
+                            <>
+                                <AlertFarmerPanel
+                                    farmerId={farmer.id}
+                                    hasFactors={why.length > 0}
+                                />
+
+                                <InterventionsPanel
+                                    farmerId={farmer.id}
+                                    assessmentId={assessment?.id ?? null}
+                                    affectedParcelId={affected?.parcel_id ?? null}
+                                    suggestions={suggestedInterventions}
+                                    open={openInterventions}
+                                />
+                            </>
+                        )}
                     </aside>
 
                     {/* ------------------ 2b. WHERE / 4. HISTORY / 7. DATA USED */}
@@ -780,6 +808,168 @@ function AnswersPanel({ assessment, audience }) {
                         </div>
                     ))}
                 </div>
+            )}
+        </Panel>
+    );
+}
+
+/**
+ * Suggested office work, and what is already open.
+ *
+ * The third sentence in the chain, and deliberately not the second: the rail
+ * above tells the farmer what to do; this tells the office what IT might do.
+ * Collapsing the two would let a page advise a farmer and then report it as
+ * work the office had in hand.
+ *
+ * Nothing here is created by the system. Each line is a proposal with an
+ * "Open" button beside it, and the queue only ever contains records a person
+ * chose to open. What is already open is listed first, so two staff reading
+ * the same analysis do not raise the same visit twice.
+ */
+function InterventionsPanel({ farmerId, assessmentId, affectedParcelId, suggestions, open }) {
+    const { post, processing } = useForm({});
+    const [opening, setOpening] = useState(null);
+
+    const openOne = (suggestion) => {
+        setOpening(suggestion.factor_key);
+
+        router.post('/admin/interventions', {
+            farmer_id: farmerId,
+            factor_key: suggestion.factor_key,
+            farm_parcel_id: affectedParcelId,
+            climate_risk_assessment_id: assessmentId,
+            priority: suggestion.priority,
+        }, {
+            preserveScroll: true,
+            onFinish: () => setOpening(null),
+        });
+    };
+
+    const alreadyOpen = new Set(open.map((row) => row.factor_key));
+    const outstanding = suggestions.filter((s) => !alreadyOpen.has(s.factor_key));
+
+    return (
+        <Panel title="Office intervention" icon={ClipboardList}>
+            {open.length > 0 && (
+                <div className="mb-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        Already open
+                    </p>
+                    <ul className="mt-1.5 space-y-2">
+                        {open.map((row) => (
+                            <li key={row.id} className="rounded-lg border border-sky-200 bg-sky-50/60 p-2.5 text-sm">
+                                <p className="font-semibold text-gray-900">{row.type_label}</p>
+                                <p className="mt-0.5 text-xs text-gray-600">
+                                    {row.status.replace('_', ' ')}
+                                    {row.assignee && ` · ${row.assignee}`}
+                                    {row.target_date && ` · target ${row.target_date}`}
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {outstanding.length === 0 ? (
+                <p className="text-sm leading-relaxed text-gray-600">
+                    {suggestions.length === 0
+                        ? 'No intervention is suggested. Either nothing was raised against this farm, or the office has not set a plan for the factors that were.'
+                        : 'Every suggested intervention for this farm is already open.'}
+                </p>
+            ) : (
+                <>
+                    <p className="-mt-1 mb-3 text-xs text-gray-500">
+                        Suggested from the factors above. Nothing is opened until you open it.
+                    </p>
+
+                    <ul className="space-y-2.5">
+                        {outstanding.map((suggestion) => (
+                            <li key={suggestion.factor_key} className="rounded-xl border border-gray-200 p-3">
+                                <p className="font-semibold leading-snug text-gray-900">
+                                    <span className="mr-1">{suggestion.icon}</span>
+                                    {suggestion.type_label}
+                                </p>
+
+                                <span className={`mt-1.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${PRIORITY[suggestion.priority]?.chip ?? PRIORITY.medium.chip}`}>
+                                    {PRIORITY[suggestion.priority]?.label ?? suggestion.priority}
+                                </span>
+
+                                <p className="mt-2 text-xs leading-relaxed text-gray-600">
+                                    <span className="font-semibold text-gray-500">Because:</span> {suggestion.reason}
+                                </p>
+
+                                <button
+                                    type="button"
+                                    disabled={processing || opening === suggestion.factor_key}
+                                    onClick={() => openOne(suggestion)}
+                                    className="mt-2.5 w-full rounded-lg border border-[#006400] px-3 py-1.5 text-sm font-semibold text-[#006400] transition hover:bg-green-50 disabled:opacity-50"
+                                >
+                                    {opening === suggestion.factor_key ? 'Opening…' : 'Open intervention'}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
+
+            <Link
+                href="/admin/interventions"
+                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#006400] hover:underline"
+            >
+                View the office queue
+                <ChevronRight className="h-4 w-4" />
+            </Link>
+        </Panel>
+    );
+}
+
+/**
+ * Email the farmer what this analysis found.
+ *
+ * The message is composed server-side from the same factors shown above, so
+ * it cannot say anything the page does not. The button is absent entirely when
+ * nothing was raised: an alert about a risk nobody identified is precisely the
+ * notification this feature must never send.
+ */
+function AlertFarmerPanel({ farmerId, hasFactors }) {
+    const [sending, setSending] = useState(false);
+    const [sent, setSent] = useState(false);
+
+    if (!hasFactors) {
+        return null;
+    }
+
+    const send = () => {
+        setSending(true);
+
+        router.post(`/admin/farmers/${farmerId}/analysis/alert`, {}, {
+            preserveScroll: true,
+            onSuccess: () => setSent(true),
+            onFinish: () => setSending(false),
+        });
+    };
+
+    return (
+        <Panel title="Tell the farmer" icon={Mail}>
+            <p className="text-sm leading-relaxed text-gray-600">
+                Emails this farmer the level, the main concern and the recommended actions —
+                composed from the factors above, not typed. Sent to the address on their own
+                record.
+            </p>
+
+            <button
+                type="button"
+                disabled={sending}
+                onClick={send}
+                className="mt-3 w-full rounded-lg border border-[#006400] px-4 py-2.5 text-sm font-semibold text-[#006400] transition hover:bg-green-50 disabled:opacity-50"
+            >
+                {sending ? 'Sending…' : sent ? 'Send again' : 'Send risk alert'}
+            </button>
+
+            {sent && (
+                <p className="mt-2 text-xs font-medium text-[#006400]">
+                    Sent, and logged with the farmer&rsquo;s other correspondence.
+                </p>
             )}
         </Panel>
     );
