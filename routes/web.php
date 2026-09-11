@@ -222,6 +222,13 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
     Route::get('analytics/predictive', [PredictiveAnalyticsController::class, 'index'])
         ->middleware('permission:view predictive')->name('analytics.predictive');
 
+    // Farm Analysis — the entry that replaced the Crop Estimator in the menu.
+    // Choosing a farmer comes first, because that is what the office arrives
+    // knowing.
+    Route::get('analytics/farms', [FarmAnalysisController::class, 'index'])
+        ->middleware(['permission:view predictive', 'permission:view farmers'])
+        ->name('analytics.farms');
+
     // One farmer's farm, analysed parcel by parcel. Guarded on view farmers as
     // well as view predictive: this shows an individual's records, not the
     // municipality-wide aggregates the page above deals in.

@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Barangay;
 use App\Models\Farmer;
 use App\Models\FinancialAssistance;
+use App\Models\LivestockType;
 use App\Services\ClimateRecommendationEngine;
 use App\Services\ParcelRiskAnalyser;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -26,6 +29,108 @@ use Inertia\Inertia;
  */
 class FarmAnalysisController extends Controller
 {
+    /**
+     * Choose whose farm to analyse.
+     *
+     * This is where the Crop Estimator used to sit in the menu. The estimator
+     * asked for a crop and a hectare figure and answered how much it might
+     * yield; the office arrives knowing a farmer's name and wanting to know
+     * whether that farm is in trouble, which is the question this answers.
+     *
+     * Verified farmers only. Nothing on a pending registration has been
+     * checked, and analysing it would dress unverified data up as a finding.
+     */
+    public function index(Request $request)
+    {
+        $filters = $request->validate([
+            'search'   => 'nullable|string|max:100',
+            'barangay' => 'nullable|string|max:50',
+        ]);
+
+        $search = $filters['search'] ?? null;
+        $barangay = $filters['barangay'] ?? null;
+
+        /*
+         * The counts come from withCount, not from loading the rows: a page of
+         * farmers each dragging in their parcels and ponds is the classic N+1,
+         * and the list only needs the numbers.
+         *
+         * latestRiskAssessment is eager-loaded rather than queried per row for
+         * the same reason.
+         */
+        $farmers = Farmer::verified()
+            // Columns qualified by hand. latestOfMany joins the assessments
+            // table to two derived copies of itself, so a bare "farmer_id" in
+            // the select list is ambiguous and MySQL refuses the query.
+            ->with(['latestRiskAssessment' => fn ($q) => $q->select(
+                'climate_risk_assessments.id',
+                'climate_risk_assessments.farmer_id',
+                'climate_risk_assessments.risk_level',
+                'climate_risk_assessments.risk_score',
+                'climate_risk_assessments.assessed_at',
+            )])
+            ->withCount([
+                'parcels as crop_parcels' => fn ($q) => $q->whereNotIn(
+                    DB::raw('LOWER(TRIM(COALESCE(commodity, "")))'),
+                    $this->livestockNames(),
+                ),
+                'parcels as livestock_parcels' => fn ($q) => $q->whereIn(
+                    DB::raw('LOWER(TRIM(COALESCE(commodity, "")))'),
+                    $this->livestockNames(),
+                ),
+                'fishponds as fishponds',
+            ])
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('first_name', 'like', "%{$search}%")
+                ->orWhere('last_name', 'like', "%{$search}%")
+                ->orWhere('rsbsa_no', 'like', "%{$search}%")))
+            ->when($barangay, fn ($q) => $q->where('barangay', $barangay))
+            // Highest risk first, then the unassessed, then the rest. The point
+            // of the page is to reach the farms that need attention soonest.
+            ->orderByRaw("FIELD((select risk_level from climate_risk_assessments where farmer_id = farmers.id order by assessed_at desc limit 1), 'high', 'moderate', 'low')")
+            ->orderBy('last_name')
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (Farmer $farmer) => [
+                'id'                => $farmer->id,
+                'name'              => $farmer->full_name,
+                'barangay'          => $farmer->barangay,
+                'rsbsa_no'          => $farmer->rsbsa_no,
+                'crop_parcels'      => $farmer->crop_parcels,
+                'livestock_parcels' => $farmer->livestock_parcels,
+                'fishponds'         => $farmer->fishponds,
+                // Null level and assessed:false are two different facts and the
+                // page needs both — "not assessed" must never render as green.
+                'assessed'          => $farmer->latestRiskAssessment !== null,
+                'risk_level'        => $farmer->latestRiskAssessment?->risk_level,
+                'risk_score'        => $farmer->latestRiskAssessment?->risk_score,
+                'assessed_at'       => $farmer->latestRiskAssessment?->assessed_at,
+                'is_stale'          => $farmer->latestRiskAssessment?->is_stale ?? false,
+            ]);
+
+        return Inertia::render('Admin/Analytics/FarmIndex', [
+            'farmers'   => $farmers,
+            'filters'   => ['search' => $search, 'barangay' => $barangay],
+            'barangays' => Barangay::where('is_active', true)->orderBy('name')->pluck('name'),
+            'upcoming'  => app(ParcelRiskAnalyser::class)->upcomingPeriod(),
+        ]);
+    }
+
+    /**
+     * Commodity names that mean livestock, lower-cased for comparison.
+     *
+     * Read from the livestock_types table rather than hard-coded, so the split
+     * between a crop parcel and a livestock one follows the same lookup
+     * CommodityCatalogue uses everywhere else.
+     */
+    private function livestockNames(): array
+    {
+        return LivestockType::query()
+            ->pluck('type_name')
+            ->map(fn ($name) => mb_strtolower(trim($name)))
+            ->all() ?: [''];
+    }
+
     public function show(
         Request $request,
         Farmer $farmer,
