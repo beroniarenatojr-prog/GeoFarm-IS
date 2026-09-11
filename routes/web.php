@@ -25,11 +25,13 @@ use App\Http\Controllers\Admin\SmallRuminantController;
 use App\Http\Controllers\Admin\SwineHybridController;
 use App\Http\Controllers\Admin\TreeCropController;
 use App\Http\Controllers\Admin\FarmerVerificationController;
+use App\Http\Controllers\Admin\FarmAnalysisController;
 use App\Http\Controllers\Admin\PredictiveAnalyticsController;
 use App\Http\Controllers\Admin\ProfileController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\FarmerRegistrationController;
 use App\Http\Controllers\Farmer\ClimateRiskAssessmentController;
+use App\Http\Controllers\Farmer\FarmAnalysisController as FarmerFarmAnalysisController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\LandingController;
@@ -220,6 +222,13 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
     Route::get('analytics/predictive', [PredictiveAnalyticsController::class, 'index'])
         ->middleware('permission:view predictive')->name('analytics.predictive');
 
+    // One farmer's farm, analysed parcel by parcel. Guarded on view farmers as
+    // well as view predictive: this shows an individual's records, not the
+    // municipality-wide aggregates the page above deals in.
+    Route::get('farmers/{farmer}/analysis', [FarmAnalysisController::class, 'show'])
+        ->middleware(['permission:view predictive', 'permission:view farmers'])
+        ->name('farmers.analysis');
+
     // Crop Yield Estimator (Predictive Analytics)
     Route::get('crop-estimator', [CropEstimatorController::class, 'index'])->middleware('permission:view predictive')->name('crop-estimator.index');
     Route::post('crop-estimator/estimate', [CropEstimatorController::class, 'estimate'])->middleware('permission:view predictive')->name('crop-estimator.estimate');
@@ -282,6 +291,11 @@ Route::middleware(['auth', 'role:Farmer'])->prefix('farmer')->name('farmer.')->g
         ->name('risk-assessment.create');
     Route::post('/risk-assessment', [ClimateRiskAssessmentController::class, 'store'])
         ->name('risk-assessment.store');
+
+    // The farmer's own farm analysis. No farmer id in the path, for the same
+    // reason as above: with one, the ownership check becomes something that
+    // can be forgotten.
+    Route::get('/analysis', [FarmerFarmAnalysisController::class, 'show'])->name('analysis');
 });
 
 // Landing Page

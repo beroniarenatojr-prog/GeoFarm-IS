@@ -183,6 +183,16 @@ function RiskAssessmentPanel({ assessment }) {
             >
                 {assessment ? 'Update assessment' : 'Start assessment'}
             </a>
+
+            {/* The full analysis reads the farm parcel by parcel, so it is
+                worth opening even before an assessment exists — the recorded
+                seasons are already there. */}
+            <a
+                href="/farmer/analysis"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-white/40 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+                View farm analysis
+            </a>
         </div>
     );
 }

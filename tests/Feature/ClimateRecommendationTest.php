@@ -51,7 +51,7 @@ class ClimateRecommendationTest extends TestCase
 
         $this->assertNotEmpty($advice);
         $this->assertSame(
-            config('climate_risk.baseline_recommendations'),
+            array_column(config('climate_risk.baseline_recommendations'), 'text'),
             array_column($advice, 'text'),
         );
     }
@@ -64,7 +64,7 @@ class ClimateRecommendationTest extends TestCase
         $advice = $this->engine->for([['key' => 'a_factor_nobody_has_written_advice_for', 'weight' => 5]]);
 
         $this->assertSame(
-            config('climate_risk.baseline_recommendations'),
+            array_column(config('climate_risk.baseline_recommendations'), 'text'),
             array_column($advice, 'text'),
             'an unmatched factor should fall through to baseline advice, not invent its own',
         );

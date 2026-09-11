@@ -98,7 +98,7 @@ const peso = (value) =>
  * season, and staff editing those answers would quietly turn a survey response
  * into an office opinion while leaving the risk score attached to it.
  */
-function RiskAssessmentTab({ latest, history = [] }) {
+function RiskAssessmentTab({ latest, history = [], farmerId }) {
   if (!latest) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center">
@@ -116,6 +116,16 @@ function RiskAssessmentTab({ latest, history = [] }) {
 
   return (
     <div className="space-y-5">
+      {/* The questionnaire answers are below; the full per-parcel analysis that
+          reads them against the farm's recorded seasons lives on its own page. */}
+      <Link
+        href={`/admin/farmers/${farmerId}/analysis`}
+        className="inline-flex items-center gap-2 rounded-lg bg-[#006400] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800"
+      >
+        <ShieldAlert className="h-4 w-4" />
+        Open full farm analysis
+      </Link>
+
       {/* Headline: the level, the score, and how old the answer is */}
       <div className="rounded-xl border border-gray-200 p-5">
         <div className="flex flex-wrap items-center gap-3">
@@ -738,6 +748,7 @@ export default function FarmerShow({ farmer }) {
                 <RiskAssessmentTab
                   latest={farmer.latest_risk_assessment}
                   history={farmer.risk_assessments ?? []}
+                  farmerId={farmer.id}
                 />
               )
             },

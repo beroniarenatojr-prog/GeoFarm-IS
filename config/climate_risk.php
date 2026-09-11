@@ -133,11 +133,112 @@ return [
     | A farmer at lower risk still gets advice - the point of the assessment is
     | to say what to do next, not only to warn. Left out, a clean result would
     | read as the system having nothing to offer.
+    |
+    | These carry the same shape as the keyed advice above so a screen never has
+    | to tell the two apart.
     */
     'baseline_recommendations' => [
-        'Keep recording production costs, harvest weights and selling prices each season, so changes in profitability are visible early.',
-        'Continue the climate adaptation practices already in use.',
-        'Monitor input costs against the price the harvest earns.',
-        'Ask the Municipal Agriculture Office about practices that may further improve productivity.',
+        [
+            'title'    => 'Keep recording every season',
+            'category' => 'planning',
+            'text'     => 'Keep recording production costs, harvest weights and selling prices each season, so changes in profitability are visible early.',
+        ],
+        [
+            'title'    => 'Continue current adaptation practices',
+            'category' => 'climate',
+            'text'     => 'Continue the climate adaptation practices already in use.',
+        ],
+        [
+            'title'    => 'Watch input costs against farmgate price',
+            'category' => 'inputs',
+            'text'     => 'Monitor input costs against the price the harvest earns.',
+        ],
+        [
+            'title'    => 'Ask about further improvements',
+            'category' => 'assistance',
+            'text'     => 'Ask the Municipal Agriculture Office about practices that may further improve productivity.',
+        ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | How a recommendation is presented
+    |--------------------------------------------------------------------------
+    |
+    | Presentation only. Nothing here changes a score, a band or whether a
+    | recommendation appears at all - that is still decided solely by which
+    | factor the scorer found true. This adds a short title, a category and a
+    | priority so the interface can lead with the few actions that matter
+    | rather than listing nine of equal weight.
+    |
+    | Priority is stated rather than derived from the weights, because urgency
+    | and contribution are not the same thing: a small weight can still be the
+    | thing to do first if it is cheap and time-bound.
+    |
+    | Keyed by the factor keys ClimateRiskScorer and ParcelRiskAnalyser emit.
+    */
+    'recommendation_meta' => [
+        'previous_season_loss' => [
+            'title' => 'Review last season’s costs against its income',
+            'category' => 'planning', 'priority' => 'high',
+        ],
+        'cost_per_kilo_above_peers' => [
+            'title' => 'Review the main input costs',
+            'category' => 'inputs', 'priority' => 'high',
+        ],
+        'yield_below_peers' => [
+            'title' => 'Request a technical assessment of crop management',
+            'category' => 'crop', 'priority' => 'high',
+        ],
+        'declining_yield' => [
+            'title' => 'Ask about soil testing for this parcel',
+            'category' => 'soil', 'priority' => 'medium',
+        ],
+        'frequent_flooding' => [
+            'title' => 'Inspect and improve drainage',
+            'category' => 'water', 'priority' => 'high',
+        ],
+        'frequent_drought' => [
+            'title' => 'Review water and irrigation management',
+            'category' => 'water', 'priority' => 'high',
+        ],
+        'severe_climate_damage' => [
+            'title' => 'Request a technical assessment and ask about assistance',
+            'category' => 'climate', 'priority' => 'high',
+        ],
+        'no_adaptation' => [
+            'title' => 'Adopt climate adaptation practices',
+            'category' => 'climate', 'priority' => 'medium',
+        ],
+        'reported_financial_loss' => [
+            'title' => 'Coordinate with the office on assistance programmes',
+            'category' => 'assistance', 'priority' => 'medium',
+        ],
+    ],
+
+    /*
+    | Categories a recommendation can belong to.
+    |
+    | A screen shows only the categories that actually appear in a farmer's
+    | result, so a crop farmer is never shown an empty livestock heading.
+    */
+    'categories' => [
+        'crop'        => ['label' => 'Crop Management',            'icon' => '🌱'],
+        'water'       => ['label' => 'Water Management',           'icon' => '💧'],
+        'pest'        => ['label' => 'Pest & Disease Management',  'icon' => '🦠'],
+        'climate'     => ['label' => 'Climate Preparedness',       'icon' => '🌦'],
+        'soil'        => ['label' => 'Soil Management',            'icon' => '🌾'],
+        'livestock'   => ['label' => 'Livestock Management',       'icon' => '🐄'],
+        'aquaculture' => ['label' => 'Aquaculture Management',     'icon' => '🐟'],
+        'inputs'      => ['label' => 'Input & Resource Management','icon' => '📦'],
+        'planning'    => ['label' => 'Production Planning',        'icon' => '📅'],
+        'assistance'  => ['label' => 'Agricultural Assistance',    'icon' => '🏢'],
+    ],
+
+    /*
+    | How many actions lead the result before the rest are folded away.
+    |
+    | Three, because a farmer handed nine things to do does none of them.
+    */
+    'top_actions' => 3,
 ];

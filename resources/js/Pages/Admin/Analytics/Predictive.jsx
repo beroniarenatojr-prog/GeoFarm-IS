@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
     AlertTriangle, TrendingUp, TrendingDown, Minus, Info, CalendarDays,
-    Sprout, UserX, Database, MapPin, Trophy,
+    Sprout, UserX, Database, MapPin, Trophy, LineChart, ChevronRight, ShieldAlert,
 } from 'lucide-react';
 import Card from '@/Components/ui/Card';
 import ConfidenceBadge from '@/Components/ui/ConfidenceBadge';
@@ -35,7 +35,7 @@ const TrendIcon = ({ direction }) => {
     return <Info className="h-4 w-4 text-gray-400" />;
 };
 
-export default function PredictiveAnalytics({ readiness, filters, barangays }) {
+export default function PredictiveAnalytics({ readiness, filters, barangays, upcoming }) {
     const changeScope = (barangay) => {
         router.get('/admin/analytics/predictive', barangay ? { barangay } : {}, {
             preserveState: true,
@@ -59,6 +59,28 @@ export default function PredictiveAnalytics({ readiness, filters, barangays }) {
 
     return (
         <AdminLayout title="Forecast & Advisory">
+            {/* ------------------------------------------------ page heading */}
+            <div className="mb-5">
+                <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-gray-900">
+                    <LineChart className="h-6 w-6 text-[#006400]" />
+                    Predictive Analytics
+                </h1>
+                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+                    Farm conditions, historical performance and seasonal patterns, read together to
+                    show which farms need attention and what can be done about it.
+                    {upcoming?.label && <> Risk figures below describe the upcoming <strong>{upcoming.label}</strong>.</>}
+                </p>
+            </div>
+
+            {/* --------------------------------- who needs attention, and how many */}
+            <Deferred data="riskBoard" fallback={<Loading label="risk summary" />}>
+                <RiskSummary />
+            </Deferred>
+
+            <Deferred data="priorityFarmers" fallback={<Loading label="priority farmers" />}>
+                <PriorityFarmers />
+            </Deferred>
+
             {/* Scope selector - municipality wide, or a single barangay */}
             <div className="flex flex-wrap items-center gap-3 mb-5 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl">
                 <div className="flex items-center gap-2">
@@ -534,5 +556,118 @@ function InactiveFarmers({ inactiveFarmers = [] }) {
                 </tbody>
             </table>
         </div>
+    );
+}
+
+/* ------------------------------------------------------------ office board */
+
+/**
+ * Four counts, and the fourth is the point.
+ *
+ * "Insufficient data" is drawn in neutral slate with a dashed edge, never in
+ * the green of low risk. A farm nobody has assessed is not a safe farm, and a
+ * board that folds the two together sends staff to the wrong villages while
+ * the unvisited ones sit quietly counted as fine.
+ */
+function RiskSummary({ riskBoard }) {
+    if (!riskBoard) return null;
+
+    const cards = [
+        { key: 'high',     label: 'High risk',        value: riskBoard.high,     tone: 'border-red-200 bg-red-50 text-red-800',        dot: 'bg-red-500' },
+        { key: 'moderate', label: 'Moderate risk',    value: riskBoard.moderate, tone: 'border-amber-200 bg-amber-50 text-amber-800',  dot: 'bg-amber-500' },
+        { key: 'low',      label: 'Low risk',         value: riskBoard.low,      tone: 'border-green-200 bg-green-50 text-green-800',  dot: 'bg-green-600' },
+        { key: 'none',     label: 'Insufficient data', value: riskBoard.insufficient, tone: 'border-dashed border-slate-300 bg-slate-50 text-slate-700', dot: 'bg-slate-300' },
+    ];
+
+    return (
+        <div className="mb-6">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {cards.map((card) => (
+                    <div key={card.key} className={`rounded-2xl border-2 p-4 ${card.tone}`}>
+                        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+                            <span className={`h-2.5 w-2.5 rounded-full ${card.dot}`} />
+                            {card.label}
+                        </p>
+                        <p className="mt-2 text-3xl font-bold tabular-nums">{card.value}</p>
+                    </div>
+                ))}
+            </div>
+
+            <p className="mt-2 text-xs text-gray-500">
+                Counted from each farmer’s most recent assessment. “Insufficient data” is the
+                {' '}{riskBoard.verified} verified farmer{riskBoard.verified === 1 ? '' : 's'} minus those assessed —
+                not a low-risk result.
+            </p>
+        </div>
+    );
+}
+
+/** The farms to look at first, highest score leading. */
+function PriorityFarmers({ priorityFarmers = [] }) {
+    if (priorityFarmers.length === 0) {
+        return (
+            <Card title="Priority attention" className="mb-6">
+                <Empty
+                    icon={ShieldAlert}
+                    title="No farms are currently flagged"
+                    hint="Farms appear here once a completed risk assessment comes out moderate or high."
+                />
+            </Card>
+        );
+    }
+
+    return (
+        <Card title="Priority attention" className="mb-6">
+            <div className="grid gap-3 lg:grid-cols-2">
+                {priorityFarmers.map((row) => {
+                    const high = row.risk_level === 'high';
+
+                    return (
+                        <div
+                            key={row.farmer_id}
+                            className={`rounded-xl border-2 p-4 ${high ? 'border-red-200 bg-red-50/40' : 'border-amber-200 bg-amber-50/40'}`}
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <p className="truncate font-bold text-gray-900">{row.farmer}</p>
+                                    <p className="truncate text-sm text-gray-600">
+                                        {[row.parcel, row.commodity, row.area_ha ? `${row.area_ha} ha` : null]
+                                            .filter(Boolean).join(' • ') || row.barangay || '—'}
+                                    </p>
+                                </div>
+
+                                <span className={`flex-none rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${
+                                    high ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                    {row.risk_level}
+                                    {row.risk_score !== null && ` · ${row.risk_score}`}
+                                </span>
+                            </div>
+
+                            {/* The heaviest stated reason, verbatim. Not a summary. */}
+                            {row.main_concern && (
+                                <p className="mt-2 text-sm text-gray-700">
+                                    <span className="font-semibold">Main concern:</span> {row.main_concern}
+                                </p>
+                            )}
+
+                            {row.is_stale && (
+                                <p className="mt-1.5 text-[11px] font-semibold text-amber-700">
+                                    Assessment is over a year old
+                                </p>
+                            )}
+
+                            <Link
+                                href={`/admin/farmers/${row.farmer_id}/analysis`}
+                                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#006400] hover:underline"
+                            >
+                                View analysis
+                                <ChevronRight className="h-4 w-4" />
+                            </Link>
+                        </div>
+                    );
+                })}
+            </div>
+        </Card>
     );
 }
