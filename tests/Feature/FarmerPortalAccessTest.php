@@ -111,6 +111,48 @@ class FarmerPortalAccessTest extends TestCase
         $this->actingAs($user)->get('/farmer/dashboard')->assertOk();
     }
 
+    public function test_the_refusal_page_says_which_account_it_refused(): void
+    {
+        /*
+         * The default 403 says "USER DOES NOT HAVE THE RIGHT ROLES" and
+         * nothing else — not which user, not which roles, not where they
+         * should have gone. Someone holding an office account and a farmer
+         * account cannot tell a broken permission from being signed in as the
+         * wrong person, which is exactly the confusion this page resolves.
+         */
+        $admin = $this->account('Admin', 'officer@example.test');
+
+        $response = $this->actingAs($admin)->get('/farmer/dashboard');
+
+        $response->assertForbidden();
+        $response->assertSee('officer@example.test');
+        $response->assertSee('Admin');
+        $response->assertSee('farmer/dashboard');
+        $response->assertSee('Sign out');
+    }
+
+    public function test_the_refusal_page_shows_only_the_viewers_own_details(): void
+    {
+        // Their own name, email and roles — nothing about anyone else, and no
+        // system internals.
+        $this->account('Farmer', 'someone.else@example.test');
+        $admin = $this->account('Admin', 'officer@example.test');
+
+        $this->actingAs($admin)
+            ->get('/farmer/dashboard')
+            ->assertDontSee('someone.else@example.test');
+    }
+
+    public function test_a_farmer_is_never_shown_the_refusal_page_for_their_own_portal(): void
+    {
+        [$user] = $this->farmerWithAccount();
+
+        $this->actingAs($user)
+            ->get('/farmer/dashboard')
+            ->assertOk()
+            ->assertDontSee('Access denied');
+    }
+
     public function test_the_farmer_role_exists_with_its_own_permissions(): void
     {
         // If this role were ever dropped, every farmer would meet the same
