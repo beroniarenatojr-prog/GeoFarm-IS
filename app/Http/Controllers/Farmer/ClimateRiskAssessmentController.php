@@ -72,7 +72,44 @@ class ClimateRiskAssessmentController extends Controller
             // The answers each scope offers, so the page narrows its lists the
             // same way the validator does.
             'scopeOptions' => ClimateRiskAssessment::SCOPE_OPTIONS,
+
+            /*
+             * Arrived from a dashboard "Assess" button.
+             *
+             * Resolved here rather than trusted from the query string: the id
+             * is checked against this farmer's own records first, so a link
+             * naming someone else's parcel preselects nothing instead of
+             * quietly pointing the form at land that is not theirs.
+             */
+            'preselect' => $this->preselectFrom($request, $farmer),
         ]);
+    }
+
+    /** The activity a deep link named, if the farmer actually owns it. */
+    private function preselectFrom(Request $request, Farmer $farmer): ?array
+    {
+        $scope = $request->query('scope');
+        $id = $request->query('activity');
+
+        if (! in_array($scope, ClimateRiskAssessment::ACTIVITY_SCOPES, true) || ! ctype_digit((string) $id)) {
+            return null;
+        }
+
+        $id = (int) $id;
+
+        $owns = $scope === ClimateRiskAssessment::SCOPE_AQUACULTURE
+            ? $farmer->fishponds->contains('id', $id)
+            : $farmer->parcels->contains('id', $id);
+
+        if (! $owns) {
+            return null;
+        }
+
+        return [
+            'scope' => $scope,
+            'farm_parcel_id' => $scope === ClimateRiskAssessment::SCOPE_AQUACULTURE ? '' : $id,
+            'fishpond_id' => $scope === ClimateRiskAssessment::SCOPE_AQUACULTURE ? $id : '',
+        ];
     }
 
     /**

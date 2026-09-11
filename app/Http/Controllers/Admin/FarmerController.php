@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClimateRiskAssessment;
 use App\Models\Farmer;
 use App\Models\FarmParcel;
 use App\Services\AuditService;
@@ -327,6 +328,97 @@ class FarmerController extends Controller
         };
 
         return 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($absolute));
+    }
+
+    /**
+     * Everything this farmer can assess, with the state of each.
+     *
+     * Answers the question the dashboard could not: "has my second parcel been
+     * asked about?" Each row carries a deep link that opens the questionnaire
+     * with the scope and the activity already chosen, so a farmer never has to
+     * work out which of their parcels the form means.
+     *
+     * Reads through ClimateRiskAssessment::bestFor, so "assessed" here means
+     * the same thing it means in the analysis: an assessment written about
+     * this activity, or none. A whole-farm assessment is reported as covering
+     * an activity only generally — which is what it does.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function assessableActivities(Farmer $farmer): array
+    {
+        $catalogue = app(CommodityCatalogue::class);
+        $rows = [];
+
+        foreach ($farmer->parcels as $parcel) {
+            $isLivestock = $catalogue->kindOf($parcel->commodity) === CommodityCatalogue::KIND_LIVESTOCK;
+
+            $scope = $isLivestock
+                ? ClimateRiskAssessment::SCOPE_LIVESTOCK
+                : ClimateRiskAssessment::SCOPE_PARCEL;
+
+            $rows[] = $this->activityRow(
+                scope: $scope,
+                id: $parcel->id,
+                icon: $isLivestock ? '🐄' : '🌾',
+                commodity: $parcel->commodity,
+                where: trim(($parcel->parcel_number ? "Parcel #{$parcel->parcel_number}" : 'Parcel')
+                    . ($parcel->barangay ? " · {$parcel->barangay}" : '')),
+                size: $isLivestock
+                    ? trim(((float) ($parcel->no_of_heads_trees ?? 0)) . ' heads')
+                    : trim(((float) ($parcel->total_area_ha ?? 0)) . ' ha'),
+                assessment: ClimateRiskAssessment::bestFor($farmer->id, $scope, $parcel->id),
+            );
+        }
+
+        foreach ($farmer->fishponds as $pond) {
+            $rows[] = $this->activityRow(
+                scope: ClimateRiskAssessment::SCOPE_AQUACULTURE,
+                id: $pond->id,
+                icon: '🐟',
+                commodity: $pond->species,
+                where: $pond->pond_type ? "Fish Pond · {$pond->pond_type}" : 'Fish Pond',
+                size: ((float) ($pond->area_hectares ?? 0)) . ' ha',
+                assessment: ClimateRiskAssessment::bestFor(
+                    $farmer->id, ClimateRiskAssessment::SCOPE_AQUACULTURE, null, $pond->id,
+                ),
+            );
+        }
+
+        return $rows;
+    }
+
+    private function activityRow(
+        string $scope,
+        int $id,
+        string $icon,
+        ?string $commodity,
+        string $where,
+        string $size,
+        ?ClimateRiskAssessment $assessment,
+    ): array {
+        // An assessment written about this very activity, as opposed to the
+        // farmer's general one merely covering it.
+        $own = $assessment !== null && $assessment->scope_type === $scope;
+
+        return [
+            'scope'      => $scope,
+            'id'         => $id,
+            'icon'       => $icon,
+            'commodity'  => $commodity ?: 'Not recorded',
+            'where'      => $where,
+            'size'       => $size,
+            'own_assessment' => $own,
+            'covered_by_general' => $assessment !== null && ! $own,
+            'risk_level' => $own ? $assessment->risk_level : null,
+            'assessed_at' => $own ? $assessment->assessed_at : null,
+            'is_stale'   => $own ? $assessment->is_stale : false,
+            // Opens the questionnaire with this activity already chosen.
+            'assess_url' => '/farmer/risk-assessment?' . http_build_query([
+                'scope' => $scope,
+                'activity' => $id,
+            ]),
+        ];
     }
 
     public function show(Farmer $farmer)
@@ -656,8 +748,22 @@ class FarmerController extends Controller
 
         $mapped = $farmer->parcels->filter(fn ($p) => filled($p->geojson_data));
 
+
         return Inertia::render('Farmer/Dashboard', [
             'farmer' => $farmer,
+
+            /*
+             * Each activity, and whether it has been assessed.
+             *
+             * The risk panel shows one figure and one "Update assessment"
+             * button, which is all there was when a farmer had one assessment.
+             * Now that each parcel and pond can be assessed on its own, the
+             * dashboard has to say so — a farmer looking at a single figure has
+             * no way to know the second parcel was never asked about, or that
+             * they are allowed to ask.
+             */
+            'assessable' => $this->assessableActivities($farmer),
+
             'stats' => [
                 'parcels'          => $farmer->parcels->count(),
                 'parcels_mapped'   => $mapped->count(),

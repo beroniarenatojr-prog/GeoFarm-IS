@@ -3,6 +3,7 @@ import {
     MapPin, LogOut, FileText, Sprout, ShieldCheck, ShieldAlert, ShieldX,
     Beef, Bird, Fish, TreePine, PiggyBank, Mail, Phone, User, Calendar,
     BadgeCheck, Ruler, Banknote, Map as MapIcon, Tractor, Eye, Info,
+    ClipboardList,
 } from 'lucide-react';
 import MapViewer from '@/Components/ui/MapViewer';
 import { TUMAUINI_CENTER } from '@/config/tumauiniMap';
@@ -279,7 +280,92 @@ function RiskAssessmentResults({ assessment }) {
     );
 }
 
-export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, mapCenter }) {
+/**
+ * Each thing a farmer works, and whether it has been assessed.
+ *
+ * The risk panel above shows one figure and one button, which was the whole
+ * story when a farmer had one assessment. Now that each parcel and pond can be
+ * assessed on its own, a single figure hides the question that matters: has my
+ * OTHER parcel been asked about? This answers it per activity and links
+ * straight into the questionnaire with that activity already chosen.
+ *
+ * "Covered generally" is its own state on purpose. A whole-farm assessment
+ * does say something about every activity, but it is not an assessment OF this
+ * parcel — and reporting the two as the same thing is what let a rice answer
+ * stand in for a carabao.
+ */
+function AssessableActivities({ activities = [] }) {
+    if (activities.length === 0) {
+        return null;
+    }
+
+    const tone = {
+        high: 'bg-red-100 text-red-800',
+        moderate: 'bg-amber-100 text-amber-800',
+        low: 'bg-green-100 text-green-800',
+    };
+
+    return (
+        <div className="mb-8 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-6">
+            <SectionHeading icon={ClipboardList} title="Assess each part of your farm" />
+
+            <p className="mt-1 text-sm text-gray-600">
+                Each parcel, herd and pond can be assessed separately, because each one meets the
+                weather differently. Answers you give for one are never applied to another.
+            </p>
+
+            <ul className="mt-4 space-y-2">
+                {activities.map((activity) => (
+                    <li
+                        key={`${activity.scope}-${activity.id}`}
+                        className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 p-3"
+                    >
+                        <span className="text-xl" aria-hidden="true">{activity.icon}</span>
+
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold text-gray-900">
+                                {activity.commodity}
+                            </span>
+                            <span className="block truncate text-sm text-gray-500">
+                                {activity.where} · {activity.size}
+                            </span>
+                        </span>
+
+                        <span className="flex flex-none items-center gap-2">
+                            {activity.own_assessment ? (
+                                <>
+                                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase ${tone[activity.risk_level] ?? 'bg-gray-100 text-gray-700'}`}>
+                                        {activity.risk_level ?? 'Assessed'}
+                                    </span>
+                                    {activity.is_stale && (
+                                        <span className="text-[11px] font-semibold text-amber-700">Over a year old</span>
+                                    )}
+                                </>
+                            ) : (
+                                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    activity.covered_by_general
+                                        ? 'bg-sky-50 text-sky-700'
+                                        : 'border border-dashed border-slate-300 bg-slate-50 text-slate-600'
+                                }`}>
+                                    {activity.covered_by_general ? 'Covered generally' : 'Not assessed'}
+                                </span>
+                            )}
+
+                            <a
+                                href={activity.assess_url}
+                                className="rounded-lg bg-[#006400] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-green-800"
+                            >
+                                {activity.own_assessment ? 'Update' : 'Assess'}
+                            </a>
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, mapCenter, assessable = [] }) {
     const handleLogout = () => {
         router.post('/logout');
     };
@@ -674,6 +760,12 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                         </div>
                     </div>
                 )}
+
+                {/* --------------------------------- what can still be assessed */}
+                {/* Above the results, because the question "has my other parcel
+                    been asked about?" comes before the detail of the one that
+                    has. */}
+                <AssessableActivities activities={assessable} />
 
                 {/* ------------------------------------------- climate & financial risk */}
                 {/* The summary and the button live in the banner above. This

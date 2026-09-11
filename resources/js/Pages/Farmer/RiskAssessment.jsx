@@ -373,11 +373,17 @@ const SCOPES = [
     },
 ];
 
-export default function RiskAssessment({ farmer, seasons = [], latest, activities = {}, scopeOptions = {} }) {
+export default function RiskAssessment({ farmer, seasons = [], latest, activities = {}, scopeOptions = {}, preselect = null }) {
     const { data, setData, post, processing, errors } = useForm({
-        scope_type: 'farmer',
-        farm_parcel_id: '',
-        fishpond_id: '',
+        /*
+         * Opened from a dashboard "Assess" button, the activity is already
+         * chosen. A farmer who picked their carabao on one page should not
+         * have to find it again on the next, and matching the two lists by eye
+         * is exactly where the wrong parcel gets assessed.
+         */
+        scope_type: preselect?.scope ?? 'farmer',
+        farm_parcel_id: preselect?.farm_parcel_id ?? '',
+        fishpond_id: preselect?.fishpond_id ?? '',
         crop_season_id: '',
         climate_events: [],
         flood_frequency: '', drought_frequency: '', heat_frequency: '', storm_frequency: '',
