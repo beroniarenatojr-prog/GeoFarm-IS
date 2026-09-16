@@ -23,3 +23,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Generated ER export (see docs) — regenerate rather than commit
+schema.dbml
