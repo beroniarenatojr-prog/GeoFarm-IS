@@ -108,6 +108,10 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
     // The RSBSA ID card, front and back. Carries the QR that used to sit on the
     // profile page, plus the farmer's photo.
     Route::get('farmers/{farmer}/id-card', [FarmerController::class, 'idCard'])->middleware('permission:view farmers')->name('farmers.id-card');
+    // The scanned ID, streamed through Laravel. It is deliberately NOT served
+    // from /storage: that path is a symlink the web server reads directly, with
+    // no session and no permission behind it.
+    Route::get('farmers/{farmer}/id-proof', [FarmerController::class, 'idProof'])->middleware('permission:view farmers')->name('farmers.id-proof');
     Route::get('farmers/{farmer}/edit', [FarmerController::class, 'edit'])->middleware('permission:edit farmers')->name('farmers.edit');
     // Staff writing to a farmer directly. Behind "edit farmers" rather than a
     // new permission: sending an official message on the office's behalf is

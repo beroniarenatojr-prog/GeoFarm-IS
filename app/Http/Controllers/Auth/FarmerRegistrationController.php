@@ -135,8 +135,23 @@ class FarmerRegistrationController extends Controller
             $data['photo_path'] = $request->file('photo')->store('farmers/photos', 'public');
         }
 
+        /*
+         * The private disk, not the public one.
+         *
+         * A scanned government ID is the most sensitive thing this form
+         * collects. On the public disk it sits behind the storage:link symlink
+         * and is served straight off the filesystem, so anyone holding the URL
+         * reads it without a session — Laravel never sees the request.
+         *
+         * 'local' roots at storage/app/private, which no symlink points into.
+         * The stored path is unchanged, so nothing that already reads this
+         * column has to change; only the disk it is read from.
+         *
+         * Profile photos stay public deliberately: they are shown on the ID
+         * card and the registry, and are not identity documents.
+         */
         if ($request->hasFile('id_proof')) {
-            $data['id_proof_path'] = $request->file('id_proof')->store('farmers/id_proofs', 'public');
+            $data['id_proof_path'] = $request->file('id_proof')->store('farmers/id_proofs', 'local');
         }
 
         // Self-submitted records are never trusted until staff verifies them.

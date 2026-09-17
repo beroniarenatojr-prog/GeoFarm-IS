@@ -170,8 +170,10 @@ class FarmerController extends Controller
             $data['photo_path'] = $request->file('photo')->store('farmers/photos', 'public');
         }
         
+        // Identity documents go to the private disk — see the note in
+        // FarmerRegistrationController::store().
         if ($request->hasFile('id_proof')) {
-            $data['id_proof_path'] = $request->file('id_proof')->store('farmers/id_proofs', 'public');
+            $data['id_proof_path'] = $request->file('id_proof')->store('farmers/id_proofs', 'local');
         }
 
         // Only a FARMER declares farm parcels (Part 3 of the RSBSA form).
@@ -215,6 +217,44 @@ class FarmerController extends Controller
      * reproduces it exactly, but the office should confirm the numbering
      * format and the validity period before these go out.
      */
+    /**
+     * Stream a farmer's ID proof to an authorised member of staff.
+     *
+     * The file is read by Laravel and written to the response, so the browser
+     * is given the bytes and never a filesystem path. The route carries
+     * "permission:view farmers" — the same gate the profile and the
+     * verification queue already use, so anyone who can see the record can see
+     * the document behind it, and nobody else can.
+     *
+     * Falls back to the public disk on purpose. Between deploying this and
+     * running farmers:move-id-proofs, a farmer's file may still be the public
+     * original; without the fallback those records would 404 in that window.
+     * The fallback costs one file_exists() and disappears by itself once the
+     * move has run, since nothing will be left on the public disk to find.
+     */
+    public function idProof(Farmer $farmer)
+    {
+        $path = $farmer->id_proof_path;
+
+        if (! $path) {
+            abort(404, 'This farmer has no ID proof on file.');
+        }
+
+        foreach (['local', 'public'] as $disk) {
+            if (Storage::disk($disk)->exists($path)) {
+                // Inline rather than attachment: staff are checking a document
+                // against a record on screen, not collecting a copy.
+                return Storage::disk($disk)->response($path, basename($path), [
+                    'Content-Disposition' => 'inline; filename="' . basename($path) . '"',
+                    // Never let a proxy or the browser keep an identity document.
+                    'Cache-Control'       => 'private, no-store, max-age=0',
+                ]);
+            }
+        }
+
+        abort(404, 'The ID proof for this farmer is recorded but the file is missing.');
+    }
+
     public function idCard(Farmer $farmer)
     {
         // An identification card asserts that the office has checked this
@@ -603,8 +643,22 @@ class FarmerController extends Controller
         }
         
         if ($request->hasFile('id_proof')) {
-            if ($farmer->id_proof_path) Storage::disk('public')->delete($farmer->id_proof_path);
-            $data['id_proof_path'] = $request->file('id_proof')->store('farmers/id_proofs', 'public');
+            /*
+             * Clear the old file from BOTH disks.
+             *
+             * Until the move command has run everywhere, a farmer's existing ID
+             * may still be the public copy. Deleting only from 'local' would
+             * leave that public original behind — replaced in the database but
+             * still fetchable by URL, which is the exact problem being fixed.
+             * Storage::delete() on a missing file is a no-op, so this is safe
+             * whichever disk the old file was on.
+             */
+            if ($farmer->id_proof_path) {
+                Storage::disk('local')->delete($farmer->id_proof_path);
+                Storage::disk('public')->delete($farmer->id_proof_path);
+            }
+
+            $data['id_proof_path'] = $request->file('id_proof')->store('farmers/id_proofs', 'local');
         }
 
         // Only a FARMER keeps farm parcels. If the livelihood changed to

@@ -216,7 +216,16 @@ function RiskAssessmentTab({ latest, history = [], farmerId }) {
   );
 }
 
-function DocumentPreview({ label, path }) {
+/**
+ * A document belonging to a farmer.
+ *
+ * `href` overrides the default /storage/ path. Identity documents pass it so
+ * they are fetched through an authenticated Laravel route instead of straight
+ * off the filesystem — /storage is a symlink the web server reads with no
+ * session and no permission behind it. Photos keep the direct path: they are
+ * shown on the ID card and the registry and are not identity documents.
+ */
+function DocumentPreview({ label, path, href }) {
   if (!path) {
     return (
       <div>
@@ -229,19 +238,20 @@ function DocumentPreview({ label, path }) {
   }
 
   const isImage = /\.(jpe?g|png|gif|webp|bmp)$/i.test(path);
+  const src = href ?? `/storage/${path}`;
 
   return (
     <div>
       <p className="text-sm text-gray-500 mb-2">{label}</p>
       <a
-        href={`/storage/${path}`}
+        href={src}
         target="_blank"
         rel="noopener noreferrer"
         className="block h-32 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:ring-2 hover:ring-green-500 transition"
         title={`Open ${label.toLowerCase()} in a new tab`}
       >
         {isImage ? (
-          <img src={`/storage/${path}`} alt={label} className="h-full w-full object-cover" />
+          <img src={src} alt={label} className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full flex flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-500">
             <Download className="h-6 w-6" />
@@ -690,7 +700,11 @@ export default function FarmerShow({ farmer }) {
                     <Section icon={Download} title="Documents">
                       <div className="grid grid-cols-2 gap-4">
                         <DocumentPreview label="Photo" path={farmer.photo_path} />
-                        <DocumentPreview label="ID Proof" path={farmer.id_proof_path} />
+                        <DocumentPreview
+                          label="ID Proof"
+                          path={farmer.id_proof_path}
+                          href={`/admin/farmers/${farmer.id}/id-proof`}
+                        />
                       </div>
                     </Section>
                   </div>
