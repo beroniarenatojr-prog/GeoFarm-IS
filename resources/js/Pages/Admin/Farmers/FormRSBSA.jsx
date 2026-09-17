@@ -32,6 +32,54 @@ const MACHINERY_STATUSES = [
     { value: 'decommissioned', label: 'No longer used' },
 ];
 
+/**
+ * One labelled value on the review step.
+ *
+ * An unanswered field says so rather than showing a blank: on a page whose
+ * whole job is "check this before you consent", an empty space is ambiguous
+ * between "nothing was asked" and "you forgot to answer".
+ */
+function ReviewField({ label, tagalog, value }) {
+    const filled = value !== null && value !== undefined && String(value).trim() !== '';
+
+    return (
+        <div>
+            <p className="mb-0.5 text-xs text-gray-500">
+                {label}{tagalog && <span className="italic"> ({tagalog})</span>}
+            </p>
+            <p className={filled ? 'text-sm font-semibold text-gray-900' : 'text-sm italic text-gray-400'}>
+                {filled ? String(value) : 'Not provided'}
+            </p>
+        </div>
+    );
+}
+
+/**
+ * A section of the review, with a way back to the step that owns it.
+ *
+ * The Edit link is the point: spotting a mistake here is only useful if
+ * correcting it does not mean clicking Back through four steps.
+ */
+function ReviewGroup({ title, tagalog, step, go, empty, children }) {
+    return (
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                <h3 className="text-sm font-bold uppercase tracking-wide text-[#006400]">
+                    {title}{tagalog && <span className="ml-1 font-normal normal-case italic text-gray-400">({tagalog})</span>}
+                </h3>
+                <button type="button" onClick={() => go(step)}
+                    className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-[#006400] hover:text-[#006400]">
+                    Edit — Step {step}
+                </button>
+            </div>
+
+            {empty
+                ? <p className="py-2 text-sm italic text-gray-400">{empty}</p>
+                : <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>}
+        </div>
+    );
+}
+
 export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], barangays = [], publicMode = false }) {
     const isEdit = !!farmer;
     const [currentStep, setCurrentStep] = useState(1);
@@ -380,6 +428,15 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
      * the farmer knows they own a thresher but not its model year.
      */
     const declaredMachinery = data.machinery.filter(m => m.machinery_type?.trim());
+
+    /** Children with a name — the same rule the submit handler applies. */
+    const declaredChildren = data.children.filter(c => c.name?.trim());
+
+    /** Whether the provincial address block was filled in at all. */
+    const hasProvincialAddress = [
+        data.provincial_house_lot, data.provincial_street_sitio, data.provincial_barangay,
+        data.provincial_city_municipality, data.provincial_province, data.provincial_region,
+    ].some(v => String(v ?? '').trim() !== '');
 
     const declaredParcels = data.parcels
         .filter(parcel => parcel.barangay?.trim() || String(parcel.total_area_ha ?? '').trim())
@@ -2163,9 +2220,136 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                 </div>
 
                                 <div className="space-y-6">
-                                    {/* Summary Card */}
+                                    {/* The full record, section by section.
+                                        This used to show seven summary lines,
+                                        which asked the farmer to consent to a
+                                        form they could not actually read back.
+                                        Every field they filled in now appears,
+                                        grouped the way the wizard collected it,
+                                        each group with the step to go back to. */}
+                                    <ReviewGroup title="Personal Information" tagalog="Impormasyong Personal" step={1} go={setCurrentStep}>
+                                        <ReviewField label="Full Name" tagalog="Buong Pangalan"
+                                            value={[data.first_name, data.middle_name, data.last_name, data.suffix].filter(Boolean).join(' ')} />
+                                        <ReviewField label="Sex" value={data.sex} />
+                                        <ReviewField label="Birthdate" value={data.birthdate} />
+                                        <ReviewField label="Place of Birth"
+                                            value={[data.birth_city_municipality, data.birth_province].filter(Boolean).join(', ')} />
+                                        <ReviewField label="Civil Status" value={data.civil_status} />
+                                        <ReviewField label="Spouse" tagalog="Asawa"
+                                            value={[data.spouse_first_name, data.spouse_middle_name, data.spouse_last_name, data.spouse_ext_name].filter(Boolean).join(' ')} />
+                                        <ReviewField label="Mother's Maiden Name"
+                                            value={[data.mother_first_name, data.mother_middle_name, data.mother_last_name].filter(Boolean).join(' ')} />
+                                        <ReviewField label="Religion" value={data.religion} />
+                                        <ReviewField label="Highest Education" value={data.highest_education} />
+                                        <ReviewField label="RSBSA No." value={data.rsbsa_no} />
+                                        <ReviewField label="Mobile Number" value={data.mobile_no} />
+                                        <ReviewField label="Email" value={publicMode ? data.email_account : data.email} />
+                                        <ReviewField label="Valid ID"
+                                            value={[data.valid_id_type, data.id_number].filter(Boolean).join(' · ')} />
+                                    </ReviewGroup>
+
+                                    {/* Children get their own rows: each carries a
+                                        birthday and sex that one line could not
+                                        hold legibly. */}
+                                    <ReviewGroup title="Children" tagalog="Mga Anak" step={1} go={setCurrentStep}
+                                        empty={declaredChildren.length === 0 && 'No children declared.'}>
+                                        {declaredChildren.map((c, i) => (
+                                            <ReviewField key={i} label={`Child ${i + 1}`}
+                                                value={[c.name, c.sex, c.birthdate].filter(Boolean).join(' · ')} />
+                                        ))}
+                                    </ReviewGroup>
+
+                                    <ReviewGroup title="Address" tagalog="Tirahan" step={2} go={setCurrentStep}>
+                                        <ReviewField label="House / Lot No." value={data.house_lot_number} />
+                                        <ReviewField label="Street / Sitio" value={data.street_sitio} />
+                                        <ReviewField label="Barangay" value={data.barangay} />
+                                        <ReviewField label="City / Municipality" value={data.city_municipality} />
+                                        <ReviewField label="Province" value={data.province} />
+                                        <ReviewField label="Region" value={data.region} />
+                                    </ReviewGroup>
+
+                                    {/* Only when it was actually filled in — an
+                                        empty provincial block on every record
+                                        would read as missing data rather than
+                                        as a question that did not apply. */}
+                                    {hasProvincialAddress && (
+                                        <ReviewGroup title="Provincial Address" step={2} go={setCurrentStep}>
+                                            <ReviewField label="House / Lot No." value={data.provincial_house_lot} />
+                                            <ReviewField label="Street / Sitio" value={data.provincial_street_sitio} />
+                                            <ReviewField label="Barangay" value={data.provincial_barangay} />
+                                            <ReviewField label="City / Municipality" value={data.provincial_city_municipality} />
+                                            <ReviewField label="Province" value={data.provincial_province} />
+                                            <ReviewField label="Region" value={data.provincial_region} />
+                                        </ReviewGroup>
+                                    )}
+
+                                    <ReviewGroup title="Classification" tagalog="Klasipikasyon" step={3} go={setCurrentStep}>
+                                        <ReviewField label="Indigenous Group"
+                                            value={data.is_indigenous ? (data.indigenous_community || 'Yes') : 'No'} />
+                                        <ReviewField label="Person with Disability (PWD)" value={data.pwd ? 'Yes' : 'No'} />
+                                        <ReviewField label="4Ps Beneficiary" value={data.is_4ps ? 'Yes' : 'No'} />
+                                        <ReviewField label="Organization"
+                                            value={[data.organization_name, data.organization_name_2, data.organization_name_3].filter(Boolean).join(', ')} />
+                                    </ReviewGroup>
+
+                                    <ReviewGroup title="Livelihood" tagalog="Kabuhayan" step={4} go={setCurrentStep}>
+                                        <ReviewField label="Livelihood Type" value={data.livelihood_type} />
+                                    </ReviewGroup>
+
+                                    <ReviewGroup title="Machinery & Equipment" tagalog="Makinarya at Kagamitan" step={4} go={setCurrentStep}
+                                        empty={declaredMachinery.length === 0 && 'No machinery declared.'}>
+                                        {declaredMachinery.map((m, i) => (
+                                            <ReviewField key={i} label={m.machinery_type}
+                                                value={[
+                                                    [m.brand, m.model].filter(Boolean).join(' '),
+                                                    m.acquisition_type,
+                                                    MACHINERY_STATUSES.find(s => s.value === m.status)?.label,
+                                                    m.year_acquired,
+                                                    m.notes,
+                                                ].filter(Boolean).join(' · ')} />
+                                        ))}
+                                    </ReviewGroup>
+
+                                    {/* Parcels are the reason a Farmer registration
+                                        exists, so they are itemised rather than
+                                        counted. Not shown at all for the other
+                                        livelihoods, which never reach Step 5. */}
+                                    {data.livelihood_type === 'Farmer' && (
+                                        <ReviewGroup title="Farm Parcels" tagalog="Impormasyon ng Sakahan" step={5} go={setCurrentStep}
+                                            empty={declaredParcels.length === 0 && 'No farm parcel declared.'}>
+                                            {declaredParcels.map((p, i) => (
+                                                <div key={i} className="sm:col-span-2 rounded-lg border border-green-100 bg-white/70 p-3">
+                                                    <p className="mb-2 text-sm font-bold text-[#006400]">
+                                                        Parcel {i + 1}{p.barangay ? ` — ${p.barangay}` : ''}
+                                                    </p>
+                                                    <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
+                                                        <ReviewField label="Area (ha)" value={p.total_area_ha} />
+                                                        <ReviewField label="Commodity" value={p.commodity} />
+                                                        <ReviewField label="Farm Type"
+                                                            value={farmTypes.find(t => String(t.id) === String(p.farm_type_id))?.type_name} />
+                                                        <ReviewField label="Cropping Schedule" value={p.cropping_schedule} />
+                                                        <ReviewField label="No. of Heads / Trees" value={p.no_of_heads_trees} />
+                                                        <ReviewField label="Ownership" value={p.ownership_type} />
+                                                        <ReviewField label="Land Owner" value={p.land_owner_name} />
+                                                        <ReviewField label="Proof of Ownership" value={p.proof_of_ownership} />
+                                                        <ReviewField label="Organic" value={p.is_organic ? 'Yes' : 'No'} />
+                                                        <ReviewField label="Within Ancestral Domain" value={p.within_ancestral ? 'Yes' : 'No'} />
+                                                        <ReviewField label="Agrarian Reform Beneficiary" value={p.arb ? 'Yes' : 'No'} />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </ReviewGroup>
+                                    )}
+
+                                    <ReviewGroup title="Documents" step={6} go={setCurrentStep}>
+                                        <ReviewField label="2x2 Photo" value={photoPreview ? 'Uploaded' : null} />
+                                        <ReviewField label="Valid ID / Proof" value={idProofPreview ? 'Uploaded' : null} />
+                                    </ReviewGroup>
+
+                                    {/* The original seven-line card, kept as the
+                                        headline above the detail. */}
                                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-4">Registration Summary</h3>
+                                        <h3 className="text-lg font-bold text-gray-900 mb-4">At a glance</h3>
                                         <div className="grid grid-cols-2 gap-4 text-sm">
                                             <div>
                                                 <p className="text-gray-600 mb-1">Full Name <span className="text-gray-500">(Buong Pangalan)</span></p>
