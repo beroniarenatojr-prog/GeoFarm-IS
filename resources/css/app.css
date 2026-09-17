@@ -34,6 +34,33 @@
     scrollbar-color: rgba(255, 255, 255, 0.3) rgba(0, 100, 0, 0.3);
 }
 
+/* Horizontal tab strips.
+   The bar is always shown rather than left to appear on hover: a row of tabs
+   that runs off the edge gives no other clue that more exist, and on a trackpad
+   the overflow is easy to miss entirely. Slim, and in the module's green so it
+   reads as part of the strip rather than as a page scrollbar. */
+.tab-scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.tab-scroll::-webkit-scrollbar-track {
+    background: rgba(0, 100, 0, 0.06);
+}
+
+.tab-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 100, 0, 0.35);
+    border-radius: 3px;
+}
+
+.tab-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 100, 0, 0.55);
+}
+
+.tab-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 100, 0, 0.35) rgba(0, 100, 0, 0.06);
+}
+
 /* Table scroll container: the bar stays pinned to the container's bottom edge,
    which stays on screen because the container height is capped to the viewport. */
 .sticky-scrollbar {
