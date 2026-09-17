@@ -257,6 +257,57 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                         ))}
                     </div>
                 )}
+
+                {/* Paging.
+                    The query was already paginated at 20 a page, but nothing
+                    rendered the links — so a queue of 56 submissions showed the
+                    first 20 and gave no way to reach the other 36.
+
+                    preserveScroll keeps the reviewer where they were rather than
+                    throwing them to the top on every page turn, and preserveState
+                    keeps the search box and the status filter they arrived with. */}
+                {submissions.last_page > 1 && (
+                    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-green-100 pt-4">
+                        <span className="text-xs text-gray-500">
+                            Page {submissions.current_page} of {submissions.last_page}
+                            <span className="text-gray-400"> · {submissions.total} submissions</span>
+                        </span>
+
+                        <div className="flex flex-wrap items-center gap-1">
+                            {/* Laravel's own link list, so the page numbers and
+                                the first/last arrows stay consistent with the
+                                filters already in the query string. */}
+                            {submissions.links.map((link, i) => {
+                                const isPrev = i === 0;
+                                const isNext = i === submissions.links.length - 1;
+                                const body = isPrev
+                                    ? <>&laquo; Prev</>
+                                    : isNext ? <>Next &raquo;</>
+                                    : <span dangerouslySetInnerHTML={{ __html: link.label }} />;
+
+                                if (!link.url) {
+                                    return (
+                                        <span key={i}
+                                            className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-gray-200 px-3 py-1 text-sm text-gray-300">
+                                            {body}
+                                        </span>
+                                    );
+                                }
+
+                                return (
+                                    <Link key={i} href={link.url} preserveState preserveScroll
+                                        className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-sm transition-colors ${
+                                            link.active
+                                                ? 'border-[#006400] bg-[#006400] font-semibold text-white'
+                                                : 'border-gray-200 hover:bg-gray-100'
+                                        }`}>
+                                        {body}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </Card>
 
             {/* Rejection reason dialog */}
