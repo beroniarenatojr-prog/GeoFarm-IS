@@ -62,4 +62,27 @@ class AssistanceDistribution extends Model
     {
         return $this->hasMany(InventoryDistribution::class, 'assistance_distribution_id');
     }
+
+    /**
+     * The office visit this hand-out came out of, when it came out of one.
+     *
+     * Nullable and expected to be: most assistance has no intervention behind
+     * it — a farmer can simply be on a programme.
+     */
+    public function intervention(): BelongsTo
+    {
+        return $this->belongsTo(AgriculturalIntervention::class, 'intervention_id');
+    }
+
+    /** The holding the support was for. Null for cash paid to the farmer. */
+    public function parcel(): BelongsTo
+    {
+        return $this->belongsTo(FarmParcel::class, 'farm_parcel_id');
+    }
+
+    /** Checks scheduled to see what the assistance achieved. */
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(FollowUp::class, 'assistance_distribution_id');
+    }
 }

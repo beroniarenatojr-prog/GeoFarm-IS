@@ -190,6 +190,22 @@ class Farmer extends Model
     public function poultry(): HasMany        { return $this->hasMany(Poultry::class); }
     public function machinery(): HasMany      { return $this->hasMany(FarmMachinery::class); }
 
+    // Agricultural support workflow
+    public function interventions(): HasMany  { return $this->hasMany(AgriculturalIntervention::class); }
+    public function followUps(): HasMany      { return $this->hasMany(FollowUp::class); }
+
+    /**
+     * Reviewable recommendation rows.
+     *
+     * Named recommendationRecords, not recommendations: ClimateRiskAssessment
+     * already exposes a JSON attribute by that name, and keeping the two
+     * distinct here means nobody has to remember which one a given model meant.
+     */
+    public function recommendationRecords(): HasMany
+    {
+        return $this->hasMany(Recommendation::class);
+    }
+
     /**
      * Crop seasons reach a farmer through their parcels — crop_seasons has no
      * farmer_id of its own, because a season is always planted on a parcel.

@@ -264,6 +264,33 @@ class ParcelRiskAnalyser
                 'The farmer reported financial loss from climate events', 'assessment');
         }
 
+        /*
+         * What the farmer said, carried as advice only.
+         *
+         * Q15 (the barrier to adapting) and Q20 (what they expect to cost them
+         * next season) were already collected and shown back, but nothing acted
+         * on them — a farmer whose stated barrier was "no water" got no water
+         * advice unless their drought frequency happened to be high too.
+         *
+         * Weight 0, explicitly and not from config. levelFor() and scoreFor()
+         * are array_sum() over these weights, so a zero adds nothing to any
+         * score and moves no band: the scorer and its weights are untouched.
+         * That is the correct treatment as well as the safe one — a stated
+         * expectation is the farmer's view of next season, not evidence of what
+         * has happened to their land.
+         */
+        if ($assessment->adaptation_barrier === 'no_water') {
+            $factors[] = $this->factor('barrier_no_water', 0,
+                'The farmer gave lack of water as the main barrier to adapting', 'assessment');
+        }
+
+        $anticipated = $assessment->anticipated_factors;
+
+        if (is_array($anticipated) && in_array('seed_cost', $anticipated, true)) {
+            $factors[] = $this->factor('anticipates_seed_cost', 0,
+                'The farmer expects seed cost to affect the coming season', 'assessment');
+        }
+
         return $factors;
     }
 
@@ -292,6 +319,7 @@ class ParcelRiskAnalyser
                 barangay: $parcel->barangay,
                 assessment: $assessment,
                 historyKind: 'livestock',
+                parcelId: $parcel->id,
             );
         }
 
@@ -372,6 +400,7 @@ class ParcelRiskAnalyser
                 $farmer->id, ClimateRiskAssessment::SCOPE_AQUACULTURE, null, $pond->id,
             ),
             historyKind: 'aquaculture',
+            pondId: $pond->id,
         );
     }
 
@@ -417,9 +446,17 @@ class ParcelRiskAnalyser
         ?string $barangay,
         ?ClimateRiskAssessment $assessment,
         string $historyKind,
+        ?int $parcelId = null,
+        ?int $pondId = null,
     ): array {
         return [
             'id'               => $id,
+            // The real row ids, alongside the display id. parcelUnit() already
+            // carries parcel_id; these make the unmeasured units match, so a
+            // caller that has to write the activity down does not have to pick
+            // "parcel-5" apart to find out which parcel it meant.
+            'parcel_id'        => $parcelId,
+            'fishpond_id'      => $pondId,
             'kind'             => $kind,
             'label'            => $label,
             'commodity'        => $commodity,

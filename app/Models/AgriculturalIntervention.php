@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Work the office decided to do, and what came of it.
@@ -68,6 +70,19 @@ class AgriculturalIntervention extends Model
         'completed_at'   => 'datetime',
     ];
 
+    /**
+     * Mirrors the column defaults.
+     *
+     * Eloquent does not read database defaults, so without these a freshly
+     * created intervention carries status = null in memory until it is read
+     * back — and is_open, which tests status against OPEN_STATUSES, answers
+     * false for a record that was just opened.
+     */
+    protected $attributes = [
+        'status'   => self::STATUS_PENDING,
+        'priority' => 'medium',
+    ];
+
     protected $appends = ['is_open', 'is_overdue', 'type_label'];
 
     /**
@@ -107,6 +122,41 @@ class AgriculturalIntervention extends Model
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('target_date IS NULL, target_date')
             ->orderBy('id');
+    }
+
+    /**
+     * Every recorded visit, call or piece of work, in order.
+     *
+     * This does not replace action_taken, which stays as the single closing
+     * summary the intervention screen already reads and writes. These are the
+     * individual events that led up to it.
+     */
+    public function actions(): HasMany
+    {
+        return $this->hasMany(InterventionAction::class)->orderBy('action_date');
+    }
+
+    /**
+     * Scheduled checks after the work.
+     *
+     * follow_up_date and follow_up_notes on this table are untouched and still
+     * drive the existing screen; this is the multi-row log beside them.
+     */
+    public function followUps(): HasMany
+    {
+        return $this->hasMany(FollowUp::class)->orderBy('scheduled_for');
+    }
+
+    /** Goods or cash handed over because of this intervention, if any were. */
+    public function assistanceRecords(): HasMany
+    {
+        return $this->hasMany(AssistanceDistribution::class, 'intervention_id');
+    }
+
+    /** The advice this was opened from, when it was opened from one. */
+    public function recommendation(): HasOne
+    {
+        return $this->hasOne(Recommendation::class, 'intervention_id');
     }
 
     public function farmer(): BelongsTo     { return $this->belongsTo(Farmer::class); }

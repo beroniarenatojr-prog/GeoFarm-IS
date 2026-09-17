@@ -125,6 +125,25 @@ return [
         'no_adaptation' => 'No climate adaptation practices are currently recorded. Ask the Municipal Agriculture Office which practices are appropriate for this farm and what technical assistance is available.',
 
         'reported_financial_loss' => 'Coordinate with the Municipal Agriculture Office regarding assistance programmes and support available to farmers who have experienced climate-related losses.',
+
+        /*
+        | Barriers and expectations the farmer stated, carried into advice.
+        |
+        | Q15 and Q20 were already being collected and shown back, but nothing
+        | acted on them: a farmer who answered "no water" to the barrier
+        | question got no water advice unless their FLOOD or DROUGHT frequency
+        | also happened to be high.
+        |
+        | Both carry weight 0 wherever they are raised. They say what the farmer
+        | told us, not what the records show, and a stated expectation is not
+        | evidence of exposure — so neither moves a risk score or a band.
+        |
+        | The seed line names no programme, deliberately. Whether one exists is
+        | a question about today's database, not about this file.
+        */
+        'barrier_no_water' => 'Lack of water was given as the main barrier to adapting. Discuss water-management and irrigation options with the Municipal Agriculture Office for this activity.',
+
+        'anticipates_seed_cost' => 'Seed cost was named as a factor expected to affect the coming season. Check with the Agricultural Office for available assistance before the next planting.',
     ],
 
     /*
@@ -285,6 +304,14 @@ return [
         ],
         'reported_financial_loss' => [
             'title' => 'Coordinate with the office on assistance programmes',
+            'category' => 'assistance', 'priority' => 'medium',
+        ],
+        'barrier_no_water' => [
+            'title' => 'Discuss water-management options with the office',
+            'category' => 'water', 'priority' => 'high',
+        ],
+        'anticipates_seed_cost' => [
+            'title' => 'Check available assistance before the next planting',
             'category' => 'assistance', 'priority' => 'medium',
         ],
     ],

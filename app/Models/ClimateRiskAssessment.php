@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A completed climate and financial risk questionnaire.
@@ -318,6 +319,22 @@ class ClimateRiskAssessment extends Model
             self::SCOPE_AQUACULTURE => 'Aquaculture Assessment',
             default                 => 'Whole-Farm Assessment',
         };
+    }
+
+    /**
+     * The reviewable recommendation rows generated from this assessment.
+     *
+     * Deliberately NOT called recommendations(): this model already has a
+     * `recommendations` JSON attribute holding the generated snapshot, and
+     * Eloquent resolves attributes before relations — a relation of that name
+     * would be unreachable through $assessment->recommendations while
+     * ->with('recommendations') loaded something else entirely. The JSON
+     * column is untouched and remains the snapshot; these are the rows staff
+     * can review, accept or reject.
+     */
+    public function recommendationRecords(): HasMany
+    {
+        return $this->hasMany(Recommendation::class, 'climate_risk_assessment_id');
     }
 
     public function farmer(): BelongsTo     { return $this->belongsTo(Farmer::class); }
