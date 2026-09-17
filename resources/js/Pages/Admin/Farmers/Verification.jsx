@@ -147,6 +147,24 @@ export default function FarmerVerification({ submissions, filters, counts }) {
                                             )}
                                         </div>
 
+                                        {/* The RSBSA number, under the name.
+                                            The badge beside the name is the
+                                            reference code — what this office
+                                            issued to track the submission. This
+                                            is the national registry number the
+                                            farmer is actually enrolled under,
+                                            and the two are easily confused, so
+                                            it is labelled rather than left as a
+                                            bare string. Hidden when absent: a
+                                            farmer can register before one has
+                                            been assigned. */}
+                                        {farmer.rsbsa_no && (
+                                            <p className="mb-2 font-mono text-xs tracking-tight text-gray-600">
+                                                <span className="font-sans text-gray-400">RSBSA No. </span>
+                                                {farmer.rsbsa_no}
+                                            </p>
+                                        )}
+
                                         {/* Who decided, and when. The whole point of
                                             keeping decided submissions on this screen. */}
                                         {farmer.verification_status !== 'pending' && (farmer.verified_at || farmer.verifier) && (

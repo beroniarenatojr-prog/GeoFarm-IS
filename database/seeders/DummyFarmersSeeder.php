@@ -52,6 +52,19 @@ class DummyFarmersSeeder extends Seeder
 
     private const FARMERS = 55;
 
+    /**
+     * Tumauini's RSBSA prefix: region 02, Isabela 31, Tumauini 23, then 027.
+     *
+     * The last six digits start at 900001 rather than 000001 deliberately.
+     * rsbsa_no carries a UNIQUE index, and real enrolment numbers run upward
+     * from the low end — so seeding 000001..000055 would sit exactly where the
+     * office's own numbers will land and the first real import would collide.
+     * A high block cannot be reached by ordinary numbering for a long time.
+     */
+    private const RSBSA_PREFIX = '02-31-23-027-';
+
+    private const RSBSA_BLOCK_START = 900_000;
+
     /** Roughly the middle of Tumauini. Parcels are scattered around it. */
     private const CENTRE_LAT = 17.2700;
     private const CENTRE_LON = 121.8100;
@@ -59,12 +72,23 @@ class DummyFarmersSeeder extends Seeder
     /** Keeps the scatter inside the municipality rather than in the next town. */
     private const SPREAD_DEG = 0.11;
 
-    private const FIRST_NAMES = [
-        'Juan', 'Maria', 'Jose', 'Rosario', 'Pedro', 'Luzviminda', 'Ricardo', 'Corazon',
-        'Antonio', 'Teresita', 'Manuel', 'Lourdes', 'Eduardo', 'Remedios', 'Rolando',
-        'Erlinda', 'Danilo', 'Nenita', 'Alfredo', 'Josefina', 'Reynaldo', 'Marilou',
-        'Benigno', 'Purificacion', 'Ernesto', 'Milagros', 'Federico', 'Gliceria',
-        'Arturo', 'Consuelo', 'Rodolfo', 'Adoracion', 'Efren', 'Natividad', 'Salvador',
+    /**
+     * Split by sex so the two agree.
+     *
+     * They did not before: sex was assigned on whether the index was even,
+     * which produced records like a female Juan. A clerk reading the registry
+     * would notice, and so would anyone reviewing the data.
+     */
+    private const MALE_NAMES = [
+        'Juan', 'Jose', 'Pedro', 'Ricardo', 'Antonio', 'Manuel', 'Eduardo', 'Rolando',
+        'Danilo', 'Alfredo', 'Reynaldo', 'Benigno', 'Ernesto', 'Federico', 'Arturo',
+        'Rodolfo', 'Efren', 'Salvador',
+    ];
+
+    private const FEMALE_NAMES = [
+        'Maria', 'Rosario', 'Luzviminda', 'Corazon', 'Teresita', 'Lourdes', 'Remedios',
+        'Erlinda', 'Nenita', 'Josefina', 'Marilou', 'Purificacion', 'Milagros',
+        'Gliceria', 'Consuelo', 'Adoracion', 'Natividad',
     ];
 
     private const MIDDLE_NAMES = [
@@ -81,9 +105,43 @@ class DummyFarmersSeeder extends Seeder
 
     private const FERTILISERS = ['Urea', 'Complete (14-14-14)', 'Ammonium Sulphate', 'Organic Compost'];
 
+    private const RELIGIONS = [
+        'Roman Catholic', 'Iglesia ni Cristo', 'Baptist', 'Aglipayan',
+        'Methodist', 'Born Again Christian', 'Seventh-day Adventist',
+    ];
+
+    /** Only types already present in the register, so nothing new is invented. */
+    private const ID_TYPES = ['PhilID', "Driver's License", "Voter's ID", '4Ps ID', 'Postal ID', 'SSS ID'];
+
+    /** Towns in Isabela and Cagayan a Tumauini farmer might plausibly be born in. */
+    private const BIRTH_TOWNS = [
+        'Tumauini', 'Ilagan', 'Cabagan', 'San Pablo', 'Santa Maria', 'Delfin Albano',
+        'Naguilian', 'Benito Soliven', 'Roxas', 'Quirino', 'Solana', 'Tuguegarao',
+    ];
+
+    private const SITIOS = [
+        'Purok 1', 'Purok 2', 'Purok 3', 'Purok 4', 'Sitio Centro', 'Sitio Riverside',
+        'Sitio Bagong Buhay', 'Sitio Maligaya', 'Zone I', 'Zone II', 'Calle Real',
+    ];
+
+    private const ORGANISATIONS = [
+        'Tumauini Irrigators Association', 'Samahang Magsasaka ng Tumauini',
+        'Isabela Corn Growers Cooperative', 'Cagayan Valley Rice Farmers Group',
+    ];
+
+    private const INDIGENOUS_GROUPS = ['Gaddang', 'Ibanag', 'Itawes', 'Ifugao'];
+
     public function run(): void
     {
-        $barangays = Barangay::orderBy('name')->pluck('name')->all();
+        /*
+         * Active barangays only.
+         *
+         * BarangaySeeder holds the authoritative 46 and retires anything not on
+         * it by setting is_active = false — names left over from older data, some
+         * of which belong to other municipalities entirely. Reading the table
+         * without this filter put farmers in barangays Tumauini does not have.
+         */
+        $barangays = Barangay::where('is_active', true)->orderBy('name')->pluck('name')->all();
         $crops     = Crop::orderBy('crop_name')->pluck('crop_name', 'id')->all();
         $livestock = LivestockType::orderBy('type_name')->pluck('type_name')->all();
         $farmTypes = FarmType::orderBy('id')->pluck('id')->all();
@@ -158,6 +216,27 @@ class DummyFarmersSeeder extends Seeder
      * crop seasons with it. Nothing is matched on name, barangay or anything
      * else a real farmer could share.
      */
+    /**
+     * An ID number shaped like the type it belongs to.
+     *
+     * A PhilID that looked like a driving licence would be noticed by anyone
+     * who handles these daily. All fictional, and none is checksum-valid, so
+     * none can collide with a real document.
+     */
+    private function idNumberFor(string $type, int $n): string
+    {
+        $pad = fn (int $length, int $seed) => str_pad((string) (($seed * 7919) % (10 ** $length)), $length, '0', STR_PAD_LEFT);
+
+        return match ($type) {
+            'PhilID'           => $pad(4, $n) . '-' . $pad(4, $n + 3) . '-' . $pad(4, $n + 7) . '-' . $pad(4, $n + 11),
+            "Driver's License" => 'B' . $pad(2, $n) . '-' . $pad(2, $n + 5) . '-' . $pad(6, $n + 9),
+            "Voter's ID"       => $pad(4, $n) . '-' . $pad(4, $n + 2) . 'A' . $pad(4, $n + 6),
+            '4Ps ID'           => '4P-' . $pad(8, $n),
+            'Postal ID'        => 'PID' . $pad(9, $n),
+            default            => $pad(2, $n) . '-' . $pad(7, $n + 4) . '-' . $pad(1, $n + 8),
+        };
+    }
+
     /** Every farmer reachable from a dummy account, by id. */
     private function dummyFarmerIds(): \Illuminate\Support\Collection
     {
@@ -202,9 +281,24 @@ class DummyFarmersSeeder extends Seeder
         $sequence = str_pad((string) $n, 3, '0', STR_PAD_LEFT);
         $email    = "dummy.farmer{$sequence}@example.test";
 
-        $first  = self::FIRST_NAMES[($n * 7) % count(self::FIRST_NAMES)];
+        // Sex comes from which name pool was used, so the two always agree.
+        $isMale = $n % 2 === 1;
+        $pool   = $isMale ? self::MALE_NAMES : self::FEMALE_NAMES;
+
+        $first  = $pool[($n * 7) % count($pool)];
         $middle = self::MIDDLE_NAMES[($n * 5) % count(self::MIDDLE_NAMES)];
         $last   = self::LAST_NAMES[($n * 3) % count(self::LAST_NAMES)];
+
+        $civilStatus = ['Single', 'Married', 'Widowed', 'Separated'][$n % 4];
+        $isIndigenous = $n % 17 === 0;
+
+        // A spouse's name only where there is or was a spouse. Single farmers
+        // leave it blank, which is the true answer rather than a placeholder.
+        $spousePool  = $isMale ? self::FEMALE_NAMES : self::MALE_NAMES;
+        $hasSpouse   = in_array($civilStatus, ['Married', 'Widowed'], true);
+        $spouseFirst = $hasSpouse ? $spousePool[($n * 11) % count($spousePool)] : null;
+
+        $idType = self::ID_TYPES[$n % count(self::ID_TYPES)];
 
         // Spread across every barangay so barangay filtering has something to
         // filter, rather than 55 farmers in one village.
@@ -225,33 +319,92 @@ class DummyFarmersSeeder extends Seeder
             'first_name'          => $first,
             'middle_name'         => $middle,
             'last_name'           => $last,
-            'sex'                 => $n % 2 === 0 ? 'Female' : 'Male',
+            'sex'                 => $isMale ? 'Male' : 'Female',
             'birthdate'           => now()->subYears(28 + ($n % 34))->subDays($n * 3)->toDateString(),
-            'civil_status'        => ['Single', 'Married', 'Widowed'][$n % 3],
+            'civil_status'        => $civilStatus,
             'mobile_no'           => '09' . str_pad((string) (170000000 + $n * 13), 9, '0', STR_PAD_LEFT),
             'email'               => $email,
+
+            // Born locally or in a neighbouring town, as most here are.
+            'birth_city_municipality' => self::BIRTH_TOWNS[$n % count(self::BIRTH_TOWNS)],
+            'birth_province'          => $n % 4 === 3 ? 'Cagayan' : 'Isabela',
+            'birthplace'              => self::BIRTH_TOWNS[$n % count(self::BIRTH_TOWNS)] . ', '
+                . ($n % 4 === 3 ? 'Cagayan' : 'Isabela'),
+
+            'religion'            => self::RELIGIONS[$n % count(self::RELIGIONS)],
+            'highest_education'   => ['Elementary', 'High School', 'Vocational', 'College'][$n % 4],
+
+            // Maiden name in three parts, which is what the profile reads;
+            // mother_maiden_name is its fallback and is left to it.
+            'mother_first_name'   => self::FEMALE_NAMES[($n * 13) % count(self::FEMALE_NAMES)],
+            'mother_middle_name'  => self::MIDDLE_NAMES[($n * 3) % count(self::MIDDLE_NAMES)],
+            'mother_last_name'    => self::LAST_NAMES[($n * 5) % count(self::LAST_NAMES)],
+
+            'spouse_first_name'   => $spouseFirst,
+            'spouse_middle_name'  => $hasSpouse ? self::MIDDLE_NAMES[($n * 7) % count(self::MIDDLE_NAMES)] : null,
+            'spouse_last_name'    => $hasSpouse ? $last : null,
+
+            'valid_id_type'       => $idType,
+            'id_number'           => $this->idNumberFor($idType, $n),
+
+            'house_lot_number'    => 'No. ' . (1 + ($n * 3) % 180),
+            'street_sitio'        => self::SITIOS[$n % count(self::SITIOS)],
             'barangay'            => $barangay,
             'city_municipality'   => 'Tumauini',
             'province'            => 'Isabela',
             'region'              => 'Region II (Cagayan Valley)',
-            'highest_education'   => ['Elementary', 'High School', 'College'][$n % 3],
+
             'is_4ps'              => $n % 9 === 0,
-            'pwd'                 => false,
-            'is_indigenous'       => $n % 17 === 0,
+            'pwd'                 => $n % 23 === 0,
+            'is_indigenous'       => $isIndigenous,
+            'indigenous_community' => $isIndigenous
+                ? self::INDIGENOUS_GROUPS[$n % count(self::INDIGENOUS_GROUPS)]
+                : null,
+            'organization_name'   => $n % 4 === 0
+                ? self::ORGANISATIONS[$n % count(self::ORGANISATIONS)]
+                : null,
+
             'livelihood_type'     => 'Farmer',
             'user_id'             => $user->id,
 
             /*
-             * The state a fresh registration leaves behind.
+             * The municipality's own RSBSA series.
              *
-             * rsbsa_no is deliberately absent: the office issues it at
-             * verification, and a pending farmer holding one would make the
-             * workflow look already finished.
+             * Holding a number does not make a farmer verified — nothing in
+             * FarmerVerificationController assigns or requires one, so these
+             * stay pending with a number already on them, which is how an
+             * already-enrolled farmer registering online would look.
              */
+            'rsbsa_no'            => self::RSBSA_PREFIX
+                . str_pad((string) (self::RSBSA_BLOCK_START + $n), 6, '0', STR_PAD_LEFT),
+
+            /* The state a fresh registration leaves behind. */
             'verification_status' => Farmer::STATUS_PENDING,
             'reference_code'      => 'RSBSA-' . now()->format('Y') . '-DMY' . $sequence,
             'submitted_online_at' => now()->subDays($n % 14)->subHours($n % 24),
         ]);
+
+        /*
+         * Children, for the farmers old enough to have them.
+         *
+         * The profile lists these one row per child with a birthday and sex, so
+         * an empty table leaves a visible gap on every record. Ages are kept
+         * below the parent's own age less eighteen so no farmer has a child
+         * older than they could be.
+         */
+        $childCount = $farmer->birthdate->age >= 25 ? $n % 4 : 0;
+
+        for ($c = 1; $c <= $childCount; $c++) {
+            $childIsMale = ($n + $c) % 2 === 0;
+            $childPool   = $childIsMale ? self::MALE_NAMES : self::FEMALE_NAMES;
+
+            $farmer->children()->create([
+                'name'      => $childPool[($n * $c * 5) % count($childPool)] . ' ' . $last,
+                'sex'       => $childIsMale ? 'Male' : 'Female',
+                'birthdate' => now()->subYears(max(1, $farmer->birthdate->age - 22 - ($c * 3)))
+                    ->subDays($n + $c)->toDateString(),
+            ]);
+        }
 
         $parcels = 0;
         $seasons = 0;
@@ -324,7 +477,11 @@ class DummyFarmersSeeder extends Seeder
 
         $parcel = $farmer->parcels()->create([
             'parcel_number'      => "DMY-{$farmer->id}-{$index}",
-            'location_address'   => "Sitio {$index}, {$barangay}",
+            // The full address, not just the barangay: the parcel list and the
+            // RSBSA form both print this line on its own, where "Sitio 1, Banig"
+            // gives a reader no municipality to place it in.
+            'location_address'   => self::SITIOS[($n + $index) % count(self::SITIOS)]
+                . ", {$barangay}, Tumauini, Isabela",
             'barangay'           => $barangay,
             'city_municipality'  => 'Tumauini',
             'province'           => 'Isabela',
