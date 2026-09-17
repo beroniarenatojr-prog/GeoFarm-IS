@@ -11,6 +11,27 @@ import { formatRsbsa, formatMobile, titleCaseName, RSBSA_MASK, MOBILE_MASK } fro
 import SuggestInput from '@/Components/ui/SuggestInput';
 import SuggestSelect from '@/Components/ui/SuggestSelect';
 
+/*
+ * Machinery option lists.
+ *
+ * These mirror FarmMachinery::TYPES, ::ACQUISITION and ::STATUSES exactly. The
+ * values are what the columns accept, so anything offered here saves; the
+ * status labels are friendlier than the stored keys, which is why that one is
+ * a value/label pair rather than a plain list.
+ */
+const MACHINERY_TYPES = [
+    'Hand Tractor', 'Four-Wheel Tractor', 'Thresher', 'Rice Mill', 'Corn Mill',
+    'Harvester', 'Water Pump', 'Sprayer', 'Dryer', 'Shredder', 'Other',
+];
+
+const MACHINERY_ACQUISITION = ['purchased', 'donated', 'loaned', 'inherited'];
+
+const MACHINERY_STATUSES = [
+    { value: 'active', label: 'Working' },
+    { value: 'for_repair', label: 'Needs repair' },
+    { value: 'decommissioned', label: 'No longer used' },
+];
+
 export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], barangays = [], publicMode = false }) {
     const isEdit = !!farmer;
     const [currentStep, setCurrentStep] = useState(1);
@@ -78,6 +99,20 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
         
         // Step 4: Livelihood
         livelihood_type: farmer?.livelihood_type || 'Farmer',
+
+        // Machinery and equipment. Starts empty for the same reason children
+        // does: a farmer who owns none should see no rows, not a blank one
+        // inviting an entry. One row per machine — the table has no quantity
+        // column and Farm Assets counts rows as units.
+        machinery: farmer?.machinery?.map(m => ({
+            machinery_type: m.machinery_type || '',
+            brand: m.brand || '',
+            model: m.model || '',
+            acquisition_type: m.acquisition_type || '',
+            status: m.status || '',
+            year_acquired: m.year_acquired || '',
+            notes: m.notes || '',
+        })) || [],
         
         // Step 5: Farm Parcels
         parcels: farmer?.parcels || [{
@@ -116,6 +151,13 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
         { number: 6, title: 'Photo', subtitle: '& ID', icon: ImageIcon },
         { number: 7, title: 'Review', subtitle: '& Submit', icon: FileCheck },
     ];
+
+    /** Change one field on one machinery row without mutating the array. */
+    const updateMachinery = (index, field, value) => {
+        setData('machinery', data.machinery.map(
+            (row, i) => (i === index ? { ...row, [field]: value } : row),
+        ));
+    };
 
     const handlePhotoChange = (e) => {
         const file = e.target.files[0];
@@ -330,6 +372,15 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
 
     // A parcel row counts as declared once it has a location or an area.
     // Untouched blank rows are ignored so they never reach the database.
+    /**
+     * Machinery rows the farmer actually filled in.
+     *
+     * A row counts once an equipment type is chosen — the rest of the fields
+     * are all optional, so requiring more would drop legitimate entries where
+     * the farmer knows they own a thresher but not its model year.
+     */
+    const declaredMachinery = data.machinery.filter(m => m.machinery_type?.trim());
+
     const declaredParcels = data.parcels
         .filter(parcel => parcel.barangay?.trim() || String(parcel.total_area_ha ?? '').trim())
         /*
@@ -458,7 +509,8 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
 
         // Add all farmer fields
         Object.keys(data).forEach(key => {
-            if (key === 'parcels' || key === 'children' || key === 'photo' || key === 'id_proof') return;
+            if (key === 'parcels' || key === 'children' || key === 'machinery'
+                || key === 'photo' || key === 'id_proof') return;
             if (credentialKeys.includes(key)) return;
             
             if (data[key] !== null && data[key] !== undefined) {
@@ -484,6 +536,14 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
         // Sent whole every time, including when empty: the server replaces the
         // stored list with this one, which is how removing a child sticks.
         formData.append('children', JSON.stringify(data.children.filter(c => c.name?.trim())));
+
+        // Same contract as children. Rows with no equipment chosen are dropped
+        // rather than sent blank — the repeater leaves one behind whenever
+        // somebody clicks Add and then thinks better of it.
+        formData.append(
+            'machinery',
+            JSON.stringify(data.machinery.filter(m => m.machinery_type?.trim())),
+        );
 
         // Add files
         if (data.photo instanceof File) {
@@ -1465,6 +1525,155 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                         <span className="font-semibold">Note:</span> If you are a <span className="font-semibold">FARM WORKER</span> or <span className="font-semibold">FISHER</span>, kindly request a <span className="font-semibold uppercase">Certification as Farm Worker/Fisher</span> from the City/Municipal Agriculture Office <span className="italic">(Mag-request ng SERTIPIKASYON BILANG MANGGAGAWA SA SAKAHAN/MANGINGISDA mula sa City/Municipal Agriculture Office)</span>.
                                     </p>
                                 </div>
+
+                                {/* Machinery and equipment.
+                                    Shown for every livelihood, not only Farmer:
+                                    a farm worker or fisher can own a hand
+                                    tractor or a water pump, and the table has
+                                    no livelihood restriction on it.
+
+                                    One row per machine. The existing
+                                    farm_machinery table has no quantity column
+                                    and the Farm Assets module counts rows as
+                                    units, so two tractors are two rows. */}
+                                <div className="mt-8 border-t border-gray-200 pt-6">
+                                    <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">
+                                                Machinery &amp; Agricultural Equipment
+                                            </h3>
+                                            <p className="text-sm text-gray-500">
+                                                <span className="italic">Makinarya at Kagamitang Pang-agrikultura</span>
+                                                {' — '}optional. Add one entry per machine.
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setData('machinery', [...data.machinery, {
+                                                machinery_type: '', brand: '', model: '',
+                                                acquisition_type: '', status: '', year_acquired: '', notes: '',
+                                            }])}
+                                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#006400] px-4 py-2 text-sm font-semibold text-white hover:bg-[#228B22]"
+                                        >
+                                            + Add Equipment
+                                        </button>
+                                    </div>
+
+                                    {data.machinery.length === 0 && (
+                                        <p className="mt-3 rounded-lg border-2 border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-400 italic">
+                                            No machinery declared. Leave this empty if the farmer owns none.
+                                        </p>
+                                    )}
+
+                                    <div className="mt-4 space-y-4">
+                                        {data.machinery.map((item, i) => (
+                                            <div key={i} className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                                                <div className="mb-3 flex items-center justify-between">
+                                                    <span className="text-sm font-semibold text-gray-700">
+                                                        Equipment {i + 1}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setData('machinery', data.machinery.filter((_, j) => j !== i))}
+                                                        className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                                    <div className="lg:col-span-1">
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                                                            Equipment <span className="italic">(Kagamitan)</span>
+                                                        </label>
+                                                        <select
+                                                            value={item.machinery_type}
+                                                            onChange={(e) => updateMachinery(i, 'machinery_type', e.target.value)}
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-green-500"
+                                                        >
+                                                            <option value="">— Select —</option>
+                                                            {MACHINERY_TYPES.map(t => (
+                                                                <option key={t} value={t}>{t}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">Brand</label>
+                                                        <input type="text" value={item.brand} maxLength={60}
+                                                            onChange={(e) => updateMachinery(i, 'brand', e.target.value)}
+                                                            placeholder="e.g. Kubota"
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-green-500" />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">Model</label>
+                                                        <input type="text" value={item.model} maxLength={60}
+                                                            onChange={(e) => updateMachinery(i, 'model', e.target.value)}
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-green-500" />
+                                                    </div>
+
+                                                    {/* Labelled "How acquired", not "Ownership": the column
+                                                        records how the machine was obtained, and a donated
+                                                        tractor is still owned. Calling it ownership would
+                                                        put the wrong answer under the right heading. */}
+                                                    <div>
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                                                            How acquired <span className="italic">(Paano nakuha)</span>
+                                                        </label>
+                                                        <select
+                                                            value={item.acquisition_type}
+                                                            onChange={(e) => updateMachinery(i, 'acquisition_type', e.target.value)}
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm capitalize focus:border-transparent focus:ring-2 focus:ring-green-500"
+                                                        >
+                                                            <option value="">— Select —</option>
+                                                            {MACHINERY_ACQUISITION.map(a => (
+                                                                <option key={a} value={a}>{a}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                                                            Condition <span className="italic">(Kondisyon)</span>
+                                                        </label>
+                                                        <select
+                                                            value={item.status}
+                                                            onChange={(e) => updateMachinery(i, 'status', e.target.value)}
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-green-500"
+                                                        >
+                                                            <option value="">— Select —</option>
+                                                            {MACHINERY_STATUSES.map(s => (
+                                                                <option key={s.value} value={s.value}>{s.label}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                                                            Year acquired
+                                                        </label>
+                                                        <input type="number" value={item.year_acquired}
+                                                            min={1901} max={new Date().getFullYear()}
+                                                            onChange={(e) => updateMachinery(i, 'year_acquired', e.target.value)}
+                                                            placeholder={String(new Date().getFullYear())}
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-green-500" />
+                                                    </div>
+
+                                                    <div className="sm:col-span-2 lg:col-span-3">
+                                                        <label className="mb-1 block text-xs font-medium text-gray-600">
+                                                            Remarks <span className="italic">(Tala)</span>
+                                                        </label>
+                                                        <input type="text" value={item.notes} maxLength={2000}
+                                                            onChange={(e) => updateMachinery(i, 'notes', e.target.value)}
+                                                            placeholder="Anything worth noting about this equipment"
+                                                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-green-500" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -1992,7 +2201,36 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                                 <p className="text-gray-600 mb-1">2x2 Photo</p>
                                                 <p className="font-semibold text-gray-900">{photoPreview ? '✓ Uploaded' : 'Not uploaded'}</p>
                                             </div>
+                                            <div>
+                                                <p className="text-gray-600 mb-1">Machinery &amp; Equipment</p>
+                                                <p className="font-semibold text-gray-900">
+                                                    {declaredMachinery.length === 0
+                                                        ? 'None declared'
+                                                        : `${declaredMachinery.length} item${declaredMachinery.length !== 1 ? 's' : ''}`}
+                                                </p>
+                                            </div>
                                         </div>
+
+                                        {/* Itemised, so the farmer can check each
+                                            machine before submitting rather than
+                                            trusting a count. */}
+                                        {declaredMachinery.length > 0 && (
+                                            <ul className="mt-4 space-y-1.5 border-t border-gray-200 pt-3 text-sm">
+                                                {declaredMachinery.map((m, i) => (
+                                                    <li key={i} className="flex flex-wrap gap-x-2 text-gray-700">
+                                                        <span className="font-semibold text-gray-900">{m.machinery_type}</span>
+                                                        {[m.brand, m.model].filter(Boolean).length > 0 && (
+                                                            <span>· {[m.brand, m.model].filter(Boolean).join(' ')}</span>
+                                                        )}
+                                                        {m.acquisition_type && <span className="capitalize">· {m.acquisition_type}</span>}
+                                                        {m.status && (
+                                                            <span>· {MACHINERY_STATUSES.find(s => s.value === m.status)?.label ?? m.status}</span>
+                                                        )}
+                                                        {m.year_acquired && <span>· {m.year_acquired}</span>}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
                                     </div>
 
                                     {/* Consent Form */}

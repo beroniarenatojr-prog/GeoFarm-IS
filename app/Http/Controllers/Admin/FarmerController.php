@@ -163,6 +163,7 @@ class FarmerController extends Controller
 
             // Children (as JSON) - Optional
             'children'          => 'nullable|json',
+            'machinery'         => 'nullable|json',
         ], Farmer::FORMAT_MESSAGES);
 
         // Handle file uploads
@@ -184,6 +185,9 @@ class FarmerController extends Controller
         $children = Farmer::childrenFrom($data['children'] ?? null);
         unset($data['children']);
 
+        $machinery = Farmer::machineryFrom($data['machinery'] ?? null);
+        unset($data['machinery']);
+
         $farmer = Farmer::create($data);
 
         foreach ($parcels as $parcelData) {
@@ -192,6 +196,10 @@ class FarmerController extends Controller
 
         foreach ($children as $childData) {
             $farmer->children()->create($childData);
+        }
+
+        foreach ($machinery as $machineryData) {
+            $farmer->machinery()->create($machineryData);
         }
 
         // Generate QR code
@@ -544,7 +552,17 @@ class FarmerController extends Controller
 
     public function edit(Farmer $farmer)
     {
-        $farmer->load('parcels');
+        /*
+         * children and machinery are loaded, not just parcels.
+         *
+         * The form sends both repeaters whole on every save and the update
+         * replaces the stored list with what arrived — which is how deleting a
+         * row sticks. With the relation unloaded the form started empty, sent
+         * an empty list, and every edit silently wiped the farmer's children.
+         * A record editing a phone number must not lose the family with it.
+         */
+        $farmer->load(['parcels', 'children', 'machinery']);
+
         return Inertia::render('Admin/Farmers/FormRSBSA', [
             'farmer'    => $farmer,
             'farmTypes' => \App\Models\FarmType::all(),
@@ -632,6 +650,7 @@ class FarmerController extends Controller
 
             // Children (as JSON) - Optional
             'children'          => 'nullable|json',
+            'machinery'         => 'nullable|json',
         ], Farmer::FORMAT_MESSAGES);
 
         $old = $farmer->toArray();
@@ -672,6 +691,10 @@ class FarmerController extends Controller
         $children = Farmer::childrenFrom($data['children'] ?? null);
         unset($data['children']);
 
+        $machinerySubmitted = array_key_exists('machinery', $data);
+        $machinery = Farmer::machineryFrom($data['machinery'] ?? null);
+        unset($data['machinery']);
+
         $farmer->update($data);
 
         if (!$isFarmer) {
@@ -693,6 +716,16 @@ class FarmerController extends Controller
 
             foreach ($children as $childData) {
                 $farmer->children()->create($childData);
+            }
+        }
+
+        // Same rule as the children repeater: replaced wholesale when the form
+        // sent it, left alone when it did not.
+        if ($machinerySubmitted) {
+            $farmer->machinery()->delete();
+
+            foreach ($machinery as $machineryData) {
+                $farmer->machinery()->create($machineryData);
             }
         }
 

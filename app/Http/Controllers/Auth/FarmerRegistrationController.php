@@ -113,6 +113,7 @@ class FarmerRegistrationController extends Controller
 
             // Children (as JSON) - Optional
             'children'          => 'nullable|json',
+            'machinery'         => 'nullable|json',
         ], Farmer::FORMAT_MESSAGES);
 
         // Guard against an obvious duplicate submission for the same person.
@@ -125,6 +126,12 @@ class FarmerRegistrationController extends Controller
         $parcels  = $this->parcelsFor($data);
         $children = Farmer::childrenFrom($data['children'] ?? null);
         unset($data['children']);
+
+        // Machinery is declared in Part 2 alongside the livelihood, and unlike
+        // parcels it is not restricted to farmers — a farm worker can own a
+        // hand tractor.
+        $machinery = Farmer::machineryFrom($data['machinery'] ?? null);
+        unset($data['machinery']);
 
         // The account credentials are not columns on the farmers table.
         $email    = $data['email'];
@@ -160,7 +167,7 @@ class FarmerRegistrationController extends Controller
         $data['submitted_online_at'] = now();
         $data['email']               = $email;
 
-        $farmer = DB::transaction(function () use ($data, $parcels, $children, $email, $password) {
+        $farmer = DB::transaction(function () use ($data, $parcels, $children, $machinery, $email, $password) {
             // Account exists but stays locked until staff approves.
             $user = User::create([
                 'name'      => trim("{$data['first_name']} {$data['last_name']}"),
@@ -179,6 +186,10 @@ class FarmerRegistrationController extends Controller
 
             foreach ($children as $child) {
                 $farmer->children()->create($child);
+            }
+
+            foreach ($machinery as $item) {
+                $farmer->machinery()->create($item);
             }
 
             return $farmer;

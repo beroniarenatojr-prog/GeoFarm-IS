@@ -52,6 +52,72 @@ class Farmer extends Model
      * An empty birthdate becomes null, not "", so the date column stays
      * genuinely absent instead of holding a zero date.
      */
+    /**
+     * Turn the machinery repeater's JSON into rows worth storing.
+     *
+     * Typeless rows are dropped rather than saved blank, the same way the
+     * children repeater behaves: the form leaves one behind whenever somebody
+     * clicks "Add Equipment" and then changes their mind.
+     *
+     * Only values the columns actually accept get through. machinery_type is
+     * free text on the table, so an "Other" entry is kept as typed, but
+     * acquisition_type and status are enums — anything unrecognised becomes
+     * null instead of reaching MySQL, where an unknown enum value is a
+     * truncation error that takes the whole save down with it.
+     */
+    public static function machineryFrom(?string $json): array
+    {
+        $rows = $json ? json_decode($json, true) : [];
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $machinery = [];
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $type = trim((string) ($row['machinery_type'] ?? ''));
+
+            if ($type === '') {
+                continue;
+            }
+
+            $year = trim((string) ($row['year_acquired'] ?? ''));
+
+            $machinery[] = [
+                'machinery_type'   => mb_substr($type, 0, 60),
+                'brand'            => self::trimOrNull($row['brand'] ?? null, 60),
+                'model'            => self::trimOrNull($row['model'] ?? null, 60),
+                'acquisition_type' => in_array($row['acquisition_type'] ?? null, FarmMachinery::ACQUISITION, true)
+                    ? $row['acquisition_type']
+                    : null,
+                'status'           => in_array($row['status'] ?? null, FarmMachinery::STATUSES, true)
+                    ? $row['status']
+                    : null,
+                // MySQL YEAR cannot hold anything before 1901, and a blank must
+                // become null rather than reaching the column as ''.
+                'year_acquired'    => ctype_digit($year) && (int) $year >= 1901 && (int) $year <= (int) date('Y')
+                    ? (int) $year
+                    : null,
+                'notes'            => self::trimOrNull($row['notes'] ?? null, 2000),
+            ];
+        }
+
+        return $machinery;
+    }
+
+    /** Empty strings from a web form are absent values, not values. */
+    private static function trimOrNull(mixed $value, int $limit): ?string
+    {
+        $trimmed = trim((string) ($value ?? ''));
+
+        return $trimmed === '' ? null : mb_substr($trimmed, 0, $limit);
+    }
+
     public static function childrenFrom(?string $json): array
     {
         $rows = $json ? json_decode($json, true) : [];
