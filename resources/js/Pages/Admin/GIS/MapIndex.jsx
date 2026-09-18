@@ -622,9 +622,9 @@ export default function MapIndex({ parcels }) {
           // to register as a mark at all; zoomed in it must let the imagery
           // through so the land underneath can still be read.
           'fill-opacity': ['interpolate', ['linear'], ['zoom'],
-            11, 0.55,
-            14, 0.38,
-            17, 0.2,
+            11, 0.65,  // Increased from 0.55 for better visibility
+            14, 0.48,  // Increased from 0.38
+            17, 0.3,   // Increased from 0.2
           ],
         },
       });
@@ -637,12 +637,12 @@ export default function MapIndex({ parcels }) {
         // The dark backing that separates a boundary from whatever it crosses.
         // Held just under the coloured line at every zoom.
         paint: {
-          'line-color': '#0f172a',
-          'line-opacity': 0.55,
+          'line-color': '#000000',  // Pure black instead of #0f172a for stronger contrast
+          'line-opacity': 0.85,      // Increased from 0.55 for better visibility
           'line-width': ['interpolate', ['linear'], ['zoom'],
-            11, 3.5,
-            15, 6,
-            19, 9,
+            11, 4.5,   // Increased from 3.5
+            15, 7.5,   // Increased from 6
+            19, 11,    // Increased from 9
           ],
         },
       });
@@ -653,11 +653,11 @@ export default function MapIndex({ parcels }) {
         source: 'parcels',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
-          'line-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
+          'line-color': ['coalesce', ['get', 'colour'], '#ffffff'],  // White default for maximum contrast
           'line-width': ['interpolate', ['linear'], ['zoom'],
-            11, 2,
-            15, 3.5,
-            19, 5.5,
+            11, 3,     // Increased from 2
+            15, 5,     // Increased from 3.5
+            19, 7.5,   // Increased from 5.5
           ],
         },
       });
@@ -678,9 +678,10 @@ export default function MapIndex({ parcels }) {
         filter: NO_SELECTION,
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
-          'line-color': '#ffffff',
-          'line-width': 3,
+          'line-color': '#ffff00',  // Bright yellow instead of white for better selection visibility
+          'line-width': 5,           // Increased from 3 for more obvious selection
           'line-dasharray': [1.5, 1.2],
+          'line-opacity': 0.9,       // Added opacity for smoother appearance
         },
       });
 
