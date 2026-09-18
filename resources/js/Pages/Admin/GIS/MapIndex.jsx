@@ -56,8 +56,23 @@ function colouriseParcels(collection) {
   };
 }
 
-/** Saved parcels are clicked on their own fill layer. */
-const PARCEL_HIT_LAYERS = ['parcels-fill'];
+/**
+ * What counts as clicking a parcel.
+ *
+ * The fill alone was not enough. A holding is about 150 m across — some 5 px
+ * at the zoom this map opens at — so the polygon was a target almost nobody
+ * could hit, while the 22 px pin sitting directly on top of it was not
+ * clickable at all. The pins carry the same properties as their polygon, so
+ * adding them here makes the visible marker the thing you actually press.
+ */
+const PARCEL_HIT_LAYERS = ['parcels-fill', 'parcel-pin-halo', 'parcel-pin-dot'];
+
+/**
+ * Below this, a parcel is too small to show a shape, so selecting one moves in
+ * far enough for its outline to mean something. Matches the zoom at which the
+ * pins hand over to the polygons.
+ */
+const PARCEL_READABLE_ZOOM = 15.5;
 
 /** A filter no parcel can satisfy, so the highlight layer draws nothing. */
 const NO_SELECTION = ['==', ['get', 'id'], -1];
@@ -517,7 +532,15 @@ export default function MapIndex({ parcels }) {
         source: 'parcels',
         paint: {
           'fill-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
-          'fill-opacity': 0.22,
+          // A parcel here is about 150 m across — roughly 5 px at the opening
+          // zoom and 33 px by zoom 15. Zoomed out it needs to be solid enough
+          // to register as a mark at all; zoomed in it must let the imagery
+          // through so the land underneath can still be read.
+          'fill-opacity': ['interpolate', ['linear'], ['zoom'],
+            11, 0.55,
+            14, 0.38,
+            17, 0.2,
+          ],
         },
       });
 
@@ -526,10 +549,17 @@ export default function MapIndex({ parcels }) {
         type: 'line',
         source: 'parcels',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        // Left exactly as it was. This layer draws every parcel, so it is the
-        // wrong place to put an expression whose support is uncertain -
-        // selection is handled by its own layer below instead.
-        paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.55 },
+        // The dark backing that separates a boundary from whatever it crosses.
+        // Held just under the coloured line at every zoom.
+        paint: {
+          'line-color': '#0f172a',
+          'line-opacity': 0.55,
+          'line-width': ['interpolate', ['linear'], ['zoom'],
+            11, 3.5,
+            15, 6,
+            19, 9,
+          ],
+        },
       });
 
       map.addLayer({
@@ -539,7 +569,11 @@ export default function MapIndex({ parcels }) {
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
-          'line-width': 3.5,
+          'line-width': ['interpolate', ['linear'], ['zoom'],
+            11, 2,
+            15, 3.5,
+            19, 5.5,
+          ],
         },
       });
 
@@ -575,15 +609,32 @@ export default function MapIndex({ parcels }) {
         data: EMPTY_FEATURE_COLLECTION,
       });
 
+      /*
+       * The pins stop at zoom 15, and that is the whole reason boundaries
+       * looked missing.
+       *
+       * A parcel is about 150 m across: roughly 5 px at the opening zoom, but
+       * 33 px by zoom 15. These layers are added AFTER the polygon layers, so
+       * they draw on top — a 22 px halo covered a 5 px parcel four times over,
+       * and every outline was hidden underneath its own marker.
+       *
+       * So they now hand over: below 15 the pin says WHERE a holding is, above
+       * 15 it gets out of the way and the polygon shows its SHAPE.
+       */
+      const PIN_MAX_ZOOM = 15;
+
       // Outer circle (white halo)
       map.addLayer({
         id: 'parcel-pin-halo',
         type: 'circle',
         source: 'parcel-pins',
+        maxzoom: PIN_MAX_ZOOM,
         paint: {
           'circle-radius': 11,
           'circle-color': '#ffffff',
-          'circle-opacity': 0.92,
+          // Fades out over the last zoom level rather than vanishing between
+          // one frame and the next.
+          'circle-opacity': ['interpolate', ['linear'], ['zoom'], 14, 0.92, 15, 0],
         },
       });
 
@@ -592,6 +643,7 @@ export default function MapIndex({ parcels }) {
         id: 'parcel-pin-dot',
         type: 'circle',
         source: 'parcel-pins',
+        maxzoom: PIN_MAX_ZOOM,
         paint: {
           'circle-radius': 8,
           'circle-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
@@ -607,6 +659,7 @@ export default function MapIndex({ parcels }) {
         id: 'parcel-pin-tail',
         type: 'circle',
         source: 'parcel-pins',
+        maxzoom: PIN_MAX_ZOOM,
         paint: {
           'circle-radius': 4,
           'circle-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
@@ -620,6 +673,7 @@ export default function MapIndex({ parcels }) {
         id: 'parcel-pin-tip',
         type: 'circle',
         source: 'parcel-pins',
+        maxzoom: PIN_MAX_ZOOM,
         paint: {
           'circle-radius': 2.5,
           'circle-color': ['coalesce', ['get', 'colour'], '#38bdf8'],
@@ -768,6 +822,23 @@ export default function MapIndex({ parcels }) {
       setSelectedFeature(props);
       highlightParcel(props.id);
       loadParcelDetail(props.id);
+
+      /*
+       * Move in close enough to actually see what was selected.
+       *
+       * Clicking a pin from the opening zoom used to select a parcel that was
+       * still only a few pixels wide, so the panel filled in while the map
+       * showed nothing new. Only zooms IN — someone already inspecting a
+       * boundary up close should not be yanked back out.
+       */
+      if (map.getZoom() < PARCEL_READABLE_ZOOM) {
+        map.easeTo({
+          center: event.lngLat,
+          zoom: PARCEL_READABLE_ZOOM,
+          duration: 600,
+        });
+      }
+
       popupRef.current?.remove();
       popupRef.current = new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
         .setLngLat(event.lngLat)
