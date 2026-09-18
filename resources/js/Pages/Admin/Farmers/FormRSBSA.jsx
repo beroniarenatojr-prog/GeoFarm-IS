@@ -470,14 +470,10 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                     data.last_name?.trim().length > 0 &&
                     data.sex?.trim().length > 0;
                 
-                if (!step1Valid) {
-                    console.log('Step 1 validation failed. Missing:', {
-                        first_name: data.first_name || 'MISSING',
-                        last_name: data.last_name || 'MISSING',
-                        sex: data.sex || 'MISSING',
-                    });
-                }
-                
+                // A console.log used to sit here naming the missing fields. It
+                // printed a farmer's details into the browser console of a
+                // public registration form and told the person filling it in
+                // nothing — each field already shows its own error.
                 return step1Valid;
             case 2:
                 // Step 2: Allow to continue even without address (all optional now)
@@ -497,14 +493,6 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
     };
 
     const nextStep = () => {
-        // Debug: Log the current form data
-        console.log('Current form data:', {
-            first_name: data.first_name,
-            last_name: data.last_name,
-            sex: data.sex,
-            livelihood_type: data.livelihood_type
-        });
-        
         if (validateStep(currentStep)) {
             // Special navigation logic for Step 4 (Livelihood)
             if (currentStep === 4) {
@@ -1546,7 +1534,6 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                             onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                console.log('Clicked livelihood:', livelihood.value);
                                                 setData('livelihood_type', livelihood.value);
                                             }}
                                             className={`
