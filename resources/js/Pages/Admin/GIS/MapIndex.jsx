@@ -238,6 +238,17 @@ export default function MapIndex({ parcels }) {
    * is pointed at empty ground, which is most of the municipality.
    */
   const [inView, setInView] = useState(null);
+
+  /**
+   * What the map actually built, and what it refused to.
+   *
+   * Read off the live map rather than inferred from the code, because the code
+   * has looked correct through several rounds of this not working. If a layer
+   * is missing or a source is empty, this says so on the page instead of
+   * leaving a blank map to be interpreted.
+   */
+  const [mapReport, setMapReport] = useState(null);
+  const [layerError, setLayerError] = useState(null);
   const totalMappedArea = useMemo(
     () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
     [geoJsonData],
@@ -561,6 +572,17 @@ export default function MapIndex({ parcels }) {
     map.on('zoomend', measureInView);
 
     map.on('load', () => {
+      /*
+       * Everything in here runs inside try/catch on purpose.
+       *
+       * Twice in this project a single bad addLayer threw partway through this
+       * handler, and because nothing caught it every layer queued AFTER the
+       * throw was never created — while the basemap imagery carried on
+       * rendering. The map looked fine and simply had no boundaries on it,
+       * with nothing anywhere to say why. Whatever fails now gets named on
+       * screen instead of disappearing.
+       */
+      try {
       mapLoadedRef.current = true;
       measureInView();
 
@@ -828,6 +850,30 @@ export default function MapIndex({ parcels }) {
           })
           .catch(console.error);
       }
+      } catch (error) {
+        // Name the failure on screen. A silent throw here is how this page has
+        // twice ended up showing imagery and no boundaries.
+        console.error('[GIS] map load failed:', error);
+        setLayerError(String(error?.message ?? error));
+      }
+
+      // Whatever happened above, record what actually exists now. "The layer
+      // is missing" and "the layer is there but empty" look identical on the
+      // map and need opposite fixes.
+      const sourceIds = ['parcels', 'parcel-pins', 'parcel-draft', 'tumauini-boundary'];
+      const layerIds = [
+        'parcels-fill', 'parcels-casing', 'parcels-line', 'parcels-selected',
+        'parcel-pin-halo', 'parcel-draft-line',
+      ];
+
+      setMapReport({
+        loadFired: true,
+        sources: sourceIds.filter((id) => Boolean(map.getSource(id))),
+        missingSources: sourceIds.filter((id) => !map.getSource(id)),
+        layers: layerIds.filter((id) => Boolean(map.getLayer(id))),
+        missingLayers: layerIds.filter((id) => !map.getLayer(id)),
+        zoom: Number(map.getZoom().toFixed(2)),
+      });
     });
 
     // The draw.create / draw.update / draw.delete handlers were removed with
@@ -1145,6 +1191,44 @@ export default function MapIndex({ parcels }) {
               {!mapUnavailable && inView > 0 && (
                 <div className="absolute left-4 bottom-4 rounded-md bg-slate-900/75 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
                   {inView} of {mappedCount} boundaries in view
+                </div>
+              )}
+
+              {/*
+                  Why the boundaries are not on screen, in the map's own words.
+                  Shown only when something is genuinely wrong — a layer failed
+                  to build, or the layer exists and has nothing in it.
+              */}
+              {!mapUnavailable && mapReport
+                && (layerError || mapReport.missingLayers.length > 0 || mappedCount === 0) && (
+                <div className="absolute right-4 top-4 max-w-xs rounded-lg bg-slate-900/90 px-3 py-2.5 text-xs text-white shadow-lg backdrop-blur-sm">
+                  <p className="font-semibold text-amber-300">Boundary layer report</p>
+
+                  {layerError && (
+                    <p className="mt-1.5 text-rose-200">
+                      A layer failed to build: <span className="font-mono">{layerError}</span>
+                    </p>
+                  )}
+
+                  <dl className="mt-1.5 space-y-0.5 text-white/80">
+                    <div className="flex justify-between gap-3">
+                      <dt>Layers built</dt>
+                      <dd className="font-mono">{mapReport.layers.length} of {mapReport.layers.length + mapReport.missingLayers.length}</dd>
+                    </div>
+                    {mapReport.missingLayers.length > 0 && (
+                      <div className="text-rose-200">
+                        Missing: <span className="font-mono">{mapReport.missingLayers.join(', ')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-3">
+                      <dt>Boundaries loaded</dt>
+                      <dd className="font-mono">{mappedCount}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt>In this view</dt>
+                      <dd className="font-mono">{inView ?? '—'}</dd>
+                    </div>
+                  </dl>
                 </div>
               )}
             </div>
