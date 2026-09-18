@@ -228,6 +228,16 @@ export default function MapIndex({ parcels }) {
   const canDelete = can('delete parcels');
 
   const mappedCount = geoJsonData.features.length;
+
+  /**
+   * How many boundaries are inside the current view. null until measured.
+   *
+   * A holding here is about 150 m across and they are scattered over some
+   * 550 km2, so a view zoomed in far enough to show a boundary's shape usually
+   * contains no boundary at all. Without this the map looks broken whenever it
+   * is pointed at empty ground, which is most of the municipality.
+   */
+  const [inView, setInView] = useState(null);
   const totalMappedArea = useMemo(
     () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
     [geoJsonData],
@@ -498,8 +508,14 @@ export default function MapIndex({ parcels }) {
      * `parcels` source below.
      */
 
+    // Recount after every pan and zoom, so the "nothing in view" notice tracks
+    // where the map is actually pointed.
+    map.on('moveend', measureInView);
+    map.on('zoomend', measureInView);
+
     map.on('load', () => {
       mapLoadedRef.current = true;
+      measureInView();
 
       map.addSource('tumauini-boundary', {
         type: 'geojson',
@@ -919,6 +935,7 @@ export default function MapIndex({ parcels }) {
     const data = showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION;
     src.setData(data);
     paintPins(map, showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION);
+    measureInView();
 
     if (fittedRef.current || !geoJsonData.features.length) return;
     fittedRef.current = true;
@@ -937,7 +954,7 @@ export default function MapIndex({ parcels }) {
     }
 
     map.fitBounds(bbox(geoJsonData), { padding: 80, maxZoom: 16, duration: 900 });
-  }, [geoJsonData, showParcels, paintPins]);
+  }, [geoJsonData, showParcels, paintPins, measureInView]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -956,8 +973,49 @@ export default function MapIndex({ parcels }) {
     });
   };
 
-  const focusSelectedParcel = () => {
-    const feature = geoJsonData.features.find((item) => String(item.properties?.id) === String(selectedParcel));
+  /**
+   * Counts the boundaries whose extent overlaps the visible map.
+   *
+   * A cheap bbox test against 74 features rather than queryRenderedFeatures,
+   * which would only see what is already painted — and the question being
+   * asked here is precisely whether anything is.
+   */
+  const measureInView = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const features = geoJsonRef.current?.features ?? [];
+    if (!features.length) {
+      setInView(0);
+      return;
+    }
+
+    const b = map.getBounds();
+    const west = b.getWest();
+    const east = b.getEast();
+    const south = b.getSouth();
+    const north = b.getNorth();
+
+    let count = 0;
+    for (const feature of features) {
+      const [fw, fs, fe, fn] = bbox(feature);
+      if (fe >= west && fw <= east && fn >= south && fs <= north) count += 1;
+    }
+
+    setInView(count);
+  }, []);
+
+  /** Bring every boundary back into view — the way out of empty ground. */
+  const showAllParcels = useCallback(() => {
+    const map = mapRef.current;
+    const features = geoJsonRef.current?.features ?? [];
+    if (!map || !features.length) return;
+
+    map.fitBounds(bbox(geoJsonRef.current), { padding: 60, maxZoom: 14, duration: 800 });
+  }, []);
+
+  const focusSelectedParcel = (parcelId = selectedParcel) => {
+    const feature = geoJsonData.features.find((item) => String(item.properties?.id) === String(parcelId));
     if (!feature) {
       toast.error('This parcel has no saved boundary yet');
       return;
@@ -1047,6 +1105,42 @@ export default function MapIndex({ parcels }) {
                   Saving boundary...
                 </div>
               )}
+
+              {/*
+                  Empty ground looks identical to a broken map.
+
+                  Holdings average about 150 m across and are spread over some
+                  550 km2, so a view close enough to read a boundary usually
+                  contains none. Saying so — and offering the way back — is the
+                  difference between "there is nothing here" and "this is
+                  broken".
+              */}
+              {!mapUnavailable && !drawing && mappedCount > 0 && inView === 0 && (
+                <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/85 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2">
+                  <MapPinned className="h-4 w-4 flex-shrink-0 text-amber-300" />
+                  <span>
+                    No farm boundaries in this view.{' '}
+                    <span className="text-white/70">
+                      {mappedCount} {mappedCount === 1 ? 'is' : 'are'} mapped elsewhere in Tumauini.
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={showAllParcels}
+                    className="ml-auto whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+                  >
+                    Show all {mappedCount}
+                  </button>
+                </div>
+              )}
+
+              {/* Once boundaries are on screen, say how many — so a single
+                  faint outline is not mistaken for the whole layer failing. */}
+              {!mapUnavailable && inView > 0 && (
+                <div className="absolute left-4 bottom-4 rounded-md bg-slate-900/75 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+                  {inView} of {mappedCount} boundaries in view
+                </div>
+              )}
             </div>
 
             <aside className="space-y-4">
@@ -1095,10 +1189,19 @@ export default function MapIndex({ parcels }) {
                 <select
                   value={selectedParcel}
                   onChange={(event) => {
-                    setSelectedParcel(event.target.value);
+                    const id = event.target.value;
+                    setSelectedParcel(id);
                     setSelectedFeature(null);
-        highlightParcel(null);
-        setParcelDetail(null);
+                    highlightParcel(null);
+                    setParcelDetail(null);
+
+                    // Go there. Choosing a parcel and then having to press
+                    // Locate was two steps for one intention — and with
+                    // holdings this small, a selection you cannot see reads as
+                    // though nothing happened.
+                    if (id && geoJsonData.features.some((f) => String(f.properties?.id) === String(id))) {
+                      focusSelectedParcel(id);
+                    }
                   }}
                   className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
                 >
