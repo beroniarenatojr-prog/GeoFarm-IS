@@ -386,6 +386,53 @@ export default function MapIndex({ parcels }) {
     map?.getSource('parcel-pins')?.setData(buildPinCollection(collection));
   }, []);
 
+  /**
+   * Counts the boundaries whose extent overlaps the visible map.
+   *
+   * A cheap bbox test against the 77 features rather than
+   * queryRenderedFeatures, which would only see what is already painted — and
+   * the question being asked here is precisely whether anything is.
+   *
+   * Declared HERE, above every effect that names it. It first went in further
+   * down the component, which put it in the temporal dead zone of a dependency
+   * array listing it — and dependency arrays are evaluated during render, so
+   * the whole component threw "Cannot access before initialization" and the
+   * map came up blank.
+   */
+  const measureInView = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const features = geoJsonRef.current?.features ?? [];
+    if (!features.length) {
+      setInView(0);
+      return;
+    }
+
+    const b = map.getBounds();
+    const west = b.getWest();
+    const east = b.getEast();
+    const south = b.getSouth();
+    const north = b.getNorth();
+
+    let count = 0;
+    for (const feature of features) {
+      const [fw, fs, fe, fn] = bbox(feature);
+      if (fe >= west && fw <= east && fn >= south && fs <= north) count += 1;
+    }
+
+    setInView(count);
+  }, []);
+
+  /** Bring every boundary back into view — the way out of empty ground. */
+  const showAllParcels = useCallback(() => {
+    const map = mapRef.current;
+    const features = geoJsonRef.current?.features ?? [];
+    if (!map || !features.length) return;
+
+    map.fitBounds(bbox(geoJsonRef.current), { padding: 60, maxZoom: 14, duration: 800 });
+  }, []);
+
   const resetDraft = useCallback(() => {
     draftRef.current = [];
     drawingRef.current = false;
@@ -972,47 +1019,6 @@ export default function MapIndex({ parcels }) {
       duration: 900,
     });
   };
-
-  /**
-   * Counts the boundaries whose extent overlaps the visible map.
-   *
-   * A cheap bbox test against 74 features rather than queryRenderedFeatures,
-   * which would only see what is already painted — and the question being
-   * asked here is precisely whether anything is.
-   */
-  const measureInView = useCallback(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const features = geoJsonRef.current?.features ?? [];
-    if (!features.length) {
-      setInView(0);
-      return;
-    }
-
-    const b = map.getBounds();
-    const west = b.getWest();
-    const east = b.getEast();
-    const south = b.getSouth();
-    const north = b.getNorth();
-
-    let count = 0;
-    for (const feature of features) {
-      const [fw, fs, fe, fn] = bbox(feature);
-      if (fe >= west && fw <= east && fn >= south && fs <= north) count += 1;
-    }
-
-    setInView(count);
-  }, []);
-
-  /** Bring every boundary back into view — the way out of empty ground. */
-  const showAllParcels = useCallback(() => {
-    const map = mapRef.current;
-    const features = geoJsonRef.current?.features ?? [];
-    if (!map || !features.length) return;
-
-    map.fitBounds(bbox(geoJsonRef.current), { padding: 60, maxZoom: 14, duration: 800 });
-  }, []);
 
   const focusSelectedParcel = (parcelId = selectedParcel) => {
     const feature = geoJsonData.features.find((item) => String(item.properties?.id) === String(parcelId));
