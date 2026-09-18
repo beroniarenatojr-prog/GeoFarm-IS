@@ -196,19 +196,53 @@ export default function Login() {
                                     </div>
                                 </div>
 
-                                {/* Register Link */}
-                                <div className="text-center">
-                                    <p className="text-gray-600">
-                                        Registered farmer in Tumauini?{' '}
-                                        <Link
-                                            href="/register"
-                                            className="font-medium text-[#1a3a2e] hover:text-[#2d5a45]"
-                                        >
-                                            Create an account
-                                        </Link>
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-2">
-                                        Need access? Contact your system administrator
+                                {/*
+                                    Both ways in, because they are not the same
+                                    thing and only one used to be reachable here.
+
+                                    /register claims a login for somebody the
+                                    office has ALREADY registered — it matches
+                                    an existing RSBSA number, surname and
+                                    birthdate. /farmer-registration is the full
+                                    RSBSA form for somebody not in the registry
+                                    yet. Sending an existing farmer down the
+                                    second path means filling in seven steps
+                                    only to be refused at the end, because
+                                    rsbsa_no is unique.
+                                */}
+                                <div className="space-y-3">
+                                    <Link
+                                        href="/farmer-registration"
+                                        className="flex items-center justify-between gap-3 rounded-lg border-2 border-[#1a3a2e] px-4 py-3 transition-colors hover:bg-[#1a3a2e]/5"
+                                    >
+                                        <span>
+                                            <span className="block text-sm font-semibold text-[#1a3a2e]">
+                                                Register as a farmer
+                                            </span>
+                                            <span className="block text-xs text-gray-500">
+                                                You are not in the RSBSA registry yet
+                                            </span>
+                                        </span>
+                                        <ArrowLeft className="h-4 w-4 flex-shrink-0 rotate-180 text-[#1a3a2e]" />
+                                    </Link>
+
+                                    <Link
+                                        href="/register"
+                                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3 transition-colors hover:bg-gray-50"
+                                    >
+                                        <span>
+                                            <span className="block text-sm font-semibold text-gray-800">
+                                                Create an account
+                                            </span>
+                                            <span className="block text-xs text-gray-500">
+                                                Already registered — claim your login
+                                            </span>
+                                        </span>
+                                        <ArrowLeft className="h-4 w-4 flex-shrink-0 rotate-180 text-gray-400" />
+                                    </Link>
+
+                                    <p className="text-center text-xs text-gray-500">
+                                        Office staff accounts are created by your system administrator.
                                     </p>
                                 </div>
                             </form>

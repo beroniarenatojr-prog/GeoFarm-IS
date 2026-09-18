@@ -22,7 +22,11 @@ class LandingController extends Controller
             'barangays' => Cache::remember(
                 'landing.barangays',
                 self::CACHE_TTL_SECONDS,
-                fn () => Barangay::orderBy('name')->pluck('name')->all()
+                // Active only. Retired names are kept as rows so the boundaries
+                // and programmes attached to them survive, but they are not
+                // barangays of Tumauini any more and must not be listed as such
+                // on a public page.
+                fn () => Barangay::active()->orderBy('name')->pluck('name')->all()
             ),
         ]);
     }
@@ -38,7 +42,10 @@ class LandingController extends Controller
     private function stats(): array
     {
         return [
-            'barangays'  => Barangay::count(),
+            // Counted the whole table before, retired rows included — which is
+            // why a public page claiming to serve Tumauini reported 75
+            // barangays when the municipality has 46.
+            'barangays'  => Barangay::active()->count(),
             'farmers'    => Farmer::verified()->count(),
             'hectares'   => round((float) FarmParcel::sum('total_area_ha'), 2),
             'programs'   => FinancialAssistance::count(),
