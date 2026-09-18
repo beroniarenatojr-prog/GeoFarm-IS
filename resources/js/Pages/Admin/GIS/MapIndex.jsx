@@ -282,6 +282,45 @@ export default function MapIndex({ parcels }) {
     selectedParcelRef.current = selectedParcel;
   }, [selectedParcel]);
 
+  /**
+   * Decides where the map opens, once, for every path that loads parcels.
+   *
+   * There were four of these: the fetch, two branches of the map-load handler
+   * and an effect. Three fitted ALL parcels and knew nothing about ?parcel=,
+   * only the effect honoured it, and whichever ran first won the race. So
+   * "View on map" from the parcel list usually landed on the whole
+   * municipality — where a 150 m holding is about four pixels wide and looks
+   * like nothing was drawn at all.
+   *
+   * Returns true once it has positioned the map, so callers stop trying.
+   */
+  const applyInitialView = useCallback((map, collection) => {
+    if (fittedRef.current) return false;
+
+    const features = collection?.features ?? [];
+    if (!features.length) return false;
+
+    fittedRef.current = true;
+
+    const wanted = new URLSearchParams(window.location.search).get('parcel');
+    const target = wanted
+      && features.find((f) => String(f.properties?.id) === String(wanted));
+
+    if (target) {
+      // Asked for one parcel: go to it and select it, close enough that its
+      // outline is the thing on screen rather than a speck.
+      setSelectedParcel(String(wanted));
+      setSelectedFeature(target.properties);
+      highlightParcel(target.properties.id);
+      loadParcelDetail(target.properties.id);
+      map.fitBounds(bbox(target), { padding: 80, maxZoom: 17, duration: 900 });
+      return true;
+    }
+
+    map.fitBounds(bbox(collection), { padding: 80, maxZoom: 16, duration: 900 });
+    return true;
+  }, [highlightParcel, loadParcelDetail]);
+
   const loadParcels = useCallback(() => {
     fetch('/admin/gis/parcels-geojson')
       .then((res) => res.json())
@@ -297,10 +336,7 @@ export default function MapIndex({ parcels }) {
         if (map && mapLoadedRef.current) {
           map.getSource('parcels')?.setData(colourised);
           map.getSource('parcel-pins')?.setData(buildPinCollection(colourised));
-          if (!fittedRef.current && colourised.features.length > 0) {
-            fittedRef.current = true;
-            map.fitBounds(bbox(colourised), { padding: 80, maxZoom: 16, duration: 900 });
-          }
+          applyInitialView(map, colourised);
         }
       })
       .catch((err) => {
@@ -434,6 +470,7 @@ export default function MapIndex({ parcels }) {
 
     setInView(count);
   }, []);
+
 
   /** Bring every boundary back into view — the way out of empty ground. */
   const showAllParcels = useCallback(() => {
@@ -829,10 +866,7 @@ export default function MapIndex({ parcels }) {
       if (geoJsonRef.current.features.length > 0) {
         map.getSource('parcels')?.setData(geoJsonRef.current);
         paintPins(map, geoJsonRef.current);
-        if (!fittedRef.current) {
-          fittedRef.current = true;
-          map.fitBounds(bbox(geoJsonRef.current), { padding: 80, maxZoom: 16, duration: 900 });
-        }
+        applyInitialView(map, geoJsonRef.current);
       } else {
         // Fetch hasn't returned yet — kick it off now that sources exist.
         // loadParcels will call setData directly because mapLoadedRef is true.
@@ -844,10 +878,7 @@ export default function MapIndex({ parcels }) {
             map.getSource('parcel-pins')?.setData(buildPinCollection(colourised));
             // Update state so the sidebar counters and parcel effects stay in sync.
             setGeoJsonData(colourised);
-            if (!fittedRef.current && colourised.features.length > 0) {
-              fittedRef.current = true;
-              map.fitBounds(bbox(colourised), { padding: 80, maxZoom: 16, duration: 900 });
-            }
+            applyInitialView(map, colourised);
           })
           .catch(console.error);
       }
@@ -1031,24 +1062,10 @@ export default function MapIndex({ parcels }) {
     paintPins(map, showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION);
     measureInView();
 
-    if (fittedRef.current || !geoJsonData.features.length) return;
-    fittedRef.current = true;
-
-    const wanted = new URLSearchParams(window.location.search).get('parcel');
-    const target = wanted
-      && geoJsonData.features.find((f) => String(f.properties?.id) === String(wanted));
-
-    if (target) {
-      setSelectedParcel(String(wanted));
-      setSelectedFeature(target.properties);
-      highlightParcel(target.properties.id);
-      loadParcelDetail(target.properties.id);
-      map.fitBounds(bbox(target), { padding: 80, maxZoom: 17, duration: 900 });
-      return;
-    }
-
-    map.fitBounds(bbox(geoJsonData), { padding: 80, maxZoom: 16, duration: 900 });
-  }, [geoJsonData, showParcels, paintPins, measureInView]);
+    // Same single decision as every other path — it no longer matters which
+    // one gets here first.
+    applyInitialView(map, geoJsonData);
+  }, [geoJsonData, showParcels, paintPins, measureInView, applyInitialView]);
 
   useEffect(() => {
     const map = mapRef.current;

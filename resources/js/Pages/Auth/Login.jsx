@@ -197,18 +197,18 @@ export default function Login() {
                                 </div>
 
                                 {/*
-                                    Both ways in, because they are not the same
-                                    thing and only one used to be reachable here.
+                                    One way in from here: the full RSBSA form,
+                                    for somebody not in the registry yet.
 
-                                    /register claims a login for somebody the
-                                    office has ALREADY registered — it matches
-                                    an existing RSBSA number, surname and
-                                    birthdate. /farmer-registration is the full
-                                    RSBSA form for somebody not in the registry
-                                    yet. Sending an existing farmer down the
-                                    second path means filling in seven steps
-                                    only to be refused at the end, because
-                                    rsbsa_no is unique.
+                                    Note for anyone tempted to point this at
+                                    /register instead — that route claims a
+                                    login for a farmer who is ALREADY on the
+                                    registry, matching their RSBSA number,
+                                    surname and birthdate. The two are not
+                                    interchangeable: rsbsa_no is unique, so an
+                                    existing farmer sent through the RSBSA form
+                                    fills in seven steps and is refused at the
+                                    final submit.
                                 */}
                                 <div className="space-y-3">
                                     <Link
@@ -226,23 +226,23 @@ export default function Login() {
                                         <ArrowLeft className="h-4 w-4 flex-shrink-0 rotate-180 text-[#1a3a2e]" />
                                     </Link>
 
-                                    <Link
-                                        href="/register"
-                                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3 transition-colors hover:bg-gray-50"
-                                    >
-                                        <span>
-                                            <span className="block text-sm font-semibold text-gray-800">
-                                                Create an account
-                                            </span>
-                                            <span className="block text-xs text-gray-500">
-                                                Already registered — claim your login
-                                            </span>
-                                        </span>
-                                        <ArrowLeft className="h-4 w-4 flex-shrink-0 rotate-180 text-gray-400" />
-                                    </Link>
+                                    {/*
+                                        The "Create an account" link to /register
+                                        was removed from here on request.
 
+                                        That route still exists and still works,
+                                        but nothing in the app links to it now.
+                                        It was the only way a farmer the office
+                                        entered in person could claim a login:
+                                        FarmerController@store creates a farmer
+                                        record and no user, and verification only
+                                        activates a user that already exists. So
+                                        those farmers now need an account created
+                                        for them in User Management.
+                                    */}
                                     <p className="text-center text-xs text-gray-500">
-                                        Office staff accounts are created by your system administrator.
+                                        Already registered but cannot sign in? Ask the Municipal
+                                        Agriculture Office to set up your account.
                                     </p>
                                 </div>
                             </form>
