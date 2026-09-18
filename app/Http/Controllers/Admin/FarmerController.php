@@ -509,6 +509,11 @@ class FarmerController extends Controller
                 'latestRiskAssessment',
                 'riskAssessments',
             ])->append('contact_email'),
+
+            // For the cropping-season form on the Crops tab, which picks a crop
+            // by name. Same list the Farm Assets module feeds its copy of the
+            // shared modal, so both offer exactly the crops the office keeps.
+            'cropOptions' => \App\Models\Crop::orderBy('crop_name')->get(['id', 'crop_name']),
         ]);
     }
 

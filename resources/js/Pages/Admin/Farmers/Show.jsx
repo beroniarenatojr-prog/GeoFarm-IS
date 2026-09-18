@@ -13,6 +13,9 @@ import MapViewer from '@/Components/ui/MapViewer';
 import Badge from '@/Components/ui/Badge';
 import Modal from '@/Components/ui/Modal';
 import ModalShell from '@/Components/ui/ModalShell';
+// The schema-driven form shared with the Farm Assets module, so a record added
+// from this page is validated by the same rules as one added from there.
+import AssetModal from '@/Components/FarmInventory/AssetModal';
 import Card from '@/Components/ui/Card';
 import Skeleton from '@/Components/ui/Skeleton';
 import TreeCropForm from '@/Components/AgriAssets/TreeCropForm';
@@ -263,7 +266,7 @@ function DocumentPreview({ label, path, href }) {
   );
 }
 
-export default function FarmerShow({ farmer }) {
+export default function FarmerShow({ farmer, cropOptions = [] }) {
   const { can } = usePermissions();
 
   const sumHeads = (rows) => (rows || []).reduce((total, row) => total + Number(row.total_heads || 0), 0);
@@ -305,6 +308,95 @@ export default function FarmerShow({ farmer }) {
   ].some(Boolean);
   const [loading, setLoading] = useState(false);
   const [assetModal, setAssetModal] = useState({ open: false, type: null, record: null });
+
+  /*
+   * The shared asset modal, used for the categories that have no hand-written
+   * form on this page.
+   *
+   * It is schema-driven and posts to the same /admin/farm-assets routes the
+   * Farm Assets module uses, so a machinery record added here is validated by
+   * exactly the rules that apply anywhere else. { category, record } — record
+   * is null when adding.
+   */
+  const [sharedAsset, setSharedAsset] = useState(null);
+
+  /** Delete through the shared routes, with the confirmation the others use. */
+  const removeAsset = (category, id, what) => {
+    if (!confirm(`Delete this ${what}? This cannot be undone.`)) return;
+
+    router.delete(`/admin/farm-assets/${category}/${id}`, {
+      preserveState: true,
+      preserveScroll: true,
+      onSuccess: () => toast.success('Deleted successfully'),
+    });
+  };
+
+  /*
+   * Season rows are edited under "seasonal" permissions, not "inventory".
+   *
+   * A cropping season is production data owned by Seasonal Tracking; the
+   * asset tabs are inventory. Gating it on the inventory permission here would
+   * quietly hand season editing to whoever can edit a tree crop.
+   */
+  const seasonActions = (can('edit seasonal') || can('delete seasonal')) ? [{
+    header: 'Actions',
+    cell: ({ row: { original: row } }) => (
+      <div className="flex gap-2">
+        {can('edit seasonal') && (
+          <button
+            onClick={() => setSharedAsset({ category: 'crops', record: row })}
+            className="text-green-600 hover:underline text-sm"
+          >
+            Edit
+          </button>
+        )}
+        {can('delete seasonal') && (
+          <button
+            onClick={() => {
+              if (!confirm('Delete this cropping season? This cannot be undone.')) return;
+              router.delete(`/admin/seasonal/${row.id}`, {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () => toast.success('Deleted successfully'),
+              });
+            }}
+            className="text-red-600 hover:underline text-sm"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    ),
+  }] : [];
+
+  /** Add / Edit / Delete controls for a shared-modal category. */
+  const sharedActions = (category, what) => (
+    can('edit inventory') || can('delete inventory')
+      ? [{
+          header: 'Actions',
+          cell: ({ row: { original: row } }) => (
+            <div className="flex gap-2">
+              {can('edit inventory') && (
+                <button
+                  onClick={() => setSharedAsset({ category, record: row })}
+                  className="text-green-600 hover:underline text-sm"
+                >
+                  Edit
+                </button>
+              )}
+              {can('delete inventory') && (
+                <button
+                  onClick={() => removeAsset(category, row.id, what)}
+                  className="text-red-600 hover:underline text-sm"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          ),
+        }]
+      : []
+  );
   const [emailOpen, setEmailOpen] = useState(false);
 
   /* The manual message to this farmer. Note what the form does NOT hold: a
@@ -764,7 +856,22 @@ export default function FarmerShow({ farmer }) {
                       Seasonal Tracking
                     </Link>.
                   </p>
-                  <DataTable columns={cropsColumns} data={cropsData} filename={`farmer-${farmer.id}-crops`} />
+                  {/* A cropping season belongs to a parcel, not to the farmer,
+                      so there is nothing to add against a farmer whose parcels
+                      have not been encoded yet. */}
+                  {can('create seasonal') && (farmer.parcels || []).length > 0 && (
+                    <button
+                      onClick={() => setSharedAsset({ category: 'crops', record: null })}
+                      className="mb-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      + Add Cropping Season
+                    </button>
+                  )}
+                  <DataTable
+                    columns={[...cropsColumns, ...seasonActions]}
+                    data={cropsData}
+                    filename={`farmer-${farmer.id}-crops`}
+                  />
                 </>
               )
             },
@@ -1213,13 +1320,19 @@ export default function FarmerShow({ farmer }) {
                   Machinery ({(farmer.machinery || []).length})
                 </span>
               ),
-              /* Read-only, unlike the other asset tabs.
-                 Machinery is entered in Step 4 of the farmer form and in the
-                 Farm Assets module, both of which already validate it. A third
-                 editor here would be a third place for the rules to drift, so
-                 this shows the record and says where to change it. */
+              /* Edited through the shared asset modal rather than a form of its
+                 own, so the fields and the rules are the ones Farm Assets and
+                 the farmer wizard already use. */
               content: (
                 <div className="space-y-4">
+                  {can('create inventory') && (
+                    <button
+                      onClick={() => setSharedAsset({ category: 'machinery', record: null })}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      + Add Machinery
+                    </button>
+                  )}
                   <DataTable
                     columns={[
                       { header: 'Equipment', accessorKey: 'machinery_type' },
@@ -1262,17 +1375,18 @@ export default function FarmerShow({ farmer }) {
                         header: 'Remarks',
                         cell: ({ row: { original: row } }) => row.notes || '—',
                       },
+                      ...sharedActions('machinery', 'machinery record'),
                     ]}
                     data={farmer.machinery || []}
                     filename={`farmer-${farmer.id}-machinery`}
                   />
 
                   <p className="text-xs text-gray-500">
-                    Machinery is recorded in{' '}
+                    Also editable in{' '}
                     <Link href={`/admin/farmers/${farmer.id}/edit`} className="font-semibold text-[#006400] hover:underline">
                       Step 4 of the farmer form
                     </Link>{' '}
-                    or in{' '}
+                    and in{' '}
                     <Link href="/admin/farm-inventory" className="font-semibold text-[#006400] hover:underline">
                       Farm Assets
                     </Link>.
@@ -1427,6 +1541,20 @@ export default function FarmerShow({ farmer }) {
             />
           )}
         </Modal>
+
+        {/* Keyed so switching between records remounts the form rather than
+            leaving the previous record's values in the inputs. */}
+        {sharedAsset && (
+          <AssetModal
+            key={`${sharedAsset.category}-${sharedAsset.record?.id ?? 'new'}`}
+            category={sharedAsset.category}
+            record={sharedAsset.record}
+            farmerId={farmer.id}
+            parcels={farmer.parcels || []}
+            cropOptions={cropOptions}
+            onClose={() => setSharedAsset(null)}
+          />
+        )}
       </div>
     </AdminLayout>
   );
