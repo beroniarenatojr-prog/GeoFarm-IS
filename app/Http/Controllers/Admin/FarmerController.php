@@ -487,6 +487,10 @@ class FarmerController extends Controller
                 'nativePigs',
                 'swineHybrid',
                 'poultry',
+                // Equipment the farmer declared in Part 2. Loaded here because
+                // the profile has a Machinery tab; without it the tab counts
+                // zero for a farmer who owns a tractor.
+                'machinery',
                 // Staff who cleared the record, shown on the verification panel.
                 'verifier:id,name',
                 // The login account's address is the fallback recipient for

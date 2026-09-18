@@ -5,7 +5,7 @@ import { useState } from 'react';
 // this whole module, so any `new Map()` added here later would build a lucide
 // icon and throw "is not a constructor" — which blanked the farmer edit page
 // once already this week.
-import { User, MapPin, Phone, Mail, Calendar, Map as MapIcon, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard, Pencil, Trash2, ShieldAlert, CloudRain, TrendingDown } from 'lucide-react';
+import { User, MapPin, Phone, Mail, Calendar, Map as MapIcon, Users, Award, Download, TreePine, Fish, Beef, Egg, Printer, Sprout, IdCard, Pencil, Trash2, ShieldAlert, CloudRain, TrendingDown, Tractor } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DataTable from '@/Components/ui/DataTable';
 import Tabs from '@/Components/ui/Tabs';
@@ -1202,6 +1202,81 @@ export default function FarmerShow({ farmer }) {
                       data={farmer.poultry || []}
                     />
                   </Card>
+                </div>
+              )
+            },
+            {
+              id: 'machinery',
+              label: (
+                <span className="flex items-center gap-2">
+                  <Tractor className="h-4 w-4" />
+                  Machinery ({(farmer.machinery || []).length})
+                </span>
+              ),
+              /* Read-only, unlike the other asset tabs.
+                 Machinery is entered in Step 4 of the farmer form and in the
+                 Farm Assets module, both of which already validate it. A third
+                 editor here would be a third place for the rules to drift, so
+                 this shows the record and says where to change it. */
+              content: (
+                <div className="space-y-4">
+                  <DataTable
+                    columns={[
+                      { header: 'Equipment', accessorKey: 'machinery_type' },
+                      {
+                        header: 'Brand / Model',
+                        cell: ({ row: { original: row } }) =>
+                          [row.brand, row.model].filter(Boolean).join(' ') || '—',
+                      },
+                      {
+                        header: 'How acquired',
+                        cell: ({ row: { original: row } }) => (
+                          <span className="capitalize">{row.acquisition_type || '—'}</span>
+                        ),
+                      },
+                      {
+                        header: 'Condition',
+                        cell: ({ row: { original: row } }) => {
+                          const tone = {
+                            active: 'bg-green-100 text-green-800',
+                            for_repair: 'bg-amber-100 text-amber-800',
+                            decommissioned: 'bg-gray-200 text-gray-600',
+                          }[row.status];
+
+                          const label = {
+                            active: 'Working',
+                            for_repair: 'Needs repair',
+                            decommissioned: 'No longer used',
+                          }[row.status];
+
+                          return label
+                            ? <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${tone}`}>{label}</span>
+                            : '—';
+                        },
+                      },
+                      {
+                        header: 'Year acquired',
+                        cell: ({ row: { original: row } }) => row.year_acquired || '—',
+                      },
+                      {
+                        header: 'Remarks',
+                        cell: ({ row: { original: row } }) => row.notes || '—',
+                      },
+                    ]}
+                    data={farmer.machinery || []}
+                    filename={`farmer-${farmer.id}-machinery`}
+                  />
+
+                  <p className="text-xs text-gray-500">
+                    Machinery is recorded in{' '}
+                    <Link href={`/admin/farmers/${farmer.id}/edit`} className="font-semibold text-[#006400] hover:underline">
+                      Step 4 of the farmer form
+                    </Link>{' '}
+                    or in{' '}
+                    <Link href="/admin/farm-inventory" className="font-semibold text-[#006400] hover:underline">
+                      Farm Assets
+                    </Link>.
+                  </p>
                 </div>
               )
             },
