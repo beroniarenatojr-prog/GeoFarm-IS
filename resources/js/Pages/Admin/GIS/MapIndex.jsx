@@ -249,6 +249,12 @@ export default function MapIndex({ parcels }) {
    */
   const [mapReport, setMapReport] = useState(null);
   const [layerError, setLayerError] = useState(null);
+
+  /** What applyInitialView decided, in words. */
+  const [viewNote, setViewNote] = useState(null);
+
+  /** Live zoom, so the status line can be read against the pin hand-over. */
+  const [zoomNow, setZoomNow] = useState(null);
   const totalMappedArea = useMemo(
     () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
     [geoJsonData],
@@ -314,8 +320,15 @@ export default function MapIndex({ parcels }) {
       highlightParcel(target.properties.id);
       loadParcelDetail(target.properties.id);
       map.fitBounds(bbox(target), { padding: 80, maxZoom: 17, duration: 900 });
+      setViewNote(`parcel ${wanted}: found, fitted`);
       return true;
     }
+
+    // Says so when the requested parcel is not in the layer at all — the
+    // difference between "it did not render" and "it was never sent".
+    setViewNote(wanted
+      ? `parcel ${wanted}: NOT in layer — fitted all ${features.length}`
+      : `fitted all ${features.length}`);
 
     map.fitBounds(bbox(collection), { padding: 80, maxZoom: 16, duration: 900 });
     return true;
@@ -449,6 +462,10 @@ export default function MapIndex({ parcels }) {
   const measureInView = useCallback(() => {
     const map = mapRef.current;
     if (!map) return;
+
+    // Zoom first: it has to be reported even when there is nothing to count,
+    // because "no features" and "wrong zoom" are different problems.
+    setZoomNow(Number(map.getZoom().toFixed(2)));
 
     const features = geoJsonRef.current?.features ?? [];
     if (!features.length) {
@@ -1204,11 +1221,48 @@ export default function MapIndex({ parcels }) {
                 </div>
               )}
 
-              {/* Once boundaries are on screen, say how many — so a single
-                  faint outline is not mistaken for the whole layer failing. */}
-              {!mapUnavailable && inView > 0 && (
-                <div className="absolute left-4 bottom-4 rounded-md bg-slate-900/75 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-                  {inView} of {mappedCount} boundaries in view
+              {/*
+                  Always on. The previous version showed a count only when
+                  inView > 0 and a notice only when NOT drawing — so in the one
+                  state that mattered (drawing, nothing in view) both were
+                  hidden and the map said nothing at all. A status line that
+                  disappears exactly when you need it is not instrumentation.
+              */}
+              {!mapUnavailable && (
+                <div className="absolute left-4 bottom-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-900/80 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+                  <span className={mappedCount === 0 ? 'text-rose-300' : ''}>
+                    {mappedCount} loaded
+                  </span>
+                  <span className="text-white/40">·</span>
+                  <span className={inView === 0 ? 'text-amber-300' : 'text-emerald-300'}>
+                    {inView ?? '—'} in view
+                  </span>
+                  {zoomNow != null && (
+                    <>
+                      <span className="text-white/40">·</span>
+                      {/* Past 15 the pins hand over to the polygons, so the
+                          zoom says which of the two you should be seeing. */}
+                      <span title={zoomNow < 15 ? 'pins shown' : 'outlines shown'}>
+                        z{zoomNow}{zoomNow < 15 ? ' (pins)' : ' (outlines)'}
+                      </span>
+                    </>
+                  )}
+                  {mapReport && (
+                    <>
+                      <span className="text-white/40">·</span>
+                      <span className={mapReport.missingLayers.length ? 'text-rose-300' : ''}>
+                        {mapReport.layers.length}/{mapReport.layers.length + mapReport.missingLayers.length} layers
+                      </span>
+                    </>
+                  )}
+                  {viewNote && (
+                    <>
+                      <span className="text-white/40">·</span>
+                      <span className={viewNote.includes('NOT in layer') ? 'text-rose-300' : 'text-white/70'}>
+                        {viewNote}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 
