@@ -1335,14 +1335,24 @@ export default function MapIndex({ parcels }) {
       <div className="space-y-5">
         <section className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-h-[680px] overflow-hidden rounded-lg border border-slate-200 relative">
+            {/*
+                Sized to the viewport rather than a fixed 680 px.
+
+                At a fixed height the map ran past the bottom of the browser
+                window on a laptop, which put its scale bar, attribution and
+                anything anchored to its lower edge permanently off-screen —
+                including the status line meant to explain a blank map. A tall
+                map you have to scroll to see the bottom of is worse than a
+                slightly shorter one that fits.
+            */}
+            <div className="relative h-[calc(100vh-13rem)] min-h-[420px] max-h-[820px] overflow-hidden rounded-lg border border-slate-200">
               {mapUnavailable ? (
                 <TumauiniMapFallback className="absolute inset-0" />
               ) : (
                 <div ref={mapContainerRef} style={{ position: 'absolute', inset: 0 }} />
               )}
               {loading && (
-                <div className="absolute left-4 top-4 rounded-md bg-white/95 px-3 py-2 text-sm font-medium text-emerald-800 shadow">
+                <div className="absolute left-4 top-16 z-10 rounded-md bg-white/95 px-3 py-2 text-sm font-medium text-emerald-800 shadow">
                   Saving boundary...
                 </div>
               )}
@@ -1357,7 +1367,7 @@ export default function MapIndex({ parcels }) {
                   broken".
               */}
               {!mapUnavailable && !drawing && mappedCount > 0 && inView === 0 && (
-                <div className="absolute inset-x-4 bottom-16 flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/85 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2">
+                <div className="absolute inset-x-4 top-16 z-10 flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/85 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:top-16">
                   <MapPinned className="h-4 w-4 flex-shrink-0 text-amber-300" />
                   <span>
                     {/* This used to read "mapped elsewhere in Tumauini", which
@@ -1413,7 +1423,10 @@ export default function MapIndex({ parcels }) {
                   disappears exactly when you need it is not instrumentation.
               */}
               {!mapUnavailable && (
-                <div className="absolute left-4 bottom-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-900/80 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
+                /* Anchored to the TOP. It sat at bottom-4 of a 680 px map,
+                   which on a laptop is below the browser fold — so the one
+                   thing built to explain a blank map was itself invisible. */
+                <div className="absolute left-4 top-4 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
                   <span className={mappedCount === 0 ? 'text-rose-300' : ''}>
                     {mappedCount} loaded
                   </span>
