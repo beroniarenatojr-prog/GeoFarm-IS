@@ -111,6 +111,30 @@ function sanitiseParcels(collection) {
   };
 }
 
+/** Great-circle distance in kilometres. */
+function kmBetween(lng1, lat1, lng2, lat2) {
+  const R = 6371;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** Which way to look, in words rather than degrees. */
+function compassBetween(lng1, lat1, lng2, lat2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2))
+    - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1));
+  const deg = (Math.atan2(y, x) * 180) / Math.PI;
+  const points = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
+
+  return points[Math.round(((deg + 360) % 360) / 45) % 8];
+}
+
 /** Give every feature a stable colour, keyed on parcel id so it never shifts. */
 function colouriseParcels(collection) {
   return {
@@ -336,6 +360,9 @@ export default function MapIndex({ parcels }) {
    * list is what made the last few rounds of this so hard to pin down.
    */
   const [unmappable, setUnmappable] = useState(0);
+
+  /** Closest boundary to the middle of the screen, when none is on it. */
+  const [nearest, setNearest] = useState(null);
   const totalMappedArea = useMemo(
     () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
     [geoJsonData],
@@ -577,6 +604,32 @@ export default function MapIndex({ parcels }) {
     }
 
     setInView(count);
+
+    // When nothing is on screen, work out where the closest one actually is.
+    // "Somewhere else in the municipality" is not something anyone can act on;
+    // "2.4 km north-east" is.
+    if (count > 0) {
+      setNearest(null);
+      return;
+    }
+
+    const middle = map.getCenter();
+    let best = null;
+
+    for (const feature of features) {
+      const [lng, lat] = center(feature).geometry.coordinates;
+      const km = kmBetween(middle.lng, middle.lat, lng, lat);
+
+      if (!best || km < best.km) {
+        best = { km, lng, lat, id: feature.properties?.id };
+      }
+    }
+
+    setNearest(best && {
+      km: best.km,
+      compass: compassBetween(middle.lng, middle.lat, best.lng, best.lat),
+      id: best.id,
+    });
   }, []);
 
 
@@ -1304,21 +1357,51 @@ export default function MapIndex({ parcels }) {
                   broken".
               */}
               {!mapUnavailable && !drawing && mappedCount > 0 && inView === 0 && (
-                <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/85 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2">
+                <div className="absolute inset-x-4 bottom-16 flex flex-wrap items-center gap-3 rounded-lg bg-slate-900/85 px-4 py-3 text-sm text-white shadow-lg backdrop-blur-sm sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2">
                   <MapPinned className="h-4 w-4 flex-shrink-0 text-amber-300" />
                   <span>
-                    No farm boundaries in this view.{' '}
-                    <span className="text-white/70">
-                      {mappedCount} {mappedCount === 1 ? 'is' : 'are'} mapped elsewhere in Tumauini.
-                    </span>
+                    {/* This used to read "mapped elsewhere in Tumauini", which
+                        sounded like an accusation that you were not in
+                        Tumauini. The map is always in Tumauini; the point is
+                        that this WINDOW — a kilometre or two of ground — holds
+                        none of them. So it now names a direction and a
+                        distance, which is something you can act on. */}
+                    Nothing mapped in this part of the map.
+                    {nearest ? (
+                      <span className="text-white/70">
+                        {' '}Nearest boundary is{' '}
+                        <span className="font-semibold text-white">
+                          {nearest.km < 1
+                            ? `${Math.round(nearest.km * 1000)} m`
+                            : `${nearest.km.toFixed(1)} km`}
+                        </span>
+                        {' '}{nearest.compass}.
+                      </span>
+                    ) : (
+                      <span className="text-white/70">
+                        {' '}All {mappedCount} are in other parts of the municipality.
+                      </span>
+                    )}
                   </span>
-                  <button
-                    type="button"
-                    onClick={showAllParcels}
-                    className="ml-auto whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100"
-                  >
-                    Show all {mappedCount}
-                  </button>
+
+                  <div className="ml-auto flex flex-shrink-0 gap-2">
+                    {nearest?.id != null && (
+                      <button
+                        type="button"
+                        onClick={() => focusSelectedParcel(nearest.id)}
+                        className="whitespace-nowrap rounded-md border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10"
+                      >
+                        Go to nearest
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={showAllParcels}
+                      className="whitespace-nowrap rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 hover:bg-slate-100"
+                    >
+                      Show all {mappedCount}
+                    </button>
+                  </div>
                 </div>
               )}
 
