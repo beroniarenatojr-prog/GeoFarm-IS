@@ -9,8 +9,10 @@ use App\Notifications\FarmerManualEmail;
 use App\Services\AuditService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Inertia\Inertia;
+use Throwable;
 
 /**
  * Staff writing to one farmer directly.
@@ -106,11 +108,59 @@ class FarmerEmailController extends Controller
             return back()->with('error', 'This farmer does not have a valid email address.');
         }
 
-        // Queued, not sent inline: FarmerManualEmail is ShouldQueue, so this
-        // writes a row to the jobs table and returns. The worker cron delivers
-        // it, which keeps a slow SMTP handshake out of the staff request.
-        Notification::route('mail', $address)
-            ->notify(new FarmerManualEmail($farmer, $data['subject'], $data['message']));
+        /*
+         * Sent inline, and this is the fix.
+         *
+         * FarmerManualEmail is ShouldQueue, so ->notify() wrote a row to the
+         * jobs table and returned. That is only delivery if something drains
+         * the queue, and nothing in this project ever did: there is no
+         * queue:work in the scheduler, no console command and no cron entry in
+         * the repository. Every message staff sent went into `jobs` and stayed
+         * there, while this page reported "Email sent" the moment the row was
+         * written — the send had not been attempted, let alone succeeded.
+         *
+         * notifyNow() bypasses the queue for this one notification without
+         * touching the class, so nothing else that uses it changes. Staff wait
+         * for the SMTP handshake, which is the right trade here: one person
+         * writing one message would rather wait two seconds and be told the
+         * truth than be told a comfortable lie instantly.
+         */
+        try {
+            Notification::route('mail', $address)
+                ->notifyNow(new FarmerManualEmail($farmer, $data['subject'], $data['message']));
+        } catch (Throwable $e) {
+            /*
+             * The technical detail goes to the log, never to the screen.
+             *
+             * An SMTP failure message can carry the host, the account and the
+             * server's own wording about authentication; staff cannot act on
+             * any of it and it should not be rendered into a page. The address
+             * and subject are recorded because they are what identifies the
+             * attempt, and the password is never in scope here — Laravel reads
+             * it from config and it appears in none of these values.
+             */
+            Log::error('Farmer email failed to send', [
+                'farmer_id' => $farmer->id,
+                'to'        => $address,
+                'subject'   => $data['subject'],
+                'exception' => $e::class,
+                'message'   => $e->getMessage(),
+                'sent_by'   => $request->user()->id,
+                'at'        => now()->toDateTimeString(),
+            ]);
+
+            /*
+             * Nothing is recorded below on this path. A FarmerMessage row and
+             * an audit entry both assert that the office wrote to this farmer,
+             * and writing them for a message that never left would put a
+             * delivery in the record that did not happen.
+             */
+            return back()->with(
+                'error',
+                'The email could not be sent. The message has not been recorded — '
+                . 'please try again, and tell IT if it keeps failing.'
+            );
+        }
 
         /*
          * Kept so the office can read back what it said.

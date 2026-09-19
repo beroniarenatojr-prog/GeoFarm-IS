@@ -49,9 +49,25 @@ export default function SendEmail({ farmers = [], filters = {}, messages = { dat
 
         post(`/admin/farmers/${selected.id}/send-email`, {
             preserveScroll: true,
-            // The picker keeps its selection so staff can send a follow-up to
-            // the same farmer without hunting for them again.
-            onSuccess: () => reset('subject', 'message'),
+            /*
+             * Clear the form only when the message actually went.
+             *
+             * A refusal comes back as back()->with('error'), which is a 302 —
+             * and Inertia counts a redirect as a successful visit, so this
+             * handler runs either way. Resetting unconditionally would wipe a
+             * message that was never sent, leaving staff to retype it with no
+             * idea why. The flash is the only thing that says what happened.
+             *
+             * The message itself is announced globally from app.jsx, success
+             * and failure alike, so nothing is toasted twice here.
+             */
+            onSuccess: (page) => {
+                if (page?.props?.flash?.success) {
+                    // The picker keeps its selection so staff can send a
+                    // follow-up to the same farmer without hunting for them.
+                    reset('subject', 'message');
+                }
+            },
             onError: () => toast.error('The message was not sent'),
         });
     };
