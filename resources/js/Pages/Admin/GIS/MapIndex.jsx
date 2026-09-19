@@ -27,15 +27,55 @@ const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
  * mostly greens and tans — so the palette avoids both.
  */
 const PARCEL_COLOURS = [
-  '#38bdf8', // sky
-  '#f87171', // red
-  '#fbbf24', // amber
-  '#ffffff', // white
-  '#c084fc', // violet
-  '#fb923c', // orange
-  '#22d3ee', // cyan
-  '#f472b6', // pink
+  '#a855f7', // violet
+  '#3b82f6', // blue
+  '#22c55e', // green
+  '#facc15', // yellow
+  '#f97316', // orange
+  '#ef4444', // red
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#6366f1', // indigo
+  '#f43f5e', // rose
+  '#84cc16', // lime
+  '#06b6d4', // cyan
+  '#d946ef', // fuchsia
+  '#eab308', // gold
+  '#0ea5e9', // sky
+  '#65a30d', // olive
 ];
+
+/** A parcel whose barangay was never recorded. Deliberately drab, so it reads
+ *  as "not classified" rather than as one more barangay. */
+const NO_BARANGAY_COLOUR = '#94a3b8';
+
+/** Trim and normalise a barangay name so "  Ugad" and "Ugad" are one place. */
+const barangayKey = (value) => String(value ?? '').trim();
+
+/**
+ * Assigns one colour per barangay.
+ *
+ * Alphabetical order rather than a hash of the name: sorting spreads
+ * neighbouring names across the palette, so adjacent barangays are unlikely to
+ * land on near-identical colours, and the result is identical on every refresh
+ * of the same data. Colouring by parcel id — which is what this did before —
+ * gave two parcels in the same barangay two different colours, which is
+ * exactly backwards for reading a municipal map.
+ */
+function buildBarangayColours(features) {
+  const names = [...new Set(
+    (features ?? [])
+      .map((feature) => barangayKey(feature.properties?.barangay))
+      .filter(Boolean),
+  )].sort((a, b) => a.localeCompare(b));
+
+  const colours = new Map();
+  names.forEach((name, index) => {
+    colours.set(name, PARCEL_COLOURS[index % PARCEL_COLOURS.length]);
+  });
+
+  return colours;
+}
 
 /**
  * A generous window around Tumauini. Anything outside it is a data error, not
@@ -135,19 +175,29 @@ function compassBetween(lng1, lat1, lng2, lat2) {
   return points[Math.round(((deg + 360) % 360) / 45) % 8];
 }
 
-/** Give every feature a stable colour, keyed on parcel id so it never shifts. */
+/**
+ * Give every feature its barangay's colour, so the map reads as a map of
+ * places rather than a map of database rows.
+ *
+ * The colour is written onto the feature's own properties because the fill and
+ * line layers paint from ['get', 'colour'] — and because the legend reads it
+ * back from here, which is what keeps the two in step.
+ */
 function colouriseParcels(collection) {
+  const features = collection.features ?? [];
+  const colours = buildBarangayColours(features);
+
   return {
     ...collection,
-    features: (collection.features ?? []).map((feature, index) => {
-      const id = Number(feature.properties?.id);
-      const slot = Number.isFinite(id) ? id : index;
+    features: features.map((feature) => {
+      const name = barangayKey(feature.properties?.barangay);
 
       return {
         ...feature,
         properties: {
           ...feature.properties,
-          colour: PARCEL_COLOURS[slot % PARCEL_COLOURS.length],
+          // Same barangay, same colour — for every parcel in it.
+          colour: colours.get(name) ?? NO_BARANGAY_COLOUR,
         },
       };
     }),
@@ -367,6 +417,39 @@ export default function MapIndex({ parcels }) {
     () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
     [geoJsonData],
   );
+
+  /**
+   * The barangays actually present in the loaded parcels, with the colour each
+   * one was given and how many parcels it holds.
+   *
+   * Built by reading back `properties.colour` — the value colouriseParcels
+   * already wrote onto each feature and the value the map paints from — rather
+   * than by re-running the palette. Recomputing would work today but would
+   * silently disagree with the map the moment the assignment rule changed.
+   *
+   * Nothing here is hard-coded: a barangay appears because a parcel says it is
+   * there. Sorted by name so the list reads the same on every refresh.
+   */
+  const barangayLegend = useMemo(() => {
+    const seen = new Map();
+
+    for (const feature of geoJsonData.features ?? []) {
+      const name = barangayKey(feature.properties?.barangay);
+      const label = name || 'No barangay recorded';
+
+      if (!seen.has(label)) {
+        seen.set(label, {
+          label,
+          colour: feature.properties?.colour ?? NO_BARANGAY_COLOUR,
+          count: 0,
+        });
+      }
+
+      seen.get(label).count += 1;
+    }
+
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [geoJsonData]);
 
   const selectedParcelDetails = useMemo(
     () => parcels.find((parcel) => String(parcel.id) === String(selectedParcel)),
@@ -1106,16 +1189,24 @@ export default function MapIndex({ parcels }) {
       buildLayers();
     };
 
-    if (map.isStyleLoaded()) {
-      buildOnce();
-    } else {
-      map.on('load', buildOnce);
-      // Belt and braces: on some caches `load` is missed but the style does
-      // become ready, and styledata fires when it does.
-      map.on('styledata', () => {
-        if (map.isStyleLoaded()) buildOnce();
-      });
-    }
+    /*
+     * Try now, and subscribe to everything that could mean "ready".
+     *
+     * The previous attempt checked isStyleLoaded() and otherwise waited for
+     * `load` or `styledata`. That still lost: both of those are one-shot for a
+     * cached style, so if they had already fired before these lines ran AND
+     * isStyleLoaded() was not yet true, nothing ever built the layers.
+     *
+     * `idle` is the one that cannot be missed. Unlike `load` it fires after
+     * every settle — "no camera transitions, all requested tiles loaded, all
+     * animations complete" — so a listener attached late still gets the next
+     * one, within a moment of the map appearing. It also implies the style is
+     * up, which is exactly the precondition for addSource.
+     */
+    if (map.isStyleLoaded()) buildOnce();
+
+    map.on('load', buildOnce);
+    map.on('idle', buildOnce);
 
     // The draw.create / draw.update / draw.delete handlers were removed with
     // MapboxDraw: nothing fires those events any more. Tracing saves through
@@ -1482,13 +1573,16 @@ export default function MapIndex({ parcels }) {
                       </span>
                     </>
                   )}
-                  {mapReport && (
-                    <>
-                      <span className="text-white/40">·</span>
-                      <span className={mapReport.missingLayers.length ? 'text-rose-300' : ''}>
-                        {mapReport.layers.length}/{mapReport.layers.length + mapReport.missingLayers.length} layers
-                      </span>
-                    </>
+                  <span className="text-white/40">·</span>
+                  {mapReport ? (
+                    <span className={mapReport.missingLayers.length ? 'text-rose-300' : 'text-emerald-300'}>
+                      {mapReport.layers.length}/{mapReport.layers.length + mapReport.missingLayers.length} layers
+                    </span>
+                  ) : (
+                    /* Said nothing at all before. The missing field was the
+                       actual symptom — the layers had never been built — and an
+                       absence is far too easy to read past. */
+                    <span className="text-rose-300 font-semibold">layers NOT built</span>
                   )}
                   {unmappable > 0 && (
                     <>
@@ -1547,6 +1641,72 @@ export default function MapIndex({ parcels }) {
                 </div>
               )}
             </div>
+
+            {/*
+                Which colour is which barangay.
+
+                Read back from the features' own `colour` property rather than
+                recomputed from the palette, so the legend cannot drift out of
+                step with what the map actually drew. Sits in the grid's second
+                row, first column — directly under the map on a wide screen,
+                stacked beneath it on a narrow one.
+            */}
+            {showParcels && barangayLegend.length > 0 && (
+              <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-start-1">
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    Barangay <span className="font-normal text-slate-500">(same colour = same barangay)</span>
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    {barangayLegend.length} {barangayLegend.length === 1 ? 'barangay' : 'barangays'} in the loaded parcels
+                  </span>
+                </div>
+
+                <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4">
+                  {barangayLegend.map((entry) => (
+                    <li key={entry.label} className="flex items-center gap-2 text-sm text-slate-700">
+                      <span
+                        aria-hidden="true"
+                        className="h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/20"
+                        style={{ backgroundColor: entry.colour }}
+                      />
+                      <span className="min-w-0 truncate" title={`${entry.label} — ${entry.count} parcel${entry.count === 1 ? '' : 's'}`}>
+                        {entry.label}
+                      </span>
+                      <span className="ml-auto flex-shrink-0 text-xs tabular-nums text-slate-400">
+                        {entry.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* The two non-barangay things on the map, each shown only when
+                    it is actually being drawn. Swatch colours are the layers'
+                    own paint values, not lookalikes. */}
+                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
+                  {selectedParcel && (
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="inline-block h-0 w-4 flex-shrink-0 border-t-2 border-dashed"
+                        style={{ borderColor: '#ffff00' }}
+                      />
+                      Selected parcel
+                    </span>
+                  )}
+                  {showBoundary && (
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="inline-block h-0 w-4 flex-shrink-0 border-t-2 border-dashed"
+                        style={{ borderColor: '#14532d' }}
+                      />
+                      Municipal focus boundary (approximate extent, not a survey)
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <aside className="space-y-4">
               <div>
