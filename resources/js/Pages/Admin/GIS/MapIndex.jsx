@@ -37,6 +37,80 @@ const PARCEL_COLOURS = [
   '#f472b6', // pink
 ];
 
+/**
+ * A generous window around Tumauini. Anything outside it is a data error, not
+ * a farm — the municipality sits near 121.8 E, 17.3 N.
+ */
+const PLAUSIBLE_EXTENT = { west: 121.0, south: 16.5, east: 123.0, north: 18.0 };
+
+/** Every [lng, lat] pair in a geometry, however deeply its rings are nested. */
+function eachPosition(coordinates, visit) {
+  if (!Array.isArray(coordinates) || coordinates.length === 0) return;
+
+  if (typeof coordinates[0] === 'number' && typeof coordinates[1] === 'number') {
+    visit(coordinates[0], coordinates[1]);
+    return;
+  }
+
+  for (const child of coordinates) eachPosition(child, visit);
+}
+
+/**
+ * Whether a feature can actually be drawn on this map.
+ *
+ * This is the fix for boundaries that were "loaded" but invisible. bbox() over
+ * the whole collection is what decides the opening view, and a single feature
+ * at [0, 0] — which is what an empty draw or a bad import leaves behind —
+ * stretches that box about 13,000 km. fitBounds then gets clamped by
+ * maxBounds and lands on empty ground, so every real parcel sits off-screen
+ * and the map looks as though nothing was ever drawn.
+ *
+ * One bad row must not be able to hide the other seventy-three.
+ */
+function isRenderableFeature(feature) {
+  const geometry = feature?.geometry;
+  if (!geometry || !geometry.coordinates) return false;
+  if (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon') return false;
+
+  let count = 0;
+  let plausible = true;
+
+  eachPosition(geometry.coordinates, (lng, lat) => {
+    count += 1;
+
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)
+      || lng < PLAUSIBLE_EXTENT.west || lng > PLAUSIBLE_EXTENT.east
+      || lat < PLAUSIBLE_EXTENT.south || lat > PLAUSIBLE_EXTENT.north) {
+      plausible = false;
+    }
+  });
+
+  // A polygon ring needs at least three distinct corners plus the closing
+  // point; fewer than four positions cannot enclose any area.
+  return plausible && count >= 4;
+}
+
+/**
+ * Splits a collection into what can be drawn and what cannot.
+ *
+ * The unmappable ones are counted rather than silently discarded, so the page
+ * can say "2 unmappable" instead of quietly disagreeing with the parcel list.
+ */
+function sanitiseParcels(collection) {
+  const features = collection?.features ?? [];
+  const kept = [];
+  const dropped = [];
+
+  for (const feature of features) {
+    (isRenderableFeature(feature) ? kept : dropped).push(feature);
+  }
+
+  return {
+    collection: { type: 'FeatureCollection', features: kept },
+    dropped,
+  };
+}
+
 /** Give every feature a stable colour, keyed on parcel id so it never shifts. */
 function colouriseParcels(collection) {
   return {
@@ -255,6 +329,13 @@ export default function MapIndex({ parcels }) {
 
   /** Live zoom, so the status line can be read against the pin hand-over. */
   const [zoomNow, setZoomNow] = useState(null);
+
+  /**
+   * Parcels the server says are mapped but whose geometry cannot be drawn.
+   * Counted rather than hidden: a silent gap between this map and the parcel
+   * list is what made the last few rounds of this so hard to pin down.
+   */
+  const [unmappable, setUnmappable] = useState(0);
   const totalMappedArea = useMemo(
     () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
     [geoJsonData],
@@ -338,7 +419,17 @@ export default function MapIndex({ parcels }) {
     fetch('/admin/gis/parcels-geojson')
       .then((res) => res.json())
       .then((data) => {
-        const colourised = colouriseParcels(normalizeFeatureCollection(data));
+        // Unmappable rows are removed BEFORE anything measures the collection:
+
+        // bbox() decides the opening view, and one bad coordinate there hides
+
+        // every good parcel.
+
+        const { collection: drawable, dropped } = sanitiseParcels(normalizeFeatureCollection(data));
+
+        setUnmappable(dropped.length);
+
+        const colourised = colouriseParcels(drawable);
         setGeoJsonData(colourised);
 
         // If the map is already loaded, push the data directly.
@@ -890,7 +981,17 @@ export default function MapIndex({ parcels }) {
         fetch('/admin/gis/parcels-geojson')
           .then((res) => res.json())
           .then((data) => {
-            const colourised = colouriseParcels(normalizeFeatureCollection(data));
+            // Unmappable rows are removed BEFORE anything measures the collection:
+
+            // bbox() decides the opening view, and one bad coordinate there hides
+
+            // every good parcel.
+
+            const { collection: drawable, dropped } = sanitiseParcels(normalizeFeatureCollection(data));
+
+            setUnmappable(dropped.length);
+
+            const colourised = colouriseParcels(drawable);
             map.getSource('parcels')?.setData(colourised);
             map.getSource('parcel-pins')?.setData(buildPinCollection(colourised));
             // Update state so the sidebar counters and parcel effects stay in sync.
@@ -1252,6 +1353,14 @@ export default function MapIndex({ parcels }) {
                       <span className="text-white/40">·</span>
                       <span className={mapReport.missingLayers.length ? 'text-rose-300' : ''}>
                         {mapReport.layers.length}/{mapReport.layers.length + mapReport.missingLayers.length} layers
+                      </span>
+                    </>
+                  )}
+                  {unmappable > 0 && (
+                    <>
+                      <span className="text-white/40">·</span>
+                      <span className="text-rose-300" title="Mapped in the parcel list, but their geometry cannot be drawn">
+                        {unmappable} unmappable
                       </span>
                     </>
                   )}
