@@ -5,10 +5,6 @@
     "src": "node_modules/@tmcw/togeojson/dist/togeojson.es.mjs",
     "isDynamicEntry": true
   },
-  "node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs": {
-    "file": "assets/maplibre-gl-worker-nfnkSQvL.mjs",
-    "src": "node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs"
-  },
   "node_modules/shpjs/lib/index.js": {
     "file": "assets/index-4UINrHII.js",
     "name": "index",
@@ -25,7 +21,7 @@
     ]
   },
   "resources/js/app.jsx": {
-    "file": "assets/app-uyIsVSFV.js",
+    "file": "assets/app-B28y4fCV.js",
     "name": "app",
     "src": "resources/js/app.jsx",
     "isEntry": true,
@@ -36,9 +32,6 @@
     "css": [
       "assets/app-voBrSrcx.css",
       "assets/app-DSYwmUFX.css"
-    ],
-    "assets": [
-      "assets/maplibre-gl-worker-nfnkSQvL.mjs"
     ]
   }
 }

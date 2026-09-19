@@ -28,12 +28,30 @@ import { setWorkerUrl } from 'maplibre-gl';
  * preview were all invisible at once, with the data present, the layers built
  * in the right order, and no style error anywhere.
  *
- * The `?url` suffix makes Vite emit the worker as a hashed asset and hand back
- * its real public path, so this is correct in dev and in production and
- * survives cache-busting. Set here, in the entry point, because all three map
- * screens need it: the GIS map, the parcel form and the farmer portal viewer.
+ * `?worker&url` is the suffix that works, and the distinction matters:
+ *
+ *   ?url         copies the file verbatim and returns its path
+ *   ?worker&url  BUNDLES it as a worker chunk and returns that chunk's path
+ *
+ * Plain `?url` is not enough here, because maplibre-gl-worker.mjs is only
+ * 18 KB of glue whose first statement is
+ *
+ *   import{...}from"./maplibre-gl-shared.mjs"
+ *
+ * a 482 KB sibling. Copied verbatim into assets/, that import resolves to
+ * /build/assets/maplibre-gl-shared.mjs, which does not exist — so the worker
+ * was served with a 200 and then failed to initialise, which looks almost
+ * identical to the 404: satellite imagery (raster, main thread) still true,
+ * every GeoJSON source still false, and isStyleLoaded() false with it, because
+ * a style is only "loaded" once all its sources are.
+ *
+ * `?worker&url` makes Vite bundle the glue and the shared module into one
+ * self-contained chunk, so there is no sibling left to resolve at runtime.
+ *
+ * Set here, in the entry point, because all three map screens need it: the GIS
+ * map, the parcel form and the farmer portal viewer.
  */
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
 setWorkerUrl(maplibreWorkerUrl);
 
