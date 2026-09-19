@@ -306,6 +306,22 @@ const PARCEL_READABLE_ZOOM = 15.5;
 /** A filter no parcel can satisfy, so the highlight layer draws nothing. */
 const NO_SELECTION = ['==', ['get', 'id'], -1];
 
+/**
+ * map.isSourceLoaded without the exception.
+ *
+ * MapLibre 6 throws "There is no tile manager with ID '<id>'" if the source
+ * has not reached the point of having one, and a throw inside a render or
+ * resize handler is reported as a map `error` event — which is how a read-only
+ * diagnostic ended up putting a red error banner over a working map.
+ */
+function safeSourceLoaded(map, id) {
+  try {
+    return map.isSourceLoaded(id);
+  } catch {
+    return 'n/a';
+  }
+}
+
 function supportsWebGL() {
   try {
     const canvas = document.createElement('canvas');
@@ -869,12 +885,18 @@ export default function MapIndex({ parcels }) {
           reactFeatures: diagFeatures.length,
           held,
           tiles,
-          // Distinguishes "not finished yet" from "will never finish". With
-          // the worker dead, styleLoaded stays true while sourceLoaded never
-          // becomes true, because tiling GeoJSON is the worker's whole job.
           styleLoaded: map.isStyleLoaded(),
-          sourceLoaded: map.isSourceLoaded('parcels'),
-          pinSourceLoaded: map.isSourceLoaded('parcel-pins'),
+          /*
+           * isSourceLoaded THROWS in MapLibre 6 ("There is no tile manager
+           * with ID 'parcels'") whenever it is called before that source has
+           * a tile manager — which includes every resize and render that
+           * happens early. Unguarded, it fired an `error` event on each one,
+           * so the map showed a red MapLibre error that had nothing to do
+           * with the map: the diagnostic was manufacturing the alarm it was
+           * meant to detect. Guarded, and reported as 'n/a' when unavailable.
+           */
+          sourceLoaded: safeSourceLoaded(map, 'parcels'),
+          pinSourceLoaded: safeSourceLoaded(map, 'parcel-pins'),
           painted,
           pinTiles,
           pinsPainted,
@@ -1884,8 +1906,15 @@ export default function MapIndex({ parcels }) {
                       </span>
                       <span className="text-white/40">·</span>
                       <span
-                        className={renderDiag.painted ? 'text-emerald-300' : 'text-rose-300 font-semibold'}
-                        title="Polygons the fill/line layers actually drew in this view"
+                        className={
+                          renderDiag.painted ? 'text-emerald-300'
+                            // Nothing on screen to paint is not a fault.
+                            : inView === 0 ? 'text-white/60'
+                              : 'text-rose-300 font-semibold'
+                        }
+                        title={inView === 0
+                          ? 'Nothing is in this view to paint — pan or zoom to the parcels'
+                          : 'Polygons the fill/line layers actually drew in this view'}
                       >
                         painted {renderDiag.painted ?? '—'}
                       </span>
@@ -1930,9 +1959,19 @@ export default function MapIndex({ parcels }) {
                   here is read live from the map, and it is on screen rather
                   than in the console so it can be screenshotted.
               */}
+              {/*
+                  Gated on inView as well. "painted 0" is the CORRECT answer
+                  when the camera is pointed at empty ground — the parcels are
+                  simply off-screen — and shouting about it there both raised a
+                  false alarm and covered the "nothing in this view / Go to
+                  nearest" notice that actually explains it.
+              */}
               {!mapUnavailable && renderDiag?.detail
-                && renderDiag.held > 0 && !renderDiag.painted && (
-                <div className="absolute inset-x-4 top-14 z-20 max-h-[60%] overflow-auto rounded-md border border-amber-400 bg-slate-900/95 p-3 text-[11px] leading-relaxed text-amber-100 shadow-xl backdrop-blur-sm">
+                && renderDiag.held > 0 && inView > 0 && !renderDiag.painted && (
+                /* Top is fine now: this and the "nothing in this view" notice
+                   are mutually exclusive (inView > 0 versus inView === 0), so
+                   they can no longer overlap. */
+                <div className="absolute inset-x-4 top-14 z-20 max-h-[55%] overflow-auto rounded-md border border-amber-400 bg-slate-900/95 p-3 text-[11px] leading-relaxed text-amber-100 shadow-xl backdrop-blur-sm">
                   <div className="mb-1 font-semibold text-amber-300">
                     Source holds {renderDiag.held} features but painted {String(renderDiag.painted)} — pipeline dump
                   </div>
