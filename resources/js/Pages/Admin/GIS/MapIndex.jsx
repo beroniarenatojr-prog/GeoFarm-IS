@@ -22,27 +22,77 @@ import {
 const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
 
 /**
- * One colour per parcel, so neighbouring boundaries read as separate holdings
- * rather than one shape. Chosen to stay legible over aerial imagery, which is
- * mostly greens and tans — so the palette avoids both.
+ * One colour per barangay, not per parcel.
+ *
+ * Tumauini has 46 active barangays, so this list holds 48 — enough for every
+ * one of them with slack, because a barangay sharing a colour with another
+ * would defeat the point of colouring by barangay at all.
+ *
+ * These were not picked by eye. They were selected by maximising the minimum
+ * CIEDE2000 distance between every pair, over a candidate set restricted to
+ * what stays readable on satellite imagery: L* 45-92 (nothing that vanishes
+ * into canopy shadow or washes out against cloud), chroma >= 26 (nothing that
+ * reads as road or bare soil), and at least dE 16 from sixteen sampled imagery
+ * colours - canopy, paddy, stubble, soil, laterite, road, shadow, cloud, water.
+ *
+ * The result: worst pair dE 10.5, worst ADJACENT pair dE 12.9. For reference
+ * dE 1 is the just-noticeable threshold and dE 5 reads as plainly different,
+ * so every pair here is a clearly different colour rather than a near-match.
+ * Adjacent indices are kept far apart deliberately, because alphabetically
+ * neighbouring barangays are often geographically neighbouring too.
+ *
+ * Regenerating this list is a measurement, not a judgement call - see the
+ * palette optimiser note in the project scratchpad if it ever needs redoing.
  */
 const PARCEL_COLOURS = [
-  '#a855f7', // violet
-  '#3b82f6', // blue
-  '#22c55e', // green
-  '#facc15', // yellow
-  '#f97316', // orange
-  '#ef4444', // red
-  '#ec4899', // pink
-  '#14b8a6', // teal
-  '#6366f1', // indigo
-  '#f43f5e', // rose
-  '#84cc16', // lime
-  '#06b6d4', // cyan
-  '#d946ef', // fuchsia
-  '#eab308', // gold
-  '#0ea5e9', // sky
-  '#65a30d', // olive
+  '#a103fc', //  0 deep violet
+  '#2cfc03', //  1 deep emerald
+  '#fc8003', //  2 deep orange
+  '#da3ffd', //  3 purple
+  '#0ff09d', //  4 deep teal
+  '#c87c19', //  5 deep orange
+  '#b12fb1', //  6 deep magenta
+  '#03fcf0', //  7 deep cyan
+  '#d3980d', //  8 deep amber
+  '#fc03c2', //  9 deep magenta
+  '#3fabfd', // 10 azure
+  '#fcd703', // 11 deep amber
+  '#de0244', // 12 deep rose
+  '#2f95b1', // 13 deep sky
+  '#dff349', // 14 lime
+  '#d31b0d', // 15 deep red
+  '#9ad6fe', // 16 light azure
+  '#a3bc24', // 17 deep lime
+  '#c81982', // 18 deep pink
+  '#03d3fc', // 19 deep sky
+  '#fdc35d', // 20 orange
+  '#f089ef', // 21 magenta
+  '#24babc', // 22 deep cyan
+  '#e3621c', // 23 deep vermilion
+  '#f4c3e8', // 24 light magenta
+  '#19c842', // 25 deep emerald
+  '#b15b2f', // 26 deep vermilion
+  '#1c7ce3', // 27 deep azure
+  '#c3f4c9', // 28 light emerald
+  '#fd3721', // 29 red
+  '#6d66d6', // 30 indigo
+  '#acdd7e', // 31 green
+  '#febbb8', // 32 light red
+  '#7e99dd', // 33 blue
+  '#2fb18c', // 34 deep teal
+  '#fec59a', // 35 light vermilion
+  '#aa89f0', // 36 indigo
+  '#7eddc0', // 37 teal
+  '#d68d66', // 38 vermilion
+  '#d1b8fe', // 39 light indigo
+  '#9af4fe', // 40 light cyan
+  '#e05e5c', // 41 red
+  '#efe9a9', // 42 light yellow
+  '#a9c0ef', // 43 light azure
+  '#d66680', // 44 rose
+  '#fe9ab6', // 45 light rose
+  '#f78a82', // 46 red
+  '#dd7eb4', // 47 pink
 ];
 
 /** A parcel whose barangay was never recorded. Deliberately drab, so it reads
@@ -53,14 +103,44 @@ const NO_BARANGAY_COLOUR = '#94a3b8';
 const barangayKey = (value) => String(value ?? '').trim();
 
 /**
+ * The colour for the nth barangay.
+ *
+ * Past the end of the curated list this keeps generating fresh colours instead
+ * of wrapping around with `% length`. That matters because `barangay` is free
+ * text: 46 official names can still arrive as more than 48 distinct values
+ * through a spelling variant, a stray middle initial, or one of the 29 retired
+ * barangay names. Wrapping would hand two different barangays the same colour
+ * — silently, and precisely in the case where someone is trying to work out
+ * why the map looks wrong.
+ *
+ * The golden angle (137.508°) is used because successive multiples of it never
+ * land near each other on the hue circle, so the overflow colours are spread
+ * out rather than clustered. They are genuinely distinct, though not held to
+ * the measured dE separation of the curated 48 — if this path is ever reached,
+ * the real fix is to tidy the barangay values, and the legend will show which.
+ */
+function paletteColour(index) {
+  if (index < PARCEL_COLOURS.length) return PARCEL_COLOURS[index];
+
+  const step = index - PARCEL_COLOURS.length + 1;
+  const hue = (step * 137.508) % 360;
+
+  // Comma syntax: valid CSS and accepted by MapLibre's style-spec colour
+  // parser, so the same string works for the layer paint and the legend swatch.
+  return `hsl(${hue.toFixed(1)}, 82%, ${step % 2 ? 58 : 74}%)`;
+}
+
+/**
  * Assigns one colour per barangay.
  *
- * Alphabetical order rather than a hash of the name: sorting spreads
- * neighbouring names across the palette, so adjacent barangays are unlikely to
- * land on near-identical colours, and the result is identical on every refresh
- * of the same data. Colouring by parcel id — which is what this did before —
- * gave two parcels in the same barangay two different colours, which is
- * exactly backwards for reading a municipal map.
+ * Alphabetical order rather than a hash of the name: sorting is stable, so the
+ * same data gives the same colours on every refresh, and the palette's own
+ * ordering already guarantees that consecutive indices are far apart in
+ * colour. Colouring by parcel id — which is what this did before — gave two
+ * parcels in the same barangay two different colours, which is exactly
+ * backwards for reading a municipal map.
+ *
+ * Distinct names never share a colour: each one takes its own palette index.
  */
 function buildBarangayColours(features) {
   const names = [...new Set(
@@ -71,7 +151,8 @@ function buildBarangayColours(features) {
 
   const colours = new Map();
   names.forEach((name, index) => {
-    colours.set(name, PARCEL_COLOURS[index % PARCEL_COLOURS.length]);
+    // One colour per name, never reused — see paletteColour.
+    colours.set(name, paletteColour(index));
   });
 
   return colours;
@@ -405,6 +486,34 @@ export default function MapIndex({ parcels }) {
   const [zoomNow, setZoomNow] = useState(null);
 
   /**
+   * What MapLibre itself holds and paints — as opposed to what React believes.
+   *
+   * Every counter on this page so far ("74 loaded", "53 in view", "6/6
+   * layers", "fitted all 74") is computed in JavaScript from geoJsonRef and
+   * map.getLayer(). All of them can read perfectly while the map draws
+   * nothing, because none of them ask the map what it actually rendered. That
+   * is exactly the state this page has been in.
+   *
+   *   held    - features inside the `parcels` source, from its own serialize()
+   *   painted - features the fill/line layers actually put on screen
+   *
+   * held 0            -> the data never reached the source
+   * held >0, painted 0 -> the data is there and the paint/style is wrong
+   * both >0            -> it IS drawing, and something is covering it
+   */
+  const [renderDiag, setRenderDiag] = useState(null);
+
+  /**
+   * The last error MapLibre reported.
+   *
+   * The handler below has always logged these to the console and surfaced only
+   * WebGL failures to the screen. An invalid paint expression or a rejected
+   * tile is reported the same way and was therefore invisible to anyone
+   * looking at the map instead of devtools.
+   */
+  const [mapError, setMapError] = useState(null);
+
+  /**
    * Parcels the server says are mapped but whose geometry cannot be drawn.
    * Counted rather than hidden: a silent gap between this map and the parcel
    * list is what made the last few rounds of this so hard to pin down.
@@ -668,6 +777,44 @@ export default function MapIndex({ parcels }) {
     // because "no features" and "wrong zoom" are different problems.
     setZoomNow(Number(map.getZoom().toFixed(2)));
 
+    /*
+     * Ask the MAP what it has, rather than asking React what it sent.
+     *
+     * serialize() returns the source's own data, so `held` is the true feature
+     * count inside MapLibre regardless of where the viewport is pointed.
+     * queryRenderedFeatures reports what the fill and line layers actually
+     * drew in the current view. Wrapped because both are unavailable until the
+     * style is up, and a throw here would take the whole measurement with it.
+     */
+    try {
+      const source = map.getSource('parcels');
+      const held = source?.serialize?.()?.data?.features?.length ?? null;
+
+      const paintLayers = ['parcels-fill', 'parcels-line']
+        .filter((id) => Boolean(map.getLayer(id)));
+
+      const painted = paintLayers.length
+        ? map.queryRenderedFeatures({ layers: paintLayers }).length
+        : null;
+
+      const pinLayers = ['parcel-pin-halo', 'parcel-pin-dot']
+        .filter((id) => Boolean(map.getLayer(id)));
+
+      const pinsPainted = pinLayers.length
+        ? map.queryRenderedFeatures({ layers: pinLayers }).length
+        : null;
+
+      setRenderDiag({
+        held,
+        painted,
+        pinsPainted,
+        pinsHeld: map.getSource('parcel-pins')?.serialize?.()?.data?.features?.length ?? null,
+        layers: paintLayers.length,
+      });
+    } catch (error) {
+      setRenderDiag({ error: String(error?.message ?? error).slice(0, 120) });
+    }
+
     const features = geoJsonRef.current?.features ?? [];
     if (!features.length) {
       setInView(0);
@@ -824,8 +971,17 @@ export default function MapIndex({ parcels }) {
 
     map.on('error', (event) => {
       console.error('MapLibre error:', event?.error || event);
-      if (String(event?.error?.message || '').toLowerCase().includes('webgl')) {
+
+      const message = String(event?.error?.message ?? event?.error ?? event ?? '');
+
+      if (message.toLowerCase().includes('webgl')) {
         setMapUnavailable(true);
+      }
+
+      // Put it on the screen. Tile 404s are noise here and would crowd out a
+      // real style error, so they are the one thing left in the console.
+      if (!/\b(40[34]|Failed to fetch|NetworkError)\b/i.test(message)) {
+        setMapError(message.slice(0, 200));
       }
     });
 
@@ -1173,6 +1329,11 @@ export default function MapIndex({ parcels }) {
         missingLayers: layerIds.filter((id) => !map.getLayer(id)),
         zoom: Number(map.getZoom().toFixed(2)),
       });
+
+      // Measure again once this settles. The call at the top of buildLayers
+      // ran before any of the above existed, so it could only ever report
+      // nulls for the thing we are actually trying to see.
+      map.once('idle', measureInView);
     };
 
     /*
@@ -1600,6 +1761,56 @@ export default function MapIndex({ parcels }) {
                       </span>
                     </>
                   )}
+
+                  {/*
+                      The only two numbers here that come from the MAP rather
+                      than from React. Everything to the left can look correct
+                      while the map draws nothing; these two cannot.
+                  */}
+                  {renderDiag && !renderDiag.error && (
+                    <>
+                      <span className="text-white/40">·</span>
+                      <span
+                        className={renderDiag.held ? 'text-emerald-300' : 'text-rose-300 font-semibold'}
+                        title="Features inside the MapLibre `parcels` source"
+                      >
+                        held {renderDiag.held ?? '—'}
+                      </span>
+                      <span className="text-white/40">·</span>
+                      <span
+                        className={renderDiag.painted ? 'text-emerald-300' : 'text-rose-300 font-semibold'}
+                        title="Polygons the fill/line layers actually drew in this view"
+                      >
+                        painted {renderDiag.painted ?? '—'}
+                      </span>
+                      <span className="text-white/40">·</span>
+                      <span
+                        className={renderDiag.pinsPainted ? 'text-emerald-300' : 'text-amber-300'}
+                        title="Pins drawn / pins in the parcel-pins source"
+                      >
+                        pins {renderDiag.pinsPainted ?? '—'}/{renderDiag.pinsHeld ?? '—'}
+                      </span>
+                    </>
+                  )}
+                  {renderDiag?.error && (
+                    <>
+                      <span className="text-white/40">·</span>
+                      <span className="text-rose-300">diag: {renderDiag.error}</span>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/*
+                  MapLibre's own complaint, on the screen.
+
+                  This has always gone to console.error and nowhere else, so a
+                  rejected paint expression or a broken source looked identical
+                  to "the map is fine but empty" to anyone not in devtools.
+              */}
+              {!mapUnavailable && mapError && (
+                <div className="absolute inset-x-4 bottom-4 z-20 rounded-md border border-rose-400 bg-rose-950/90 px-3 py-2 text-xs text-rose-100 shadow-lg backdrop-blur-sm">
+                  <span className="font-semibold">MapLibre error:</span> {mapError}
                 </div>
               )}
 
@@ -1662,7 +1873,9 @@ export default function MapIndex({ parcels }) {
                   </span>
                 </div>
 
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4">
+                {/* Up to 46 barangays can be listed, so lean on columns rather
+                    than a tall scroll: 46 rows over 5 columns is 10 lines. */}
+                <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {barangayLegend.map((entry) => (
                     <li key={entry.label} className="flex items-center gap-2 text-sm text-slate-700">
                       <span
