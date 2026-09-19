@@ -1,3 +1,16 @@
+# Serve .mjs as JavaScript.
+#
+# MapLibre's worker ships as an ES module (maplibre-gl-worker.mjs) and is
+# started with `new Worker(url, { type: 'module' })`. A module worker is
+# REJECTED unless the response carries a JavaScript MIME type, and Apache does
+# not map .mjs on every host. Without this the worker fails to start, and the
+# failure is silent in a way that looks nothing like its cause: raster imagery
+# still draws, so the basemap looks fine, while every GeoJSON source yields
+# zero tiles and the map appears to have no data on it.
+<IfModule mod_mime.c>
+    AddType text/javascript .mjs
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes

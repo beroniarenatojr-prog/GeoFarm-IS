@@ -869,6 +869,12 @@ export default function MapIndex({ parcels }) {
           reactFeatures: diagFeatures.length,
           held,
           tiles,
+          // Distinguishes "not finished yet" from "will never finish". With
+          // the worker dead, styleLoaded stays true while sourceLoaded never
+          // becomes true, because tiling GeoJSON is the worker's whole job.
+          styleLoaded: map.isStyleLoaded(),
+          sourceLoaded: map.isSourceLoaded('parcels'),
+          pinSourceLoaded: map.isSourceLoaded('parcel-pins'),
           painted,
           pinTiles,
           pinsPainted,

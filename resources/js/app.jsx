@@ -4,6 +4,39 @@ import { createRoot } from 'react-dom/client';
 import { router } from '@inertiajs/react';
 import '../css/app.css';
 
+import { setWorkerUrl } from 'maplibre-gl';
+/*
+ * Tell MapLibre where its worker actually is.
+ *
+ * MapLibre 6 ships the worker as a SEPARATE module (maplibre-gl-worker.mjs)
+ * instead of inlining it as a blob, and it works out the URL at runtime:
+ *
+ *   let e = import.meta.url;
+ *   let t = e.endsWith('-dev.mjs') ? 'maplibre-gl-worker-dev.mjs' : 'maplibre-gl-worker.mjs';
+ *   return new URL(`./${t}`, e).href;
+ *
+ * Because that path is assembled from a runtime string rather than a literal
+ * `new URL('./file', import.meta.url)`, Vite cannot see it, never emits the
+ * file, and never rewrites the reference. In a production build the bundle
+ * therefore asks for /build/assets/maplibre-gl-worker.mjs, which 404s.
+ *
+ * The consequence is specific and very easy to misread: raster tiles are
+ * decoded on the main thread and keep working, so the satellite basemap looks
+ * perfectly healthy, while EVERY GeoJSON source silently yields zero tiles —
+ * because tiling GeoJSON is precisely what the worker does. That is why the
+ * parcel polygons, the parcel pins, the municipal boundary and the drawing
+ * preview were all invisible at once, with the data present, the layers built
+ * in the right order, and no style error anywhere.
+ *
+ * The `?url` suffix makes Vite emit the worker as a hashed asset and hand back
+ * its real public path, so this is correct in dev and in production and
+ * survives cache-busting. Set here, in the entry point, because all three map
+ * screens need it: the GIS map, the parcel form and the farmer portal viewer.
+ */
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+
+setWorkerUrl(maplibreWorkerUrl);
+
 import toast from 'react-hot-toast';
 import { Toaster } from './Components/Toaster.jsx'
 
