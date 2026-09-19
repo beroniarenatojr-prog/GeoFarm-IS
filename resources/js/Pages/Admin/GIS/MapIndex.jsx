@@ -4,6 +4,7 @@ import { router } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import BoundaryImport from '@/Components/Parcels/BoundaryImport';
+import QrScanner from '@/Components/ui/QrScanner';
 import toast from 'react-hot-toast';
 import * as maplibregl from 'maplibre-gl';
 import { buildDraftFeatures } from '@/utils/draftGeometry';
@@ -12,7 +13,7 @@ import bbox from '@turf/bbox';
 import center from '@turf/center';
 import {
   Eye, Layers, LocateFixed, MapPinned, PenLine, RefreshCcw, Trash2,
-  Map as MapIcon, Ruler, Spline, SlidersHorizontal, X,
+  Map as MapIcon, QrCode, Ruler, Spline, SlidersHorizontal, X,
 } from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
@@ -673,6 +674,10 @@ export default function MapIndex({ parcels }) {
 
   /** Mobile: the controls live in a sheet so the map keeps the screen. */
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  /** Reading a farmer's ID card to jump to their land. */
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
 
   /*
    * Debounce the search box.
@@ -1813,6 +1818,81 @@ export default function MapIndex({ parcels }) {
     focusSelectedParcel(id);
   };
 
+  /**
+   * A scanned ID card, turned into that farmer's land on the map.
+   *
+   * The QR carries the farmer's own page URL, which the server resolves —
+   * FarmerScanController owns that parsing because it sits beside the code
+   * that writes the card, and because a scanner pointed at some other QR
+   * should be refused by the server rather than by a regex in a bundle.
+   *
+   * Scanning changes nothing: it sets a filter and moves the camera. No parcel
+   * or farmer record is written, and the card carries no credentials — the
+   * staff member is already signed in, this only saves them the typing.
+   */
+  const handleScan = async (code) => {
+    setScannerOpen(false);
+    setScanBusy(true);
+
+    try {
+      const response = await fetch(
+        `/admin/farmer-scan?code=${encodeURIComponent(code)}`,
+        { headers: { Accept: 'application/json' } },
+      );
+
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        // The server's reason, not a generic one: "no longer on the register"
+        // and "not verified yet" need different actions from the counter.
+        toast.error(body.message || 'That card could not be read.');
+        return;
+      }
+
+      const farmerId = String(body.id);
+      const theirs = geoJsonData.features.filter(
+        (feature) => String(feature.properties?.farmer_id) === farmerId,
+      );
+
+      if (theirs.length === 0) {
+        // Say so rather than applying a filter that empties the map — an
+        // unmapped farmer is a real answer, not a failed scan.
+        toast.error(`${body.label ?? 'That farmer'} has no mapped parcel yet.`);
+        return;
+      }
+
+      setSearchInput('');
+      setFilters({ ...EMPTY_FILTERS, farmer: farmerId });
+
+      if (theirs.length === 1) {
+        pickFeature(theirs[0]);
+      } else {
+        mapRef.current?.fitBounds(
+          bbox({ type: 'FeatureCollection', features: theirs }),
+          { padding: 72, maxZoom: 16, duration: 900 },
+        );
+      }
+
+      toast.success(
+        `${body.label ?? 'Farmer'} — ${theirs.length} mapped parcel${theirs.length === 1 ? '' : 's'}`,
+      );
+    } catch {
+      toast.error('Unable to look up that card. Check the connection and try again.');
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  /*
+   * QrScanner restarts its camera whenever its onScan prop changes identity,
+   * and handleScan is rebuilt on every render. The ref keeps the prop stable
+   * while the handler it calls stays current — without it the viewfinder would
+   * tear down and reopen on each keystroke typed into the search box.
+   */
+  const scanHandlerRef = useRef(handleScan);
+  scanHandlerRef.current = handleScan;
+  const onScanStable = useCallback((code) => scanHandlerRef.current(code), []);
+
   /** Clear the selection everywhere it is held. */
   const clearSelection = () => {
     setSelectedParcel('');
@@ -1982,16 +2062,46 @@ export default function MapIndex({ parcels }) {
             </button>
           </div>
 
-          <div className="lg:w-[28rem]">
-            <GisSearch
-              value={searchInput}
-              onChange={setSearchInput}
-              results={searchResults}
-              onPick={pickFeature}
-              loading={dataStatus === 'loading'}
-            />
+          <div className="flex items-start gap-2 lg:w-[30rem]">
+            <div className="min-w-0 flex-1">
+              <GisSearch
+                value={searchInput}
+                onChange={setSearchInput}
+                results={searchResults}
+                onPick={pickFeature}
+                loading={dataStatus === 'loading'}
+              />
+            </div>
+
+            {/*
+                Scan a farmer's ID card instead of typing their name.
+
+                Same card and same endpoint the distribution counter already
+                uses, so there is one definition of what a GeoFarm QR is. Shown
+                only to staff who may view farmers, because that is what the
+                scan resolves to and what the route requires.
+            */}
+            {can('view farmers') && (
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                disabled={scanBusy}
+                title="Scan a farmer's ID card to jump to their parcels"
+                aria-label="Scan a farmer ID card"
+                className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <QrCode className={`h-4 w-4 ${scanBusy ? 'animate-pulse' : ''}`} aria-hidden="true" />
+                <span className="hidden sm:inline">{scanBusy ? 'Looking up…' : 'Scan ID'}</span>
+              </button>
+            )}
           </div>
         </div>
+
+        <QrScanner
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={onScanStable}
+        />
 
         {dataStatus === 'error' && (
           <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
@@ -2294,7 +2404,7 @@ export default function MapIndex({ parcels }) {
                 onZoom={() => focusSelectedParcel()}
                 onClear={clearSelection}
                 canViewFarmer={can('view farmers')}
-                canViewParcel={can('view parcels')}
+                canEditParcel={can('edit parcels')}
               />
 
               <div className="rounded-lg border border-slate-200 p-4">
@@ -2834,7 +2944,7 @@ export default function MapIndex({ parcels }) {
                 onZoom={() => { focusSelectedParcel(); setSheetOpen(false); }}
                 onClear={clearSelection}
                 canViewFarmer={can('view farmers')}
-                canViewParcel={can('view parcels')}
+                canEditParcel={can('edit parcels')}
               />
             </div>
           </div>

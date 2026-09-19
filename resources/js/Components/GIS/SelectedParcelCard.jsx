@@ -29,7 +29,7 @@ export default function SelectedParcelCard({
   onZoom,
   onClear,
   canViewFarmer,
-  canViewParcel,
+  canEditParcel,
 }) {
   if (!properties) {
     return (
@@ -155,15 +155,25 @@ export default function SelectedParcelCard({
           Zoom to parcel
         </button>
 
-        {/* Rendered only when the route can actually be reached — a button that
-            leads to a 403 is worse than no button. */}
-        {canViewParcel && (
+        {/*
+            Points at the EDIT page, not /admin/parcels/{id}.
+
+            That second URL is declared in routes/web.php as parcels.show, but
+            ParcelController has no show() method and no Parcels/Show.jsx
+            exists, so it returns a 500. Nothing else in the app ever linked to
+            it, which is why the route had sat broken unnoticed.
+
+            The permission matches the destination's own middleware — the edit
+            route requires "edit parcels", so gating this on "view parcels"
+            would hand a viewer a button that 403s.
+        */}
+        {canEditParcel && (
           <a
-            href={`/admin/parcels/${properties.id}`}
+            href={`/admin/parcels/${properties.id}/edit`}
             className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            View parcel
+            Open parcel
           </a>
         )}
 
