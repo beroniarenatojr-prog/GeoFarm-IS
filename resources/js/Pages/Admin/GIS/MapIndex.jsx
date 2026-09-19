@@ -787,6 +787,16 @@ export default function MapIndex({ parcels }) {
      * style is up, and a throw here would take the whole measurement with it.
      */
     try {
+      // Self-contained on purpose: the bounds and feature list used below this
+      // block are declared LATER in this function, and naming them here throws
+      // "cannot access before initialization" — the same trap as before.
+      const diagFeatures = geoJsonRef.current?.features ?? [];
+      const dB = map.getBounds();
+      const dWest = dB.getWest();
+      const dSouth = dB.getSouth();
+      const dEast = dB.getEast();
+      const dNorth = dB.getNorth();
+
       const source = map.getSource('parcels');
       const held = source?.serialize?.()?.data?.features?.length ?? null;
 
@@ -804,12 +814,83 @@ export default function MapIndex({ parcels }) {
         ? map.queryRenderedFeatures({ layers: pinLayers }).length
         : null;
 
+      /*
+       * The one measurement that was still missing.
+       *
+       * serialize() gives back the source's own `_data` — the object we handed
+       * MapLibre. It proves assignment and nothing else. querySourceFeatures
+       * reads the PARSED tiles the worker produced. So:
+       *
+       *   held 74, tiles 0  -> the worker never turned the data into geometry
+       *   held 74, tiles >0 -> geometry exists; the paint or the style is wrong
+       *
+       * Those two need opposite fixes and have been indistinguishable all along.
+       */
+      let tiles = null;
+      let pinTiles = null;
+      try { tiles = map.querySourceFeatures('parcels').length; } catch { /* style not up */ }
+      try { pinTiles = map.querySourceFeatures('parcel-pins').length; } catch { /* style not up */ }
+
+      // Live per-layer state. Everything reported so far has been existence
+      // only; a layer can exist and still be hidden, filtered or zoom-gated.
+      const layerInfo = {};
+      for (const id of ['parcels-fill', 'parcels-casing', 'parcels-line',
+        'parcels-selected', 'parcel-pin-halo', 'parcel-pin-dot']) {
+        const layer = map.getLayer(id);
+        if (!layer) { layerInfo[id] = 'MISSING'; continue; }
+
+        layerInfo[id] = {
+          vis: map.getLayoutProperty(id, 'visibility') ?? 'visible',
+          filter: JSON.stringify(map.getFilter(id) ?? null),
+          minzoom: layer.minzoom,
+          maxzoom: layer.maxzoom,
+        };
+      }
+
+      // Is the parcel fill actually above the imagery? Order decides whether a
+      // drawn polygon is visible; queryRenderedFeatures would find it either way.
+      const order = map.getStyle()?.layers?.map((l) => l.id) ?? [];
+
+      // One real feature, end of pipeline, exactly as MapLibre holds it.
+      const f0 = source?.serialize?.()?.data?.features?.[0];
+      const g0 = f0?.geometry;
+      const firstRing = g0?.type === 'Polygon' ? g0.coordinates?.[0]
+        : g0?.type === 'MultiPolygon' ? g0.coordinates?.[0]?.[0] : null;
+
       setRenderDiag({
         held,
         painted,
         pinsPainted,
         pinsHeld: map.getSource('parcel-pins')?.serialize?.()?.data?.features?.length ?? null,
         layers: paintLayers.length,
+        tiles,
+        pinTiles,
+        detail: {
+          reactFeatures: diagFeatures.length,
+          held,
+          tiles,
+          painted,
+          pinTiles,
+          pinsPainted,
+          zoom: Number(map.getZoom().toFixed(2)),
+          pitch: Number(map.getPitch().toFixed(1)),
+          bearing: Number(map.getBearing().toFixed(1)),
+          bounds: [dWest.toFixed(5), dSouth.toFixed(5), dEast.toFixed(5), dNorth.toFixed(5)],
+          firstFeature: {
+            id: f0?.id,
+            geometryType: g0?.type ?? 'MISSING',
+            ringPositions: firstRing?.length ?? null,
+            firstPosition: firstRing?.[0] ?? null,
+            positionTypes: firstRing?.[0]
+              ? firstRing[0].map((v) => typeof v).join(',') : null,
+            colour: f0?.properties?.colour ?? 'MISSING',
+            barangay: f0?.properties?.barangay ?? 'MISSING',
+          },
+          layerInfo,
+          fillIndex: order.indexOf('parcels-fill'),
+          basemapIndex: order.indexOf('basemap'),
+          layerOrder: order.join(' > '),
+        },
       });
     } catch (error) {
       setRenderDiag({ error: String(error?.message ?? error).slice(0, 120) });
@@ -962,6 +1043,17 @@ export default function MapIndex({ parcels }) {
     // Assigned straight away: anything that throws later must not leave the
     // rest of the page believing there is no map.
     mapRef.current = map;
+
+    /*
+     * DIAGNOSTIC HANDLE — remove once the blank-map cause is confirmed.
+     *
+     * Exposes nothing secret (the map object and the same public GeoJSON the
+     * page already fetched), but it lets any question about the live style be
+     * answered from the console without shipping another build, e.g.
+     *   __geofarmMap.querySourceFeatures('parcels').length
+     *   __geofarmMap.getStyle().layers.map(l => l.id)
+     */
+    if (typeof window !== 'undefined') window.__geofarmMap = map;
 
     const resizeObserver = new ResizeObserver(() => {
       map.resize();
@@ -1777,6 +1869,14 @@ export default function MapIndex({ parcels }) {
                         held {renderDiag.held ?? '—'}
                       </span>
                       <span className="text-white/40">·</span>
+                      <span className="text-white/40">·</span>
+                      <span
+                        className={renderDiag.tiles ? 'text-emerald-300' : 'text-rose-300 font-semibold'}
+                        title="Features in the PARSED vector tiles — proves the worker turned the GeoJSON into geometry"
+                      >
+                        tiles {renderDiag.tiles ?? '—'}
+                      </span>
+                      <span className="text-white/40">·</span>
                       <span
                         className={renderDiag.painted ? 'text-emerald-300' : 'text-rose-300 font-semibold'}
                         title="Polygons the fill/line layers actually drew in this view"
@@ -1809,8 +1909,30 @@ export default function MapIndex({ parcels }) {
                   to "the map is fine but empty" to anyone not in devtools.
               */}
               {!mapUnavailable && mapError && (
-                <div className="absolute inset-x-4 bottom-4 z-20 rounded-md border border-rose-400 bg-rose-950/90 px-3 py-2 text-xs text-rose-100 shadow-lg backdrop-blur-sm">
+                /* TOP, not bottom. The previous version of this sat at
+                   bottom-4 of an 820 px map — off the bottom of a laptop
+                   screen, which is exactly how the last blank-map notice
+                   managed to go unread. */
+                <div className="absolute inset-x-4 top-14 z-30 rounded-md border border-rose-400 bg-rose-950/95 px-3 py-2 text-xs text-rose-100 shadow-lg backdrop-blur-sm">
                   <span className="font-semibold">MapLibre error:</span> {mapError}
+                </div>
+              )}
+
+              {/*
+                  Full pipeline dump, shown only in the failing state: the
+                  source holds features but nothing is painted. Everything in
+                  here is read live from the map, and it is on screen rather
+                  than in the console so it can be screenshotted.
+              */}
+              {!mapUnavailable && renderDiag?.detail
+                && renderDiag.held > 0 && !renderDiag.painted && (
+                <div className="absolute inset-x-4 top-14 z-20 max-h-[60%] overflow-auto rounded-md border border-amber-400 bg-slate-900/95 p-3 text-[11px] leading-relaxed text-amber-100 shadow-xl backdrop-blur-sm">
+                  <div className="mb-1 font-semibold text-amber-300">
+                    Source holds {renderDiag.held} features but painted {String(renderDiag.painted)} — pipeline dump
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all font-mono text-[10px]">
+                    {JSON.stringify(renderDiag.detail, null, 1)}
+                  </pre>
                 </div>
               )}
 
