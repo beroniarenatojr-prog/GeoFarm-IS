@@ -163,24 +163,59 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map?.isStyleLoaded()) return;
+    if (!map) return;
 
-    const source = map.getSource('farm-parcels');
-    source?.setData(featureCollection);
+    const apply = () => {
+      const source = map.getSource('farm-parcels');
+      if (!source) return;
 
-    if (featureCollection.features.length) {
-      const bounds = new maplibregl.LngLatBounds();
-      featureCollection.features.forEach((feature) => {
-        const rings = feature.geometry?.coordinates?.flat(feature.geometry.type === 'MultiPolygon' ? 2 : 1) || [];
-        rings.forEach((coordinate) => bounds.extend(coordinate));
-      });
+      source.setData(featureCollection);
 
-      if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, { padding: 36, maxZoom: 15, duration: 700 });
+      if (featureCollection.features.length) {
+        const bounds = new maplibregl.LngLatBounds();
+        featureCollection.features.forEach((feature) => {
+          const rings = feature.geometry?.coordinates?.flat(feature.geometry.type === 'MultiPolygon' ? 2 : 1) || [];
+          rings.forEach((coordinate) => bounds.extend(coordinate));
+        });
+
+        if (!bounds.isEmpty()) {
+          /*
+           * Close enough to recognise the place.
+           *
+           * maxZoom was 15. A holding here is 100-150 m across, which is about
+           * 33 px at that zoom — a speck somewhere in a field, which tells a
+           * farmer nothing about where their land is. At 17 the parcel fills a
+           * good part of the frame and the tree lines, tracks and bunds around
+           * it are visible, which is what makes it recognisable on the ground.
+           *
+           * maxZoom only bites when the boundary is small; several parcels
+           * spread apart still fit as a group, because fitBounds zooms to the
+           * box and the cap merely stops it going closer than 17.
+           */
+          map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 700 });
+        }
+      } else {
+        map.easeTo({ center, zoom, duration: 700 });
       }
-    } else {
-      map.easeTo({ center, zoom, duration: 700 });
+    };
+
+    if (map.isStyleLoaded()) {
+      apply();
+      return undefined;
     }
+
+    /*
+     * Style not up yet, so the source does not exist and a fitBounds now would
+     * be thrown away. This used to `return` here and never try again — the map
+     * then stayed at its constructor centre and zoom 12, showing the whole
+     * municipality rather than the farm, which looks exactly like a map that
+     * simply failed to find the parcel.
+     *
+     * `idle` is the event that cannot be missed: unlike `load` it fires after
+     * every settle, so a listener attached late still gets the next one.
+     */
+    map.once('idle', apply);
+    return () => map.off('idle', apply);
   }, [featureCollection, center, zoom]);
 
   return (
