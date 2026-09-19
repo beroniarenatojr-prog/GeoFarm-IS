@@ -20,6 +20,9 @@ import {
     Search,
     UserCog,
     FileCheck,
+    // Kept though only the commented-out Forecast & Advisory entry uses it,
+    // the same way Boxes is kept for Inventory: restoring the menu item is
+    // then a one-line change rather than a hunt for the icon it used.
     LineChart,
     ChevronDown,
     FolderOpen,
@@ -99,7 +102,12 @@ const nav = [
             // to close. Guarded on assistance rather than predictive because
             // it commits staff time rather than only reporting.
             { label: 'Interventions', href: '/admin/interventions', icon: ClipboardList, permission: 'view assistance' },
-            { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
+            //
+            // Forecast & Advisory removed from the menu on request. Its route,
+            // controller and page are untouched and still reachable by URL for
+            // anyone holding "view predictive" — same treatment as Inventory
+            // below, so nothing that depends on it breaks.
+            // { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
             //
             // Inventory is the LGU's own supply store, and it still runs behind
             // Assistance: confirming a distribution deducts stock from it. Only
