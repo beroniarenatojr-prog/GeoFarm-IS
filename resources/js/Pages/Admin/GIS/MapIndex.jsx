@@ -769,7 +769,20 @@ export default function MapIndex({ parcels }) {
     map.on('moveend', measureInView);
     map.on('zoomend', measureInView);
 
-    map.on('load', () => {
+    /*
+     * Build the layers, whether or not the load event is still coming.
+     *
+     * This was `map.on('load', …)`, attached AFTER three addControl calls and
+     * a ResizeObserver. MapLibre fires `load` exactly once and does not replay
+     * it for listeners that arrive late — so when the style came from cache and
+     * loaded inside that gap, the event was already gone. No layers were ever
+     * built, no fitBounds ran, and the map sat at its constructor zoom with the
+     * imagery showing and nothing on top of it. On a slower load the listener
+     * won the race and everything worked.
+     *
+     * That is the intermittency: "sometimes I can see the boundaries".
+     */
+    const buildLayers = () => {
       /*
        * Everything in here runs inside try/catch on purpose.
        *
@@ -1077,7 +1090,32 @@ export default function MapIndex({ parcels }) {
         missingLayers: layerIds.filter((id) => !map.getLayer(id)),
         zoom: Number(map.getZoom().toFixed(2)),
       });
-    });
+    };
+
+    /*
+     * Run it now if the style is already up, otherwise wait for the event.
+     *
+     * `isStyleLoaded()` is the question that matters — layers cannot be added
+     * before the style exists, and `load` will never come again if it has
+     * already been and gone. Guarded so it cannot run twice.
+     */
+    let layersBuilt = false;
+    const buildOnce = () => {
+      if (layersBuilt) return;
+      layersBuilt = true;
+      buildLayers();
+    };
+
+    if (map.isStyleLoaded()) {
+      buildOnce();
+    } else {
+      map.on('load', buildOnce);
+      // Belt and braces: on some caches `load` is missed but the style does
+      // become ready, and styledata fires when it does.
+      map.on('styledata', () => {
+        if (map.isStyleLoaded()) buildOnce();
+      });
+    }
 
     // The draw.create / draw.update / draw.delete handlers were removed with
     // MapboxDraw: nothing fires those events any more. Tracing saves through
