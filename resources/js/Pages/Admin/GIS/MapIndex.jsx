@@ -10,14 +10,34 @@ import { buildDraftFeatures } from '@/utils/draftGeometry';
 import area from '@turf/area';
 import bbox from '@turf/bbox';
 import center from '@turf/center';
-import { Eye, Layers, LocateFixed, MapPinned, PenLine, RefreshCcw, Trash2 } from 'lucide-react';
+import {
+  Eye, Layers, LocateFixed, MapPinned, PenLine, RefreshCcw, Trash2,
+  Map as MapIcon, Ruler, Spline, SlidersHorizontal, X,
+} from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
+  BASEMAPS,
   TUMAUINI_BOUNDS,
   TUMAUINI_BOUNDARY_COLLECTION,
   TUMAUINI_CENTER,
   getBasemapStyle,
 } from '@/config/tumauiniMap';
+import {
+  EMPTY_FILTERS,
+  applyFilters,
+  buildLegend,
+  buildOptions,
+  computeStats,
+  featureHectares,
+  hasActiveFilters,
+  sortFeatures,
+} from '@/utils/gisFilters';
+import StatCards from '@/Components/GIS/StatCards';
+import GisSearch from '@/Components/GIS/GisSearch';
+import FarmFilters from '@/Components/GIS/FarmFilters';
+import BarangayLegend from '@/Components/GIS/BarangayLegend';
+import ParcelTable from '@/Components/GIS/ParcelTable';
+import SelectedParcelCard from '@/Components/GIS/SelectedParcelCard';
 
 const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
 
@@ -279,6 +299,21 @@ function colouriseParcels(collection) {
           ...feature.properties,
           // Same barangay, same colour — for every parcel in it.
           colour: colours.get(name) ?? NO_BARANGAY_COLOUR,
+
+          /*
+           * The drawn area, measured once here.
+           *
+           * The statistics, the filters, the list and the parcel card all want
+           * this number, and every one of them re-derives on each keystroke.
+           * Measuring the polygon once at load costs a single pass; measuring
+           * it inside the filter would re-run turf over every parcel on every
+           * character typed into the search box.
+           *
+           * Rounded to two decimals so the same value is displayed, summed and
+           * compared — an unrounded total that disagrees with the visible rows
+           * by a hundredth is the kind of thing an office has to explain.
+           */
+          drawn_ha: Math.round((area(feature) / 10000) * 100) / 100,
         },
       };
     }),
@@ -521,43 +556,212 @@ export default function MapIndex({ parcels }) {
 
   /** Closest boundary to the middle of the screen, when none is on it. */
   const [nearest, setNearest] = useState(null);
-  const totalMappedArea = useMemo(
-    () => geoJsonData.features.reduce((sum, feature) => sum + area(feature), 0),
+
+  // ── Search, filters and presentation state ────────────────────────────────
+  // All of it display-only: none of these can reach the server or change a
+  // parcel record. The map is narrowed by handing the source a smaller
+  // collection, never by asking the backend for a different one.
+
+  /** What is typed, and the settled value the filtering actually uses. */
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [listSort, setListSort] = useState({ key: 'parcel', dir: 'asc' });
+
+  /** Which basemap layer is visible. Satellite stays the default. */
+  const [basemap, setBasemap] = useState('satellite');
+
+  /** Pins are their own layer now, not a rider on the parcels toggle. */
+  const [showPins, setShowPins] = useState(true);
+
+  /** Measuring: 'distance' | 'area' | null. Never writes to parcel records. */
+  const [measureMode, setMeasureMode] = useState(null);
+  const [measurePoints, setMeasurePoints] = useState([]);
+
+  /*
+   * The click handler is registered once when the map is created, so it must
+   * read the current mode and points through refs rather than closing over the
+   * values they had at registration time.
+   */
+  const measureModeRef = useRef(null);
+  const measurePointsRef = useRef([]);
+
+  useEffect(() => { measureModeRef.current = measureMode; }, [measureMode]);
+  useEffect(() => { measurePointsRef.current = measurePoints; }, [measurePoints]);
+
+  /*
+   * Draw the ruler using the existing draft layers.
+   *
+   * No new source or layer: parcel-draft-line renders anything tagged
+   * draft:'shape', parcel-draft-fill renders any Polygon and
+   * parcel-draft-points any Point, so a measurement can borrow them by
+   * emitting the same shapes. That keeps buildLayers — the code path this map
+   * spent days failing to complete — completely untouched.
+   *
+   * Drawing and measuring are mutually exclusive for the same reason: they
+   * share one source, so only one of them may own it at a time.
+   */
+  const paintMeasure = useCallback(() => {
+    const source = mapRef.current?.getSource('parcel-draft');
+    if (!source) return;
+
+    const points = measurePointsRef.current;
+    const mode = measureModeRef.current;
+    const features = [];
+
+    if (mode === 'area' && points.length >= 3) {
+      features.push({
+        type: 'Feature',
+        properties: { draft: 'shape' },
+        geometry: { type: 'Polygon', coordinates: [[...points, points[0]]] },
+      });
+    } else if (points.length >= 2) {
+      // Distance stays an open line however many points are added — closing it
+      // would silently measure a perimeter instead of a route.
+      features.push({
+        type: 'Feature',
+        properties: { draft: 'shape' },
+        geometry: { type: 'LineString', coordinates: points },
+      });
+    }
+
+    points.forEach((point, index) => features.push({
+      type: 'Feature',
+      properties: { draft: 'vertex', first: index === 0 },
+      geometry: { type: 'Point', coordinates: point },
+    }));
+
+    source.setData({ type: 'FeatureCollection', features });
+  }, []);
+
+  /** The ruler's reading. Pure arithmetic over the clicked points. */
+  const measurement = useMemo(() => {
+    if (!measureMode || measurePoints.length < 2) return null;
+
+    if (measureMode === 'distance') {
+      let km = 0;
+      for (let i = 1; i < measurePoints.length; i += 1) {
+        km += kmBetween(
+          measurePoints[i - 1][0], measurePoints[i - 1][1],
+          measurePoints[i][0], measurePoints[i][1],
+        );
+      }
+      return { kind: 'distance', km, metres: km * 1000 };
+    }
+
+    if (measurePoints.length < 3) return null;
+
+    // @turf/area is spherical, so this is real ground area rather than the
+    // planar degree arithmetic that would understate it this far north.
+    const squareMetres = area({
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Polygon', coordinates: [[...measurePoints, measurePoints[0]]] },
+    });
+
+    return { kind: 'area', squareMetres, hectares: squareMetres / 10000 };
+  }, [measureMode, measurePoints]);
+
+  const clearMeasure = useCallback(() => {
+    measurePointsRef.current = [];
+    setMeasurePoints([]);
+    mapRef.current?.getSource('parcel-draft')?.setData(EMPTY_FEATURE_COLLECTION);
+  }, []);
+
+  /** Where the data stands, for the status strip. Never faked. */
+  const [dataStatus, setDataStatus] = useState('loading');
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  /** Mobile: the controls live in a sheet so the map keeps the screen. */
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  /*
+   * Debounce the search box.
+   *
+   * Filtering re-derives the visible collection and calls source.setData, so
+   * running it on every keystroke would re-tile the whole layer while someone
+   * types a farmer's name. 200 ms is below the threshold where typing feels
+   * laggy and well above a fast typist's inter-key gap.
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 200);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+  /*
+   * The old totalMappedArea useMemo was removed here.
+   *
+   * It summed turf area over every feature on each change, and the card that
+   * displayed it is now one of the summary cards above the map. Those read
+   * `drawn_ha`, stamped once per feature at load, so the same total is now
+   * obtained without re-measuring 74 polygons on every filter keystroke.
+   */
+
+  /*
+   * ── The one derivation the whole page reads from ──────────────────────────
+   *
+   * geoJsonData always holds the FULL, already-coloured collection. Filtering
+   * selects a subset of those same feature objects and never re-colours them,
+   * which is what keeps a barangay's colour fixed: colours are assigned by
+   * position in the sorted list of barangays PRESENT in the collection handed
+   * to colouriseParcels, so colourising a filtered set would make whichever
+   * barangay you filtered to barangay #0 and change its colour.
+   */
+  const visibleFeatures = useMemo(
+    () => applyFilters(geoJsonData.features, filters, search),
+    [geoJsonData, filters, search],
+  );
+
+  const visibleCollection = useMemo(
+    () => ({ type: 'FeatureCollection', features: visibleFeatures }),
+    [visibleFeatures],
+  );
+
+  /** Options come from everything loaded, so a dropdown never strands itself. */
+  const filterOptions = useMemo(() => buildOptions(geoJsonData.features), [geoJsonData]);
+
+  const filtersActive = useMemo(() => hasActiveFilters(filters, search), [filters, search]);
+
+  const visibleStats = useMemo(() => computeStats(visibleFeatures), [visibleFeatures]);
+  const totalStats = useMemo(() => computeStats(geoJsonData.features), [geoJsonData]);
+
+  /** Legend counts follow the filter; legend colours come off the features. */
+  const barangayLegend = useMemo(
+    () => buildLegend(visibleFeatures, NO_BARANGAY_COLOUR),
+    [visibleFeatures],
+  );
+  const barangayLegendTotal = useMemo(
+    () => buildLegend(geoJsonData.features, NO_BARANGAY_COLOUR).length,
     [geoJsonData],
   );
 
+  const sortedVisible = useMemo(
+    () => sortFeatures(visibleFeatures, listSort.key, listSort.dir),
+    [visibleFeatures, listSort],
+  );
+
+  /** Search results are the filtered set — the two narrow the same collection. */
+  const searchResults = useMemo(
+    () => (searchInput.trim() ? visibleFeatures : []),
+    [searchInput, visibleFeatures],
+  );
+
   /**
-   * The barangays actually present in the loaded parcels, with the colour each
-   * one was given and how many parcels it holds.
+   * The target-parcel list, sorted and flagged with whether a boundary exists.
    *
-   * Built by reading back `properties.colour` — the value colouriseParcels
-   * already wrote onto each feature and the value the map paints from — rather
-   * than by re-running the palette. Recomputing would work today but would
-   * silently disagree with the map the moment the assignment rule changed.
-   *
-   * Nothing here is hard-coded: a barangay appears because a parcel says it is
-   * there. Sorted by name so the list reads the same on every refresh.
+   * `mapped` is derived from the drawn collection rather than from a column,
+   * which keeps it true the moment a boundary is saved or deleted without a
+   * page reload.
    */
-  const barangayLegend = useMemo(() => {
-    const seen = new Map();
+  const targetOptions = useMemo(() => {
+    const mapped = new Set(geoJsonData.features.map((f) => String(f.properties?.id)));
 
-    for (const feature of geoJsonData.features ?? []) {
-      const name = barangayKey(feature.properties?.barangay);
-      const label = name || 'No barangay recorded';
+    return [...parcels]
+      .map((parcel) => ({ ...parcel, mapped: mapped.has(String(parcel.id)) }))
+      .sort((a, b) => String(a.parcel_number ?? `#${a.id}`)
+        .localeCompare(String(b.parcel_number ?? `#${b.id}`), undefined, { numeric: true }));
+  }, [parcels, geoJsonData]);
 
-      if (!seen.has(label)) {
-        seen.set(label, {
-          label,
-          colour: feature.properties?.colour ?? NO_BARANGAY_COLOUR,
-          count: 0,
-        });
-      }
-
-      seen.get(label).count += 1;
-    }
-
-    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
-  }, [geoJsonData]);
 
   const selectedParcelDetails = useMemo(
     () => parcels.find((parcel) => String(parcel.id) === String(selectedParcel)),
@@ -634,8 +838,16 @@ export default function MapIndex({ parcels }) {
   }, [highlightParcel, loadParcelDetail]);
 
   const loadParcels = useCallback(() => {
+    setDataStatus('loading');
+
     fetch('/admin/gis/parcels-geojson')
-      .then((res) => res.json())
+      .then((res) => {
+        // A 500 or a login redirect still resolves the promise; without this
+        // the page would parse an HTML error document as JSON and report
+        // "connected" while showing nothing.
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
         // Unmappable rows are removed BEFORE anything measures the collection:
 
@@ -660,10 +872,22 @@ export default function MapIndex({ parcels }) {
           map.getSource('parcel-pins')?.setData(buildPinCollection(colourised));
           applyInitialView(map, colourised);
         }
+
+        // Real timestamp of a real successful response, not a render clock.
+        setDataStatus('ok');
+        setLastUpdated(new Date());
       })
       .catch((err) => {
         console.error('Error loading parcels:', err);
         toast.error('Unable to load farm boundary layers');
+
+        /*
+         * Non-destructive: the status turns to offline and whatever was
+         * already drawn stays on the map. A failed refresh must not blank a
+         * working map — the previous data is stale, not wrong, and staff can
+         * still read it while the connection is sorted out.
+         */
+        setDataStatus('error');
       });
   }, []);
 
@@ -1352,6 +1576,24 @@ export default function MapIndex({ parcels }) {
     // finishDraft, and boundary deletion goes through deleteSelectedBoundary.
 
     map.on('click', (event) => {
+      /*
+       * Measuring takes the click before anything else.
+       *
+       * It is a read-only ruler: points are collected in component state, the
+       * result is arithmetic over those points, and nothing is ever sent to
+       * the server. No parcel record can be touched by measuring.
+       *
+       * Read through a ref because this handler is registered once, on map
+       * creation, and would otherwise close over the mode as it was then.
+       */
+      if (measureModeRef.current) {
+        const { lng, lat } = event.lngLat;
+        measurePointsRef.current = [...measurePointsRef.current, [lng, lat]];
+        setMeasurePoints(measurePointsRef.current);
+        paintMeasure();
+        return;
+      }
+
       // While tracing, a click places a corner instead of inspecting a parcel.
       if (drawingRef.current) {
         const { lng, lat } = event.lngLat;
@@ -1496,15 +1738,47 @@ export default function MapIndex({ parcels }) {
     const src = map.getSource('parcels');
     if (!src) return;
 
-    const data = showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION;
+    /*
+     * One decision about what belongs on the map, made here.
+     *
+     * The layer toggle and the filters both narrow the same thing, so they
+     * resolve to a single collection rather than each writing the source on
+     * their own — two writers on one source is how a toggle ends up undoing a
+     * filter. setData is used rather than rebuilding layers: the sources and
+     * layers are created once and only their contents change.
+     */
+    const data = showParcels ? visibleCollection : EMPTY_FEATURE_COLLECTION;
     src.setData(data);
-    paintPins(map, showParcels ? geoJsonData : EMPTY_FEATURE_COLLECTION);
+    paintPins(map, showParcels && showPins ? visibleCollection : EMPTY_FEATURE_COLLECTION);
     measureInView();
 
-    // Same single decision as every other path — it no longer matters which
-    // one gets here first.
+    // Fitted from the FULL collection, so the opening view frames everything
+    // the office has mapped rather than whatever filter happens to be set.
     applyInitialView(map, geoJsonData);
-  }, [geoJsonData, showParcels, paintPins, measureInView, applyInitialView]);
+  }, [geoJsonData, visibleCollection, showParcels, showPins, paintPins, measureInView, applyInitialView]);
+
+  /*
+   * Basemap switching by visibility, never by setStyle.
+   *
+   * setStyle tears down every source and layer this page has added — the
+   * parcels, the pins, the boundary, the drawing preview — and rebuilds them
+   * on the same load race that left this map blank for days. All three rasters
+   * are declared in the initial style instead, and a hidden one fetches no
+   * tiles, so switching is just two visibility writes.
+   */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+
+    for (const option of BASEMAPS) {
+      if (!map.getLayer(option.layer)) continue;
+      map.setLayoutProperty(
+        option.layer,
+        'visibility',
+        option.id === basemap ? 'visible' : 'none',
+      );
+    }
+  }, [basemap]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1535,6 +1809,44 @@ export default function MapIndex({ parcels }) {
     setSelectedFeature(feature.properties);
     highlightParcel(feature.properties.id);
     loadParcelDetail(feature.properties.id);
+  };
+
+  /**
+   * One way to choose a parcel, shared by the search box, the parcel list and
+   * the target selector, so all three leave the page in the same state: the
+   * map flown to it, the outline highlighted, the detail card filled and the
+   * target selector agreeing with what is selected.
+   */
+  const pickFeature = (feature) => {
+    const id = feature?.properties?.id;
+    if (id === null || id === undefined) return;
+
+    setSelectedParcel(String(id));
+    focusSelectedParcel(id);
+  };
+
+  /** Clear the selection everywhere it is held. */
+  const clearSelection = () => {
+    setSelectedParcel('');
+    setSelectedFeature(null);
+    setParcelDetail(null);
+    highlightParcel(null);
+  };
+
+  /**
+   * Turn the ruler on or off.
+   *
+   * Measuring and drawing share the parcel-draft source, so starting one must
+   * stop the other — otherwise a half-traced boundary and a half-measured line
+   * would overwrite each other's geometry on the same layer.
+   */
+  const toggleMeasure = (mode) => {
+    const next = measureMode === mode ? null : mode;
+
+    if (next && drawing) cancelDrawing();
+
+    clearMeasure();
+    setMeasureMode(next);
   };
 
   const beginDrawing = () => {
@@ -1576,6 +1888,33 @@ export default function MapIndex({ parcels }) {
       return;
     }
 
+    /*
+     * Confirm, and name what is about to go.
+     *
+     * This had no confirmation at all: one click on Delete permanently removed
+     * a boundary that may have come from a surveyed shapefile, with nothing
+     * between the click and the request. The prompt names the parcel and the
+     * farmer so the parcel being destroyed is the one the user meant — a bare
+     * "Are you sure?" on a map where selection is easy to lose is not a check.
+     *
+     * Only the boundary is removed. deleteGeometry nulls geojson_data on the
+     * parcel row; the parcel and the farmer are untouched.
+     */
+    const p = feature.properties ?? {};
+    const label = p.parcel_number || `Parcel #${p.id}`;
+    const owner = p.farmer_name ? ` (${p.farmer_name})` : '';
+
+    const confirmed = window.confirm(
+      `Delete the boundary for ${label}${owner}?\n\n`
+      + `Barangay: ${p.barangay || 'not recorded'}\n`
+      + `Drawn area: ${featureHectares(feature).toFixed(2)} ha\n`
+      + `Source: ${p.boundary_source || 'not recorded'}\n\n`
+      + 'The mapped outline will be removed. The parcel record and the farmer '
+      + 'are not deleted. This cannot be undone.',
+    );
+
+    if (!confirmed) return;
+
     router.delete(`/admin/gis/parcels/${selectedParcel}/geometry`, {
       preserveState: true,
       preserveScroll: true,
@@ -1600,7 +1939,81 @@ export default function MapIndex({ parcels }) {
 
   return (
     <AdminLayout title="GIS Farm Mapping">
-      <div className="space-y-5">
+      <div className="space-y-4">
+
+        {/*
+            Status strip and search.
+
+            The status is measured, never decorative: it reports the outcome of
+            the last actual request to the GeoJSON endpoint and the time that
+            response came back. A failed refresh says so and leaves the map as
+            it was, because stale boundaries are still readable and blanking
+            them would destroy the only copy on screen.
+        */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
+              <span
+                aria-hidden="true"
+                className={`h-2 w-2 flex-shrink-0 rounded-full ${
+                  dataStatus === 'ok' ? 'bg-emerald-500'
+                    : dataStatus === 'loading' ? 'animate-pulse bg-amber-400'
+                      : 'bg-rose-500'
+                }`}
+              />
+              <span className="text-xs">
+                <span className="font-semibold uppercase tracking-wide text-slate-500">GIS data </span>
+                <span className={
+                  dataStatus === 'ok' ? 'text-emerald-700'
+                    : dataStatus === 'loading' ? 'text-amber-700'
+                      : 'text-rose-700'
+                }>
+                  {dataStatus === 'ok' ? 'Connected'
+                    : dataStatus === 'loading' ? 'Loading…'
+                      : 'Unable to load'}
+                </span>
+                {lastUpdated && dataStatus === 'ok' && (
+                  <span className="ml-2 hidden text-slate-500 sm:inline">
+                    Updated {lastUpdated.toLocaleString(undefined, {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                      hour: 'numeric', minute: '2-digit',
+                    })}
+                  </span>
+                )}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadParcels}
+              title="Fetch the latest boundaries without reloading the page"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <RefreshCcw className={`h-3.5 w-3.5 ${dataStatus === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true" />
+              Refresh map data
+            </button>
+          </div>
+
+          <div className="lg:w-[28rem]">
+            <GisSearch
+              value={searchInput}
+              onChange={setSearchInput}
+              results={searchResults}
+              onPick={pickFeature}
+              loading={dataStatus === 'loading'}
+            />
+          </div>
+        </div>
+
+        {dataStatus === 'error' && (
+          <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+            Unable to load GIS data. Please try again — any boundaries already
+            on the map are still shown and are unchanged.
+          </p>
+        )}
+
+        <StatCards stats={visibleStats} totals={totalStats} filtered={filtersActive} />
+
         <section className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             {/*
@@ -1806,73 +2219,39 @@ export default function MapIndex({ parcels }) {
             </div>
 
             {/*
-                Which colour is which barangay.
-
-                Read back from the features' own `colour` property rather than
-                recomputed from the palette, so the legend cannot drift out of
-                step with what the map actually drew. Sits in the grid's second
-                row, first column — directly under the map on a wide screen,
-                stacked beneath it on a narrow one.
+                Legend and parcel list, below the map on a wide screen and
+                stacked under it on a narrow one. Both sit in the grid's first
+                column so the map keeps its full width.
             */}
-            {showParcels && barangayLegend.length > 0 && (
-              <div className="rounded-lg border border-slate-200 bg-white p-4 xl:col-start-1">
-                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-800">
-                    Barangay <span className="font-normal text-slate-500">(same colour = same barangay)</span>
-                  </h3>
-                  <span className="text-xs text-slate-500">
-                    {barangayLegend.length} {barangayLegend.length === 1 ? 'barangay' : 'barangays'} in the loaded parcels
-                  </span>
-                </div>
+            <div className="space-y-4 xl:col-start-1">
+              {showParcels && barangayLegend.length > 0 && (
+                <BarangayLegend
+                  entries={barangayLegend}
+                  totalCount={barangayLegendTotal}
+                  activeBarangay={filters.barangay}
+                  onPick={(name) => setFilters((current) => ({ ...current, barangay: name }))}
+                />
+              )}
 
-                {/* Up to 46 barangays can be listed, so lean on columns rather
-                    than a tall scroll: 46 rows over 5 columns is 10 lines. */}
-                <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                  {barangayLegend.map((entry) => (
-                    <li key={entry.label} className="flex items-center gap-2 text-sm text-slate-700">
-                      <span
-                        aria-hidden="true"
-                        className="h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/20"
-                        style={{ backgroundColor: entry.colour }}
-                      />
-                      <span className="min-w-0 truncate" title={`${entry.label} — ${entry.count} parcel${entry.count === 1 ? '' : 's'}`}>
-                        {entry.label}
-                      </span>
-                      <span className="ml-auto flex-shrink-0 text-xs tabular-nums text-slate-400">
-                        {entry.count}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+              <ParcelTable
+                features={sortedVisible}
+                sort={listSort}
+                onSort={(key) => setListSort((current) => ({
+                  key,
+                  // Same column toggles direction; a new column starts ascending.
+                  dir: current.key === key && current.dir === 'asc' ? 'desc' : 'asc',
+                }))}
+                onPick={pickFeature}
+                selectedId={selectedParcel}
+                loading={dataStatus === 'loading' && geoJsonData.features.length === 0}
+              />
+            </div>
 
-                {/* The two non-barangay things on the map, each shown only when
-                    it is actually being drawn. Swatch colours are the layers'
-                    own paint values, not lookalikes. */}
-                <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
-                  {selectedParcel && (
-                    <span className="flex items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        className="inline-block h-0 w-4 flex-shrink-0 border-t-2 border-dashed"
-                        style={{ borderColor: '#ffff00' }}
-                      />
-                      Selected parcel
-                    </span>
-                  )}
-                  {showBoundary && (
-                    <span className="flex items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        className="inline-block h-0 w-4 flex-shrink-0 border-t-2 border-dashed"
-                        style={{ borderColor: '#14532d' }}
-                      />
-                      Municipal focus boundary (approximate extent, not a survey)
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
+            {/* Always rendered: on a narrow screen the grid collapses to one
+                column and this stacks under the map, which keeps every control
+                reachable. The bottom sheet below is an additional shortcut to
+                the two panels needed while actually looking at the map, not a
+                replacement for this one. */}
             <aside className="space-y-4">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800">
@@ -1892,27 +2271,40 @@ export default function MapIndex({ parcels }) {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-slate-200 p-3">
-                  <div className="text-xs font-medium uppercase text-slate-500">Mapped Parcels</div>
-                  <div className="mt-1 text-2xl font-semibold text-slate-900">{mappedCount}</div>
-                </div>
-                {/* While tracing this shows the outline in progress; the rest
-                    of the time it is the total across every mapped parcel.
-                    Same label, because in both cases it is the area that has
-                    actually been drawn. */}
-                <div className={`rounded-lg border p-3 ${drawing ? 'border-blue-300 bg-blue-50' : 'border-slate-200'}`}>
-                  <div className="text-xs font-medium uppercase text-slate-500">
-                    {drawing ? 'Drawing Area' : 'Drawn Area'}
-                  </div>
+              {/* The totals moved to the cards above the map. What is left
+                  here is the one reading those cards cannot give: the outline
+                  being traced right now, which is not a saved parcel and must
+                  not be counted as one. */}
+              {drawing && (
+                <div className="rounded-lg border border-blue-300 bg-blue-50 p-3">
+                  <div className="text-xs font-medium uppercase text-slate-500">Drawing area</div>
                   <div className="mt-1 text-2xl font-semibold text-slate-900">
-                    {formatArea(drawing ? draftArea : totalMappedArea)}
+                    {formatArea(draftArea)}
                   </div>
-                  {drawing && draftArea === 0 && (
+                  {draftArea === 0 && (
                     <div className="mt-1 text-xs text-slate-500">Place three corners</div>
                   )}
                 </div>
-              </div>
+              )}
+
+              <FarmFilters
+                filters={filters}
+                options={filterOptions}
+                onChange={setFilters}
+                onClear={() => { setFilters(EMPTY_FILTERS); setSearchInput(''); }}
+                active={filtersActive}
+                resultCount={visibleFeatures.length}
+              />
+
+              <SelectedParcelCard
+                properties={selectedFeature}
+                detail={parcelDetail}
+                loading={detailLoading}
+                onZoom={() => focusSelectedParcel()}
+                onClear={clearSelection}
+                canViewFarmer={can('view farmers')}
+                canViewParcel={can('view parcels')}
+              />
 
               <div className="rounded-lg border border-slate-200 p-4">
                 <label className="text-sm font-medium text-slate-700">Target parcel</label>
@@ -1936,12 +2328,23 @@ export default function MapIndex({ parcels }) {
                   className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
                 >
                   <option value="">Select a parcel</option>
-                  {parcels.map((parcel) => (
+                  {targetOptions.map((parcel) => (
                     <option key={parcel.id} value={parcel.id}>
-                      {parcel.parcel_number || `Parcel #${parcel.id}`} - {parcel.farmer?.first_name} {parcel.farmer?.last_name} ({parcel.barangay || 'No barangay'})
+                      {parcel.parcel_number || `Parcel #${parcel.id}`}
+                      {' — '}
+                      {[parcel.farmer?.first_name, parcel.farmer?.last_name].filter(Boolean).join(' ') || 'Unassigned'}
+                      {' — '}
+                      {parcel.barangay || 'No barangay'}
+                      {/* Says which parcels still need tracing, so Draw is
+                          aimed at one of them rather than found by trial. */}
+                      {parcel.mapped ? '' : '  · no boundary yet'}
                     </option>
                   ))}
                 </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  {mappedCount} of {parcels.length} parcels have a boundary. Use
+                  the search box above the map to find one by farmer or RSBSA.
+                </p>
 
                 {selectedParcelDetails && (
                   <div className="mt-3 text-sm text-slate-600">
@@ -1993,6 +2396,95 @@ export default function MapIndex({ parcels }) {
                     Refresh
                   </button>
                 </div>
+
+                {/*
+                    Measuring tools.
+
+                    A ruler, not an editor: clicks are collected in component
+                    state and the reading is arithmetic over those points.
+                    Nothing here posts, and no parcel record can be changed by
+                    measuring. They share the draft layers with Draw, so
+                    starting one cancels the other.
+                */}
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleMeasure('distance')}
+                    title="Measure a distance — click points along the route"
+                    aria-pressed={measureMode === 'distance'}
+                    className={`inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium ${
+                      measureMode === 'distance'
+                        ? 'border-sky-400 bg-sky-50 text-sky-800'
+                        : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Spline className="h-4 w-4" aria-hidden="true" />
+                    Distance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleMeasure('area')}
+                    title="Measure an area — click at least three corners"
+                    aria-pressed={measureMode === 'area'}
+                    className={`inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium ${
+                      measureMode === 'area'
+                        ? 'border-sky-400 bg-sky-50 text-sky-800'
+                        : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Ruler className="h-4 w-4" aria-hidden="true" />
+                    Area
+                  </button>
+                </div>
+
+                {measureMode && (
+                  <div className="mt-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm" role="status">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sky-900">
+                        {measurement
+                          ? measurement.kind === 'distance'
+                            ? (measurement.metres < 1000
+                                ? `${measurement.metres.toFixed(0)} m`
+                                : `${measurement.km.toFixed(2)} km`)
+                            : (measurement.hectares < 1
+                                ? `${measurement.squareMetres.toFixed(0)} m²`
+                                : `${measurement.hectares.toFixed(2)} ha`)
+                          : measureMode === 'distance'
+                            ? 'Click two or more points'
+                            : 'Click three or more corners'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => toggleMeasure(measureMode)}
+                        className="rounded p-1 text-sky-700 hover:bg-sky-100"
+                        title="Stop measuring"
+                        aria-label="Stop measuring"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {measurePoints.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearMeasure}
+                        className="mt-1 text-xs text-sky-700 underline hover:text-sky-900"
+                      >
+                        Clear the {measurePoints.length} point{measurePoints.length === 1 ? '' : 's'} placed
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {selectedParcel && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    title="Deselect the current parcel"
+                  >
+                    Clear selection
+                  </button>
+                )}
               </div>
 
               {/* Import needs a parcel to attach the boundary to, so it stays
@@ -2027,6 +2519,72 @@ export default function MapIndex({ parcels }) {
                   Farm parcel boundaries
                   <input type="checkbox" checked={showParcels} onChange={(event) => setShowParcels(event.target.checked)} />
                 </label>
+                <label className="flex items-center justify-between gap-3 py-2 text-sm text-slate-700">
+                  Farmer pins
+                  <input
+                    type="checkbox"
+                    checked={showPins}
+                    disabled={!showParcels}
+                    onChange={(event) => setShowPins(event.target.checked)}
+                  />
+                </label>
+
+                {/*
+                    Layers the registry does not hold as geography.
+
+                    Listed so the structure is visible and disabled because the
+                    data is not spatial: risk is recorded per farmer, assistance
+                    per distribution, assets and seasons per record — none of
+                    them has an outline to draw. They are NOT rendered with
+                    invented shapes; a placeholder that draws nothing is honest,
+                    a placeholder that draws fake polygons is not.
+                */}
+                <fieldset className="mt-2 border-t border-slate-100 pt-2" disabled>
+                  <legend className="sr-only">Layers not yet available</legend>
+                  {['Flood / drought risk areas', 'Assistance coverage', 'Crop distribution zones'].map((label) => (
+                    <label
+                      key={label}
+                      className="flex cursor-not-allowed items-center justify-between gap-3 py-1.5 text-sm text-slate-400"
+                      title="No mapped geometry exists for this yet"
+                    >
+                      {label}
+                      <span className="flex-shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-500">
+                        No map data
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+
+                {/*
+                    Basemap. Switched by visibility, never by setStyle — see the
+                    note in tumauiniMap.js. All three come from the same Esri
+                    service already in use, so no new provider or key is added.
+                */}
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <MapIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    Basemap
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Basemap">
+                    {BASEMAPS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setBasemap(option.id)}
+                        aria-pressed={basemap === option.id}
+                        title={option.hint}
+                        className={`rounded-md border px-2 py-1.5 text-xs font-medium ${
+                          basemap === option.id
+                            ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                            : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   onClick={focusTumauini}
@@ -2216,6 +2774,81 @@ export default function MapIndex({ parcels }) {
           </div>
         </section>
       </div>
+
+      {/*
+          Mobile: filters and the selected parcel, reachable without scrolling.
+
+          A shortcut, not a second home for these controls — the sidebar above
+          still renders on every screen size and stacks under the map, so
+          nothing is only reachable here. Hidden from xl up, where the sidebar
+          is already beside the map.
+      */}
+      <button
+        type="button"
+        onClick={() => setSheetOpen(true)}
+        className="fixed bottom-5 right-5 z-30 inline-flex items-center gap-2 rounded-full bg-emerald-700 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-emerald-800 xl:hidden"
+        aria-label="Open filters and selected parcel"
+      >
+        <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+        Filters
+        {filtersActive && (
+          <span className="rounded-full bg-white/25 px-1.5 text-xs tabular-nums">
+            {visibleFeatures.length}
+          </span>
+        )}
+      </button>
+
+      {sheetOpen && (
+        <div className="fixed inset-0 z-40 xl:hidden" role="dialog" aria-modal="true" aria-label="Map filters">
+          <div
+            className="absolute inset-0 bg-slate-900/40"
+            onClick={() => setSheetOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-auto rounded-t-2xl bg-slate-50 p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-800">Filters &amp; selection</h2>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(false)}
+                className="rounded p-1 text-slate-500 hover:bg-slate-200"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <GisSearch
+                value={searchInput}
+                onChange={setSearchInput}
+                results={searchResults}
+                onPick={(feature) => { pickFeature(feature); setSheetOpen(false); }}
+                loading={dataStatus === 'loading'}
+              />
+
+              <FarmFilters
+                filters={filters}
+                options={filterOptions}
+                onChange={setFilters}
+                onClear={() => { setFilters(EMPTY_FILTERS); setSearchInput(''); }}
+                active={filtersActive}
+                resultCount={visibleFeatures.length}
+              />
+
+              <SelectedParcelCard
+                properties={selectedFeature}
+                detail={parcelDetail}
+                loading={detailLoading}
+                onZoom={() => { focusSelectedParcel(); setSheetOpen(false); }}
+                onClear={clearSelection}
+                canViewFarmer={can('view farmers')}
+                canViewParcel={can('view parcels')}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }

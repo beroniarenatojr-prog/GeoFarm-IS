@@ -89,13 +89,83 @@ export function getBasemapStyle() {
         attribution:
           'Imagery © Esri, Maxar, Earthstar Geographics and the GIS User Community',
       },
+
+      /*
+       * Two alternatives to the imagery, both from the SAME Esri service the
+       * imagery already comes from — same terms, same attribution, no key, and
+       * the same CORS headers MapLibre needs. Deliberately not OpenStreetMap's
+       * own tiles: the OSMF Tile Usage Policy asks applications not to use
+       * them this way, and a municipal system should not be the exception.
+       *
+       * Streets is for finding a place by road and sitio name; Topo carries
+       * relief and waterways, which is what tells you whether a parcel sits on
+       * a slope or beside a creek.
+       */
+      streets: {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors',
+      },
+
+      terrain: {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: 'Esri, HERE, Garmin, FAO, NOAA, USGS, OpenStreetMap contributors',
+      },
     },
+
+    /*
+     * All three basemaps are declared here, in the INITIAL style, and switched
+     * with setLayoutProperty('visibility').
+     *
+     * The obvious alternative, map.setStyle(), tears down every source and
+     * layer the page has added — the parcels, the pins, the boundary and the
+     * drawing preview — and rebuilds them on a race this page has already lost
+     * once. Declaring them up front costs nothing: a hidden raster layer
+     * requests no tiles.
+     *
+     * They stay first in the array so every parcel layer, all of which are
+     * appended later, draws above whichever basemap is showing.
+     */
     layers: [
       {
         id: 'basemap',
         type: 'raster',
         source: 'satellite',
+        layout: { visibility: 'visible' },
+      },
+      {
+        id: 'basemap-streets',
+        type: 'raster',
+        source: 'streets',
+        layout: { visibility: 'none' },
+      },
+      {
+        id: 'basemap-terrain',
+        type: 'raster',
+        source: 'terrain',
+        layout: { visibility: 'none' },
       },
     ],
   };
 }
+
+/**
+ * The basemaps the switcher may offer, and the layer each one turns on.
+ *
+ * Exported so the control cannot drift from the style: a basemap listed here
+ * that has no layer in getBasemapStyle would be a dead button.
+ */
+export const BASEMAPS = [
+  { id: 'satellite', label: 'Satellite', layer: 'basemap', hint: 'Aerial imagery — see the actual field' },
+  { id: 'streets', label: 'Streets', layer: 'basemap-streets', hint: 'Roads and place names' },
+  { id: 'terrain', label: 'Terrain', layer: 'basemap-terrain', hint: 'Relief, waterways and contours' },
+];
