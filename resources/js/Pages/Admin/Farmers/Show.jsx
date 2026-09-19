@@ -1,6 +1,6 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 // Map is aliased: imported under its own name it shadows the global Map for
 // this whole module, so any `new Map()` added here later would build a lucide
 // icon and throw "is not a constructor" — which blanked the farmer edit page
@@ -497,17 +497,59 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
   };
 
   // Mock geojson - backend will provide real
-  const mockGeoJSON = {
-    type: 'FeatureCollection',
-    features: parcelsData.slice(0, 3).map((p, i) => ({
-      type: 'Feature',
-      properties: p,
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[ [121 + i*0.01, 14.6 + i*0.01], [121 + i*0.01, 14.6 + i*0.02], [121 + i*0.02, 14.6 + i*0.02], [121 + i*0.02, 14.6 + i*0.01] ]]
+  /*
+   * This farmer's own boundaries — the real ones, and only theirs.
+   *
+   * What stood here before was `mockGeoJSON`: three squares generated from
+   * `[121 + i*0.01, 14.6 + i*0.01]`, carrying this farmer's real parcel
+   * details. Latitude 14.6 is roughly 300 km south of Tumauini, so a
+   * government record displayed invented rectangles in the wrong province and
+   * labelled them with a named farmer's holdings. Nothing about it was true.
+   *
+   * The geometry is read from farmer.parcels, which the controller already
+   * eager-loads, so the scope is the relation itself: a farmer's profile can
+   * only ever draw that farmer's land. Parcels with no boundary recorded are
+   * skipped rather than invented — an unmapped parcel is a real state of the
+   * registry and is reported as such below the map.
+   */
+  const farmGeoJSON = useMemo(() => {
+    const features = [];
+
+    for (const parcel of farmer.parcels || []) {
+      if (!parcel.geojson_data) continue;
+
+      let geometry;
+      try {
+        geometry = typeof parcel.geojson_data === 'string'
+          ? JSON.parse(parcel.geojson_data)
+          : parcel.geojson_data;
+      } catch {
+        // One unreadable row must not take the whole map down with it.
+        continue;
       }
-    }))
-  };
+
+      if (!geometry?.type || !geometry?.coordinates) continue;
+
+      features.push({
+        type: 'Feature',
+        properties: {
+          id: parcel.id,
+          parcel_number: parcel.parcel_number || `Parcel #${parcel.id}`,
+          barangay: parcel.barangay,
+          area_ha: parcel.total_area_ha,
+          commodity: parcel.commodity,
+          farm_type: parcel.farm_type?.type_name ?? null,
+          farmer_name: [farmer.first_name, farmer.last_name].filter(Boolean).join(' '),
+        },
+        geometry,
+      });
+    }
+
+    return { type: 'FeatureCollection', features };
+  }, [farmer]);
+
+  const mappedParcelCount = farmGeoJSON.features.length;
+  const totalParcelCount = (farmer.parcels || []).length;
 
   return (
     <AdminLayout title={`Farmer Profile: ${farmer.last_name}, ${farmer.first_name}`}>
@@ -884,24 +926,110 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
                 </span>
               ),
               content: (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  <div className="h-[500px]">
-                    <MapViewer geojson={mockGeoJSON} />
+                <div className="space-y-4">
+                  {/* Scope, stated. This map is one farmer's land and nothing
+                      else, and the counts say plainly how much of their
+                      holding has actually been surveyed. */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        Designated area — {farmer.first_name} {farmer.last_name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-600">
+                        {mappedParcelCount === totalParcelCount
+                          ? `All ${totalParcelCount} parcel${totalParcelCount === 1 ? '' : 's'} mapped`
+                          : `${mappedParcelCount} of ${totalParcelCount} parcel${totalParcelCount === 1 ? '' : 's'} mapped`}
+                        {' · only this farmer’s parcels are shown'}
+                      </p>
+                    </div>
+
+                    {mappedParcelCount > 0 && (
+                      <Link
+                        href={`/admin/gis/map?parcel=${farmGeoJSON.features[0].properties.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                      >
+                        <MapIcon className="h-3.5 w-3.5" />
+                        Open in GIS map
+                      </Link>
+                    )}
                   </div>
-                  <div className="space-y-4">
-                    <Card title="Map Legend">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="flex items-center gap-2 p-3 bg-green-100 rounded-xl">
-                          <div className="w-8 h-8 bg-green-500 rounded opacity-70"></div>
-                          <span className="text-sm">Rice Fields</span>
-                        </div>
-                        <div className="flex items-center gap-2 p-3 bg-amber-100 rounded-xl">
-                          <div className="w-8 h-8 bg-amber-500 rounded opacity-70"></div>
-                          <span className="text-sm">Corn/Other</span>
-                        </div>
+
+                  {mappedParcelCount === 0 ? (
+                    /* An empty state, not an empty map. A blank viewer over
+                       satellite imagery reads as a broken map rather than as
+                       "no boundary has been recorded". */
+                    <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center">
+                      <MapIcon className="mx-auto h-8 w-8 text-slate-300" />
+                      <p className="mt-3 text-sm font-medium text-slate-700">
+                        No farm boundary has been mapped for this farmer yet
+                      </p>
+                      <p className="mx-auto mt-1 max-w-md text-xs text-slate-500">
+                        {totalParcelCount === 0
+                          ? 'This farmer has no parcels on record.'
+                          : `${totalParcelCount} parcel${totalParcelCount === 1 ? ' is' : 's are'} recorded, but no outline has been drawn or imported for ${totalParcelCount === 1 ? 'it' : 'any of them'}.`}
+                      </p>
+                      <Link
+                        href="/admin/gis/map"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+                      >
+                        <MapIcon className="h-4 w-4" />
+                        Map it on the GIS page
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                      {/* No border here: MapViewer draws its own, and two
+                          would stack into a double rule. */}
+                      <div className="h-[420px] sm:h-[520px]">
+                        <MapViewer geojson={farmGeoJSON} height="100%" />
                       </div>
-                    </Card>
-                  </div>
+
+                      {/* The parcels being drawn, listed. Replaces a fixed
+                          "Rice Fields / Corn/Other" key that described
+                          categories this map does not colour by. */}
+                      <div className="space-y-2">
+                        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Parcels on this map
+                        </h3>
+
+                        {farmGeoJSON.features.map((feature) => {
+                          const p = feature.properties;
+                          return (
+                            <div
+                              key={p.id}
+                              className="rounded-lg border border-slate-200 bg-white p-3"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-sm font-semibold text-slate-800">
+                                  {p.parcel_number}
+                                </span>
+                                <span className="flex-shrink-0 text-xs tabular-nums text-slate-500">
+                                  {p.area_ha ? `${p.area_ha} ha` : '—'}
+                                </span>
+                              </div>
+                              <dl className="mt-1 space-y-0.5 text-xs text-slate-600">
+                                <div>{p.barangay || 'Barangay not recorded'}</div>
+                                <div>
+                                  {p.commodity || 'No commodity recorded'}
+                                  {p.farm_type ? ` · ${p.farm_type}` : ''}
+                                </div>
+                              </dl>
+                            </div>
+                          );
+                        })}
+
+                        {mappedParcelCount < totalParcelCount && (
+                          <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                            {totalParcelCount - mappedParcelCount} further parcel
+                            {totalParcelCount - mappedParcelCount === 1 ? '' : 's'} on
+                            record {totalParcelCount - mappedParcelCount === 1 ? 'has' : 'have'} no
+                            boundary yet, so {totalParcelCount - mappedParcelCount === 1 ? 'it is' : 'they are'} not
+                            on this map.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             },

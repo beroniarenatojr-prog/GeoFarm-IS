@@ -138,6 +138,76 @@ class ParcelController extends Controller
      * spatial geom. Shipping it for every row of the list would send a polygon
      * per parcel to draw a table, so the modal asks for one on demand.
      */
+    /**
+     * One parcel, read-only.
+     *
+     * This method did not exist. routes/web.php has declared
+     * `GET parcels/{parcel} -> ParcelController@show` as parcels.show since the
+     * route file was written, so every request to /admin/parcels/{id} raised a
+     * BadMethodCallException and returned a bare 500. Nothing in the
+     * application linked there — every other parcel link goes to /edit,
+     * /edit-data or /boundary — which is why a broken route sat unnoticed.
+     *
+     * Read-only on purpose rather than a redirect to the edit form: the
+     * registry grants "view parcels" separately from "edit parcels", and this
+     * route is gated on the former. Sending a viewer to the editor would turn
+     * a 500 into a 403 and still leave them unable to look at a parcel they
+     * are entitled to see.
+     */
+    public function show(FarmParcel $parcel)
+    {
+        $parcel->load(['farmer', 'farmType', 'seasons.crop']);
+
+        // Same read the edit screen uses: geom is the source of truth, and
+        // ST_AsGeoJSON returns null when no boundary has been recorded yet.
+        $geo = DB::selectOne(
+            'SELECT ST_AsGeoJSON(geom) as geojson FROM farm_parcels WHERE id = ?',
+            [$parcel->id]
+        );
+
+        return Inertia::render('Admin/Parcels/Show', [
+            'parcel' => [
+                'id'             => $parcel->id,
+                'parcel_number'  => $parcel->parcel_number,
+                'barangay'       => $parcel->barangay,
+                'location'       => $parcel->location_address,
+                'municipality'   => $parcel->city_municipality,
+                'province'       => $parcel->province,
+                'area_ha'        => $parcel->total_area_ha,
+                'commodity'      => $parcel->commodity,
+                'farm_type'      => $parcel->farmType?->type_name,
+                'ownership'      => $parcel->ownership_type,
+                'land_owner'     => $parcel->land_owner_name,
+                'within_ancestral' => (bool) $parcel->within_ancestral,
+                'arb'            => (bool) $parcel->arb,
+                'is_organic'     => (bool) $parcel->is_organic,
+                'cropping_schedule' => $parcel->cropping_schedule,
+                'no_of_heads_trees' => $parcel->no_of_heads_trees,
+                'boundary_source'   => $parcel->boundary_source,
+                'boundary_imported_at' => $parcel->boundary_imported_at,
+                'has_boundary'   => filled($parcel->geojson_data),
+            ],
+
+            'farmer' => $parcel->farmer ? [
+                'id'       => $parcel->farmer->id,
+                'name'     => $parcel->farmer->full_name,
+                'rsbsa_no' => $parcel->farmer->rsbsa_no,
+                'barangay' => $parcel->farmer->barangay,
+                'contact'  => $parcel->farmer->mobile_no,
+            ] : null,
+
+            'seasons' => $parcel->seasons->map(fn ($season) => [
+                'crop'         => $season->crop?->crop_name,
+                'season'       => $season->season,
+                'year'         => $season->cropping_year,
+                'area_planted' => $season->area_planted_ha,
+                'yield_kg'     => $season->yield_kg,
+            ])->values(),
+
+            'geojson' => $geo?->geojson,
+        ]);
+    }
+
     public function editData(FarmParcel $parcel)
     {
         $geo = DB::selectOne(
