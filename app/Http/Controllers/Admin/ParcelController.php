@@ -208,6 +208,37 @@ class ParcelController extends Controller
         ]);
     }
 
+    /**
+     * One farmer's parcels, for a picker.
+     *
+     * Needed because an intervention or a release may concern one particular
+     * piece of land, and staff should only ever be offered parcels that
+     * actually belong to the farmer they have chosen. The server-side checks
+     * that refuse a mismatched parcel stay where they are — this only keeps
+     * the wrong choice off the screen in the first place.
+     *
+     * Deliberately thin: identifying text and nothing more. No geometry, no
+     * owner details, nothing a picker does not draw.
+     */
+    public function optionsForFarmer(Farmer $farmer)
+    {
+        return response()->json(
+            $farmer->parcels()
+                ->with('farmType:id,type_name')
+                ->orderBy('parcel_number')
+                ->get(['id', 'parcel_number', 'barangay', 'commodity', 'total_area_ha', 'farm_type_id'])
+                ->map(fn (FarmParcel $parcel) => [
+                    'id'            => $parcel->id,
+                    'parcel_number' => $parcel->parcel_number,
+                    'barangay'      => $parcel->barangay,
+                    'commodity'     => $parcel->commodity,
+                    'area_ha'       => $parcel->total_area_ha,
+                    'farm_type'     => $parcel->farmType?->type_name,
+                ])
+                ->values()
+        );
+    }
+
     public function editData(FarmParcel $parcel)
     {
         $geo = DB::selectOne(

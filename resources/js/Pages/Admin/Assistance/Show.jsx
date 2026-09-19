@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Lock, Unlock, Send, Wallet, Package as PackageIcon } from 'lucide-react';
 import ModalShell from '@/Components/ui/ModalShell';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
+import InterventionPicker from '@/Components/Assistance/InterventionPicker';
 import { usePageLock } from '@/hooks/usePageLock';
 import { formatDate, formatDateForInput } from '@/utils/dateFormatter';
 
@@ -81,6 +82,16 @@ export default function AssistanceShow({
         // duplicated the customisation reason. The columns still exist, so
         // older records keep their values.
         farmer_id: '',
+        /*
+         * Both optional, and both already accepted and ownership-checked by
+         * AssistanceController@distribute. Recording them is what lets an
+         * intervention show what the farmer actually received — until now the
+         * columns existed but nothing could set them.
+         */
+        farm_parcel_id: '',
+        intervention_id: '',
+        // The office's own number from the voucher or release slip.
+        reference_no: '',
         // Today by default — a hand-out is recorded as it happens, and staff
         // serving a queue should not retype the date for every farmer. It stays
         // editable for anything recorded after the fact.
@@ -93,6 +104,36 @@ export default function AssistanceShow({
         customization_reason: '',
         items: standardItems(),
     });
+
+    /*
+     * Changing the farmer clears the parcel and the intervention with it.
+     *
+     * Both belong to the farmer they were chosen for. Left behind, they would
+     * be refused by the ownership checks on submit — but only after the whole
+     * form had been filled in, which is a worse way to find out than simply
+     * not carrying them across.
+     */
+    const [parcels, setParcels] = useState([]);
+    const [loadingParcels, setLoadingParcels] = useState(false);
+
+    const onFarmerChange = (farmerId) => {
+        setData(current => ({
+            ...current,
+            farmer_id: farmerId,
+            farm_parcel_id: '',
+            intervention_id: '',
+        }));
+
+        setParcels([]);
+        if (!farmerId) return;
+
+        setLoadingParcels(true);
+        fetch(`/admin/farmers/${farmerId}/parcel-options`, { headers: { Accept: 'application/json' } })
+            .then(res => (res.ok ? res.json() : []))
+            .then(rows => setParcels(Array.isArray(rows) ? rows : []))
+            .catch(() => setParcels([]))
+            .finally(() => setLoadingParcels(false));
+    };
 
     const setItemQty = (id, value) => setData('items',
         data.items.map(l => (l.inventory_item_id === id ? { ...l, quantity: value } : l)));
@@ -432,10 +473,51 @@ export default function AssistanceShow({
                         <FarmerPicker
                             label={null}
                             value={data.farmer_id}
-                            onChange={id => setData('farmer_id', id)}
+                            onChange={onFarmerChange}
                             error={errors.farmer_id}
                             scanSize="lg"
                             hint="Type a name or RSBSA number — or scan the farmer's ID card."
+                        />
+                    </div>
+
+                    {/* Which land, and what authorised it. Both optional: a
+                        release may be farmer-level, and the columns have always
+                        been nullable. */}
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="release-parcel" className="mb-1.5 block text-sm font-semibold text-gray-700">
+                                Parcel <span className="font-normal text-gray-500">(optional)</span>
+                            </label>
+                            <select
+                                id="release-parcel"
+                                value={data.farm_parcel_id}
+                                onChange={e => setData('farm_parcel_id', e.target.value)}
+                                disabled={!data.farmer_id || loadingParcels}
+                                className={`w-full rounded-lg border px-4 py-3 text-base outline-none focus:ring-2 focus:ring-green-500 disabled:bg-gray-50 ${errors.farm_parcel_id ? 'border-red-500' : 'border-gray-300'}`}
+                            >
+                                <option value="">
+                                    {!data.farmer_id ? 'Select a farmer first'
+                                        : loadingParcels ? 'Loading parcels…'
+                                        : parcels.length === 0 ? 'This farmer has no parcels on record'
+                                        : 'Farmer-level (no particular parcel)'}
+                                </option>
+                                {parcels.map(p => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.parcel_number || `Parcel #${p.id}`}
+                                        {p.barangay ? ` — ${p.barangay}` : ''}
+                                        {p.commodity ? ` — ${p.commodity}` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            {errors.farm_parcel_id && <p className="mt-1 text-xs text-red-500">{errors.farm_parcel_id}</p>}
+                        </div>
+
+                        <InterventionPicker
+                            farmerId={data.farmer_id}
+                            parcelId={data.farm_parcel_id}
+                            value={data.intervention_id}
+                            onChange={id => setData('intervention_id', id)}
+                            error={errors.intervention_id}
                         />
                     </div>
 
@@ -467,6 +549,24 @@ export default function AssistanceShow({
                             )}
                             {errors.amount_given && <p className="mt-1 text-xs text-red-500">{errors.amount_given}</p>}
                         </div>
+                    </div>
+
+                    {/* The office's own number from the voucher or release slip,
+                        so a record can be found later from the paper in hand. */}
+                    <div>
+                        <label htmlFor="release-reference" className="mb-1.5 block text-sm font-semibold text-gray-700">
+                            Reference number <span className="font-normal text-gray-500">(optional)</span>
+                        </label>
+                        <input
+                            id="release-reference"
+                            type="text"
+                            value={data.reference_no}
+                            onChange={e => setData('reference_no', e.target.value)}
+                            placeholder="e.g. FS-2026-0001"
+                            maxLength={60}
+                            className={`w-full rounded-lg border px-4 py-3 font-mono text-base outline-none focus:ring-2 focus:ring-green-500 ${errors.reference_no ? 'border-red-500' : 'border-gray-300'}`}
+                        />
+                        {errors.reference_no && <p className="mt-1 text-xs text-red-500">{errors.reference_no}</p>}
                     </div>
 
                     {(programItems.length > 0 || program.standard_cash_amount) && (
@@ -678,6 +778,30 @@ export default function AssistanceShow({
                                         {d.is_customized && d.customization_reason && (
                                             <span className="mt-0.5 block text-[11px] text-gray-500">
                                                 {d.customization_reason}
+                                            </span>
+                                        )}
+
+                                        {/*
+                                            What authorised this release, under the
+                                            farmer it was given to. Farmer, parcel and
+                                            barangay are not repeated — the farmer is
+                                            the line above, and the intervention's own
+                                            parcel is what is named here.
+                                        */}
+                                        {d.intervention && (
+                                            <Link
+                                                href={`/admin/interventions/${d.intervention.id}`}
+                                                className="mt-1 block text-[11px] text-[#006400] hover:underline"
+                                                title={`${d.intervention.title} — ${String(d.intervention.status).replace(/_/g, ' ')}`}
+                                            >
+                                                ↳ {d.intervention.title}
+                                                {d.intervention.parcel ? ` · ${d.intervention.parcel}` : ' · farmer-level'}
+                                            </Link>
+                                        )}
+
+                                        {d.reference_no && (
+                                            <span className="mt-0.5 block font-mono text-[11px] text-gray-500">
+                                                {d.reference_no}
                                             </span>
                                         )}
                                     </td>

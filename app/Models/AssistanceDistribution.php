@@ -11,10 +11,24 @@ class AssistanceDistribution extends Model
     protected $fillable = [
         'assistance_id',
         'farmer_id',
+        /*
+         * These two were missing.
+         *
+         * The columns, the foreign keys and the intervention()/parcel()
+         * relations below have existed since the workflow migration, but
+         * neither name was fillable — so create() and fill() dropped them in
+         * silence and every release was recorded unlinked, however carefully
+         * the caller passed them. That is why no distribution in the registry
+         * points at the intervention that authorised it.
+         */
+        'intervention_id',
+        'farm_parcel_id',
         'distribution_date',
         'quantity_given',
         'amount_given',
         'status',
+        // The office's own reference from the voucher or release slip.
+        'reference_no',
         'is_customized',
         'customization_reason',
         'notes',

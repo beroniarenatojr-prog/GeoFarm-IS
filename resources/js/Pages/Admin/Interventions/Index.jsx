@@ -2,9 +2,11 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import ModalShell from '@/Components/ui/ModalShell';
+import ManualInterventionModal from '@/Components/Interventions/ManualInterventionModal';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
     ClipboardList, AlertTriangle, User, MapPin, Calendar, CheckCircle2,
-    Clock, UserCheck, XCircle, ChevronRight, Building2,
+    Clock, UserCheck, XCircle, ChevronRight, Building2, Plus,
 } from 'lucide-react';
 
 /**
@@ -41,6 +43,8 @@ const onDate = (value) =>
 
 export default function InterventionsIndex({ interventions, filters, counts, staff = [], types = {} }) {
     const [working, setWorking] = useState(null);
+    const [manualOpen, setManualOpen] = useState(false);
+    const { can } = usePermissions();
 
     const filterBy = (next) =>
         router.get('/admin/interventions', { ...filters, ...next }, { preserveState: true, preserveScroll: true, replace: true });
@@ -61,10 +65,30 @@ export default function InterventionsIndex({ interventions, filters, counts, sta
                     Agricultural Interventions
                 </h1>
                 <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
-                    Work the office has opened in response to a farm analysis. Every record here was
-                    opened by a person, and closing one means writing down what was actually done.
+                    Work the office has opened — from a farm analysis, or directly by staff who
+                    already knew what was needed. Every record here was opened by a person, and
+                    closing one means writing down what was actually done.
                 </p>
             </div>
+
+            {/* The second entry path. The first one lives on the farm analysis,
+                where the finding is, and is unchanged. */}
+            {can('edit assistance') && (
+                <div className="mb-4">
+                    <button
+                        type="button"
+                        onClick={() => setManualOpen(true)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#006400] px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New intervention
+                    </button>
+                    <p className="mt-1 text-xs text-gray-500">
+                        Opens a manual intervention. To raise one from a finding, use
+                        &ldquo;Open intervention&rdquo; on the farmer&rsquo;s analysis.
+                    </p>
+                </div>
+            )}
 
             {counts.overdue > 0 && (
                 <div className="mb-4 flex items-start gap-3 rounded-xl border-2 border-red-200 bg-red-50 p-4">
@@ -162,6 +186,16 @@ export default function InterventionsIndex({ interventions, filters, counts, sta
                                             </div>
 
                                             <div className="flex flex-none flex-wrap items-center gap-2">
+                                                {/* Where this record came from. Derived on the
+                                                    model from the foreign keys, so it cannot
+                                                    disagree with the analysis it claims. */}
+                                                <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                                    row.source === 'manual'
+                                                        ? 'bg-gray-100 text-gray-600'
+                                                        : 'bg-violet-100 text-violet-700'
+                                                }`}>
+                                                    {row.source === 'manual' ? 'Manual' : 'From analysis'}
+                                                </span>
                                                 <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${priority.chip}`}>
                                                     {priority.label}
                                                 </span>
@@ -172,7 +206,22 @@ export default function InterventionsIndex({ interventions, filters, counts, sta
                                             </div>
                                         </div>
 
-                                        <p className="mt-3 font-semibold text-gray-900">{row.type_label}</p>
+                                        <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-semibold text-gray-900">
+                                            {/* Manual interventions carry a typed name; ones
+                                                raised from the analysis never had one and keep
+                                                reading by their type, as they always have. */}
+                                            <Link
+                                                href={`/admin/interventions/${row.id}`}
+                                                className="hover:text-[#006400] hover:underline"
+                                            >
+                                                {row.display_title ?? row.type_label}
+                                            </Link>
+                                            {row.assistance_count > 0 && (
+                                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+                                                    {row.assistance_count} assistance record{row.assistance_count === 1 ? '' : 's'}
+                                                </span>
+                                            )}
+                                        </p>
 
                                         {/* Why it was put forward. */}
                                         <p className="mt-1 text-sm text-gray-600">
@@ -268,6 +317,13 @@ export default function InterventionsIndex({ interventions, filters, counts, sta
                     intervention={working}
                     staff={staff}
                     onClose={() => setWorking(null)}
+                />
+            )}
+
+            {manualOpen && (
+                <ManualInterventionModal
+                    types={types}
+                    onClose={() => setManualOpen(false)}
                 />
             )}
         </AdminLayout>

@@ -55,6 +55,18 @@ class GISController extends Controller
             'farmer.fishponds',
             'farmer.associations',
             'farmer.distributions.program',
+            /*
+             * The office's response for this farmer.
+             *
+             * GIS reads these relationships; it never creates them. Clicking a
+             * parcel answers "what has the office done about this land", which
+             * until now needed three other screens — the map could show what
+             * was handed out but not what decided to hand it out.
+             */
+            'farmer.interventions' => fn ($query) => $query
+                ->with('parcel:id,parcel_number')
+                ->latest('id')
+                ->limit(10),
         ]);
 
         $farmer = $parcel->farmer;
@@ -109,6 +121,38 @@ class GISController extends Controller
             ])->values() ?? [],
 
             'associations' => $farmer?->associations->pluck('association_name')->values() ?? [],
+
+            /*
+             * Interventions raised for this farmer, newest first.
+             *
+             * Farmer-level rather than parcel-only: an intervention may concern
+             * one piece of land or the whole holding, and hiding the
+             * farmer-level ones would make the map disagree with the farmer's
+             * own profile. `parcel` says which land each concerns, or null when
+             * it concerns none in particular.
+             */
+            'interventions' => $farmer?->interventions
+                // Ones concerning the parcel just clicked first, then newest.
+                // Sorted here rather than in SQL because the parcel being
+                // compared against is this request's, not a column.
+                ->sortByDesc(fn ($row) => [
+                    (int) ((int) $row->farm_parcel_id === (int) $parcel->id),
+                    $row->id,
+                ])
+                ->map(fn ($row) => [
+                'id'       => $row->id,
+                'title'    => $row->display_title,
+                'source'   => $row->source,
+                'type'     => $row->type_label,
+                'priority' => $row->priority,
+                'status'   => $row->status,
+                'parcel'   => $row->parcel?->parcel_number,
+                // True when this intervention concerns the parcel just clicked,
+                // so the panel can put those first.
+                'is_this_parcel' => (int) $row->farm_parcel_id === (int) $parcel->id,
+                'target_date'  => $row->target_date?->toDateString(),
+                'completed_at' => $row->completed_at?->toDateString(),
+            ])->values() ?? [],
 
             'assistance' => $farmer?->distributions->map(fn ($given) => [
                 'program'  => $given->program?->program_name,

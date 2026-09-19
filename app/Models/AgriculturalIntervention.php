@@ -58,6 +58,7 @@ class AgriculturalIntervention extends Model
 
     protected $fillable = [
         'farmer_id', 'farm_parcel_id', 'climate_risk_assessment_id', 'factor_key',
+        'title',
         'type', 'priority', 'reason', 'status',
         'assigned_to', 'target_date', 'notes',
         'action_taken', 'completed_at', 'completed_by',
@@ -83,7 +84,46 @@ class AgriculturalIntervention extends Model
         'priority' => 'medium',
     ];
 
-    protected $appends = ['is_open', 'is_overdue', 'type_label'];
+    protected $appends = ['is_open', 'is_overdue', 'type_label', 'source', 'display_title'];
+
+    /** Raised from the risk analysis. */
+    public const SOURCE_ANALYSIS = 'analysis';
+
+    /** Raised directly by staff who already knew what was needed. */
+    public const SOURCE_MANUAL = 'manual';
+
+    /**
+     * Where this intervention came from.
+     *
+     * Derived, not stored, for the same reason is_open is: a `source` column
+     * would be free to disagree with the foreign keys that actually describe
+     * the origin. An intervention raised from the analysis carries the
+     * assessment it came from and the risk factor it answers; a manual one
+     * carries neither, because there was no analysis to carry.
+     */
+    public function getSourceAttribute(): string
+    {
+        return ($this->climate_risk_assessment_id || $this->factor_key)
+            ? self::SOURCE_ANALYSIS
+            : self::SOURCE_MANUAL;
+    }
+
+    /**
+     * What to call this intervention on screen.
+     *
+     * Manual ones are named by the staff member who raised them. Ones raised
+     * from the analysis have no typed name and never did, so they keep reading
+     * as they always have — "Farm visit — frequent flooding" — rather than
+     * being retitled by a backfill that would put words in the office's mouth.
+     */
+    public function getDisplayTitleAttribute(): string
+    {
+        if (filled($this->title)) {
+            return $this->title;
+        }
+
+        return trim($this->type_label . ' — ' . ($this->reason ?: 'no reason recorded'));
+    }
 
     /**
      * Still on somebody's list.

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AgriculturalIntervention;
 use App\Models\FarmParcel;
+use App\Models\Farmer;
+use App\Models\Recommendation;
 use App\Models\User;
 use App\Services\AuditService;
 use Illuminate\Http\Request;
@@ -44,6 +46,9 @@ class InterventionController extends Controller
                 'assignee:id,name',
                 'completer:id,name',
             ])
+            // Counted in SQL rather than loaded: the list shows how many
+            // releases an intervention carries, not what they were.
+            ->withCount('assistanceRecords')
             // Default to the open queue: the page exists to show outstanding
             // work, and closed records would quickly bury it.
             ->when($status === 'open', fn ($q) => $q->open())
@@ -63,6 +68,13 @@ class InterventionController extends Controller
                 'area_ha'     => $row->parcel?->total_area_ha ? (float) $row->parcel->total_area_ha : null,
                 'type'        => $row->type,
                 'type_label'  => $row->type_label,
+                // Derived on the model from the foreign keys, so the badge can
+                // never disagree with where the record actually came from.
+                'source'        => $row->source,
+                'display_title' => $row->display_title,
+                // One intervention may carry several releases; the list says
+                // how many without loading any of them.
+                'assistance_count' => $row->assistance_records_count ?? 0,
                 'priority'    => $row->priority,
                 'reason'      => $row->reason,
                 'status'      => $row->status,
@@ -103,15 +115,50 @@ class InterventionController extends Controller
      */
     public function store(Request $request)
     {
+        /*
+         * Two entry paths, one table.
+         *
+         * From the analysis: a factor_key is required and must be one the
+         * office has configured, and the type, reason and priority are read
+         * from that config rather than from the browser. That is what makes
+         * the queue's reasons verifiable, and it is unchanged.
+         *
+         * Manual: a staff member already knows what is needed and there is no
+         * analysis behind it, so they name it and say why themselves. It gets
+         * no factor_key and no assessment, which is exactly what the `source`
+         * accessor reads to tell the two apart.
+         *
+         * The manual path is an ADDITIONAL door, not a way around the first
+         * one: nothing here lets a caller supply their own reason for a
+         * factor-driven intervention.
+         */
+        $isManual = $request->input('source') === AgriculturalIntervention::SOURCE_MANUAL;
+
         $data = $request->validate([
             'farmer_id'  => 'required|exists:farmers,id',
-            'factor_key' => ['required', 'string', Rule::in(array_keys(config('climate_risk.interventions')))],
+            'factor_key' => [
+                Rule::requiredIf(! $isManual),
+                'nullable', 'string',
+                Rule::in(array_keys(config('climate_risk.interventions'))),
+            ],
             'farm_parcel_id' => 'nullable|exists:farm_parcels,id',
             'climate_risk_assessment_id' => 'nullable|exists:climate_risk_assessments,id',
             'target_date' => 'nullable|date',
             'notes'       => 'nullable|string|max:2000',
+
+            // Manual only. Required there because an intervention nobody can
+            // name is one nobody can act on.
+            'title'  => [Rule::requiredIf($isManual), 'nullable', 'string', 'max:150'],
+            'reason' => [Rule::requiredIf($isManual), 'nullable', 'string', 'max:255'],
+            'type'   => [
+                Rule::requiredIf($isManual), 'nullable', 'string',
+                Rule::in(array_keys(config('climate_risk.intervention_types'))),
+            ],
         ], [
             'factor_key.in' => 'The office has no configured intervention for that risk factor.',
+            'title.required' => 'Give the intervention a name so staff can find it later.',
+            'reason.required' => 'Record why this intervention is being opened.',
+            'type.required' => 'Choose what kind of action this is.',
         ]);
 
         // A parcel belongs to one farmer. Without this, a mistyped id would
@@ -128,34 +175,86 @@ class InterventionController extends Controller
             }
         }
 
-        $plan = config("climate_risk.interventions.{$data['factor_key']}");
         $priority = $request->input('priority');
         $priority = in_array($priority, AgriculturalIntervention::PRIORITIES, true) ? $priority : 'medium';
 
-        $intervention = AgriculturalIntervention::create([
+        if ($isManual) {
+            // Named and justified by the person raising it. No factor_key and
+            // no assessment: there was no analysis, and pretending otherwise
+            // would make a manual decision look like an evidenced one.
+            $attributes = [
+                'factor_key' => null,
+                'climate_risk_assessment_id' => null,
+                'title'      => $data['title'],
+                'type'       => $data['type'],
+                'reason'     => $data['reason'],
+            ];
+        } else {
+            $plan = config("climate_risk.interventions.{$data['factor_key']}");
+
+            $attributes = [
+                'factor_key' => $data['factor_key'],
+                'climate_risk_assessment_id' => $data['climate_risk_assessment_id'] ?? null,
+                'title'      => null,
+                'type'       => $plan['type'],
+                // Frozen. The office revises this wording, and a reason that
+                // reworded itself later would misreport a visit already made.
+                'reason'     => $plan['reason'],
+            ];
+        }
+
+        $intervention = AgriculturalIntervention::create(array_merge($attributes, [
             'farmer_id'      => $data['farmer_id'],
             'farm_parcel_id' => $data['farm_parcel_id'] ?? null,
-            'climate_risk_assessment_id' => $data['climate_risk_assessment_id'] ?? null,
-            'factor_key'     => $data['factor_key'],
-            'type'           => $plan['type'],
             'priority'       => $priority,
-            // Frozen. The office revises this wording, and a reason that
-            // reworded itself later would misreport a visit already made.
-            'reason'         => $plan['reason'],
             'status'         => AgriculturalIntervention::STATUS_PENDING,
             'target_date'    => $data['target_date']
                 ?? now()->addDays((int) config("climate_risk.intervention_target_days.{$priority}", 21)),
             'notes'          => $data['notes'] ?? null,
             'created_by'     => $request->user()->id,
-        ]);
+        ]));
 
         AuditService::log('create', 'agricultural_interventions', $intervention->id, null, [
             'farmer_id'  => $intervention->farmer_id,
             'factor_key' => $intervention->factor_key,
             'type'       => $intervention->type,
+            'source'     => $intervention->source,
         ]);
 
-        return back()->with('success', 'Intervention opened. It is now on the office queue.');
+        /*
+         * Mark the advice that prompted this as dealt with.
+         *
+         * recommendations.intervention_id and Recommendation::STATUS_CONVERTED
+         * have existed since the workflow migration but nothing ever wrote
+         * them, so the same advice stayed outstanding after somebody acted on
+         * it and two staff reading one analysis could raise the same visit
+         * twice.
+         *
+         * Matched narrowly — same farmer, same factor, same assessment, still
+         * outstanding, not already linked — because a loose match would attach
+         * a visit to the wrong piece of advice. Oldest first, and only one. If
+         * nothing matches, nothing happens: the intervention stands on its own
+         * and this is not allowed to fail the request that created it.
+         */
+        if (! $isManual && $intervention->climate_risk_assessment_id) {
+            Recommendation::where('farmer_id', $intervention->farmer_id)
+                ->where('factor_key', $intervention->factor_key)
+                ->where('climate_risk_assessment_id', $intervention->climate_risk_assessment_id)
+                ->whereNull('intervention_id')
+                ->outstanding()
+                ->oldest('id')
+                ->first()
+                ?->forceFill([
+                    'intervention_id' => $intervention->id,
+                    'status'          => Recommendation::STATUS_CONVERTED,
+                    'reviewed_by'     => $request->user()->id,
+                    'reviewed_at'     => now(),
+                ])->save();
+        }
+
+        return back()->with('success', $isManual
+            ? 'Manual intervention opened. It is now on the office queue.'
+            : 'Intervention opened. It is now on the office queue.');
     }
 
     /** Assign it, move it along, or close it with what was actually done. */
@@ -215,6 +314,168 @@ class InterventionController extends Controller
         return back()->with('success', $completing
             ? 'Intervention completed and the action recorded.'
             : 'Intervention updated.');
+    }
+
+    /**
+     * One intervention, with everything hanging off it.
+     *
+     * The whole chain in one place — the analysis that prompted it, the farm
+     * it concerns, what has been done, and what the farmer actually received —
+     * because that is the question staff ask and it currently takes three
+     * screens to answer.
+     *
+     * Everything here is read through existing relationships. No figure is
+     * recomputed and no field is duplicated: the barangay, commodity and area
+     * come off the parcel, and the farmer's name off the farmer.
+     */
+    public function show(AgriculturalIntervention $intervention)
+    {
+        $intervention->load([
+            'farmer:id,first_name,middle_name,last_name,suffix,barangay,rsbsa_no,mobile_no',
+            'parcel:id,parcel_number,barangay,commodity,total_area_ha,farm_type_id',
+            'parcel.farmType:id,type_name',
+            'assessment',
+            'recommendation',
+            'assignee:id,name',
+            'completer:id,name',
+            'creator:id,name',
+            'actions.performer:id,name',
+            'assistanceRecords.program:id,program_name,assistance_type_id',
+            'assistanceRecords.program.assistanceType:id,type_name,distribution_type',
+        ]);
+
+        return Inertia::render('Admin/Interventions/Show', [
+            'intervention' => [
+                'id'            => $intervention->id,
+                'title'         => $intervention->title,
+                'display_title' => $intervention->display_title,
+                'source'        => $intervention->source,
+                'type'          => $intervention->type,
+                'type_label'    => $intervention->type_label,
+                'priority'      => $intervention->priority,
+                'status'        => $intervention->status,
+                'reason'        => $intervention->reason,
+                'notes'         => $intervention->notes,
+                'action_taken'  => $intervention->action_taken,
+                'target_date'   => $intervention->target_date?->toDateString(),
+                'completed_at'  => $intervention->completed_at?->toDateString(),
+                'follow_up_date'  => $intervention->follow_up_date?->toDateString(),
+                'follow_up_notes' => $intervention->follow_up_notes,
+                'is_overdue'    => $intervention->is_overdue,
+                'assignee'      => $intervention->assignee?->name,
+                'assigned_to'   => $intervention->assigned_to,
+                'completed_by'  => $intervention->completer?->name,
+                'created_by'    => $intervention->creator?->name,
+                'created_at'    => $intervention->created_at?->toDateString(),
+            ],
+
+            'farmer' => $intervention->farmer ? [
+                'id'       => $intervention->farmer->id,
+                'name'     => $intervention->farmer->full_name,
+                'rsbsa_no' => $intervention->farmer->rsbsa_no,
+                'barangay' => $intervention->farmer->barangay,
+                'contact'  => $intervention->farmer->mobile_no,
+            ] : null,
+
+            // Parcel-level when the action concerns one piece of land, null
+            // when it is farmer-level. Both are legitimate; nothing forces a
+            // parcel onto an intervention that does not need one.
+            'parcel' => $intervention->parcel ? [
+                'id'            => $intervention->parcel->id,
+                'parcel_number' => $intervention->parcel->parcel_number,
+                'barangay'      => $intervention->parcel->barangay,
+                'commodity'     => $intervention->parcel->commodity,
+                'area_ha'       => $intervention->parcel->total_area_ha,
+                'farm_type'     => $intervention->parcel->farmType?->type_name,
+            ] : null,
+
+            // Only present on the analysis-driven path. The page says so
+            // plainly rather than leaving an empty section that reads like
+            // missing data.
+            'analysis' => $intervention->assessment ? [
+                'id'         => $intervention->assessment->id,
+                'factor_key' => $intervention->factor_key,
+                'assessed_on' => $intervention->assessment->created_at?->toDateString(),
+                'risk_level' => $intervention->assessment->risk_level ?? null,
+            ] : null,
+
+            'recommendation' => $intervention->recommendation ? [
+                'title'    => $intervention->recommendation->title,
+                'reason'   => $intervention->recommendation->reason,
+                'priority' => $intervention->recommendation->priority,
+                'status'   => $intervention->recommendation->status,
+            ] : null,
+
+            'actions' => $intervention->actions
+                ->sortByDesc('action_date')
+                ->map(fn ($action) => [
+                    'id'          => $action->id,
+                    'action_date' => $action->action_date?->toDateString(),
+                    'action'      => $action->action,
+                    'result'      => $action->result,
+                    'farmer_response'    => $action->farmer_response,
+                    'resources_provided' => $action->resources_provided,
+                    'next_action' => $action->next_action,
+                    'performed_by' => $action->performer?->name,
+                ])->values(),
+
+            'assistance' => $intervention->assistanceRecords
+                ->sortByDesc('distribution_date')
+                ->map(fn ($given) => [
+                    'id'       => $given->id,
+                    'program'  => $given->program?->program_name,
+                    'type'     => $given->program?->assistanceType?->type_name,
+                    'quantity' => $given->quantity_given,
+                    'amount'   => $given->amount_given,
+                    'status'   => $given->status,
+                    'reference_no' => $given->reference_no,
+                    'date'     => $given->distribution_date?->toDateString(),
+                    'notes'    => $given->notes,
+                ])->values(),
+        ]);
+    }
+
+    /**
+     * One farmer's interventions, for the release form's picker.
+     *
+     * Scoped by the relation itself, so the list can only ever contain that
+     * farmer's work. This is what keeps the wrong choice off the screen; it is
+     * NOT the check — AssistanceController re-verifies ownership on the way in
+     * and refuses a mismatch, because a list is only a convenience and an id
+     * can be posted without it.
+     *
+     * Cancelled ones are left out: linking a release to work the office called
+     * off is a mistake in every case anyone could describe. Completed ones
+     * stay, because assistance is often recorded after the visit that
+     * authorised it, and the status travels with each row so staff can see
+     * what they are attaching to.
+     */
+    public function optionsForFarmer(Farmer $farmer)
+    {
+        return response()->json(
+            $farmer->interventions()
+                ->with('parcel:id,parcel_number,barangay')
+                ->where('status', '!=', AgriculturalIntervention::STATUS_CANCELLED)
+                ->get()
+                // Open work first — that is what a release is usually against —
+                // then newest. Sorted here because "open" is a set of statuses
+                // rather than a column to order by.
+                ->sortByDesc(fn (AgriculturalIntervention $row) => [(int) $row->is_open, $row->id])
+                ->map(fn (AgriculturalIntervention $row) => [
+                    'id'       => $row->id,
+                    'title'    => $row->display_title,
+                    'source'   => $row->source,
+                    'status'   => $row->status,
+                    'priority' => $row->priority,
+                    'is_open'  => $row->is_open,
+                    // Null when the intervention is farmer-level rather than
+                    // about one piece of land. Both are legitimate.
+                    'parcel_id'     => $row->farm_parcel_id,
+                    'parcel_number' => $row->parcel?->parcel_number,
+                    'barangay'      => $row->parcel?->barangay,
+                ])
+                ->values()
+        );
     }
 
     /** Counts for the strip across the top of the queue. */

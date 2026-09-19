@@ -238,6 +238,20 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
         ->middleware('permission:view assistance')->name('interventions.index');
     Route::post('interventions', [InterventionController::class, 'store'])
         ->middleware('permission:edit assistance')->name('interventions.store');
+    // The whole chain for one intervention: the analysis behind it, the farm,
+    // what was done, and what the farmer actually received. Read-only, so it
+    // is gated on viewing rather than editing.
+    Route::get('interventions/{intervention}', [InterventionController::class, 'show'])
+        ->middleware('permission:view assistance')->name('interventions.show');
+    // A farmer's own parcels, for the intervention and release pickers. Read
+    // only, and narrow: identifying text for one farmer's land, nothing more.
+    Route::get('farmers/{farmer}/parcel-options', [ParcelController::class, 'optionsForFarmer'])
+        ->middleware('permission:view assistance')->name('farmers.parcel-options');
+    // That farmer's interventions, so a release can say what authorised it.
+    // Read only; the ownership check that actually matters is in
+    // AssistanceController@distribute, which re-verifies whatever is posted.
+    Route::get('farmers/{farmer}/intervention-options', [InterventionController::class, 'optionsForFarmer'])
+        ->middleware('permission:view assistance')->name('farmers.intervention-options');
     Route::put('interventions/{intervention}', [InterventionController::class, 'update'])
         ->middleware('permission:edit assistance')->name('interventions.update');
 

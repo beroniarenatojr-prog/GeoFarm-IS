@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AgriculturalIntervention;
 use App\Models\AssistanceDistribution;
 use App\Models\AssistanceType;
 use App\Models\Barangay;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use RuntimeException;
 use Throwable;
@@ -346,6 +348,17 @@ class AssistanceController extends Controller
             'distributions' => AssistanceDistribution::with([
                     'farmer',
                     'itemIssues.item:id,item_name,unit',
+                    // What authorised this release, and which land it concerns.
+                    // Both have been recordable since the workflow migration;
+                    // this is the first screen to read them back.
+                    // Every column the appended accessors read, not just the
+                    // ones drawn: display_title needs title/type/reason, source
+                    // needs factor_key and the assessment id, and is_overdue
+                    // needs target_date — omitted, it would serialise false for
+                    // an intervention that is in fact overdue.
+                    'intervention:id,farmer_id,farm_parcel_id,title,type,reason,factor_key,climate_risk_assessment_id,status,priority,target_date',
+                    'intervention.parcel:id,parcel_number,barangay',
+                    'parcel:id,parcel_number,barangay',
                 ])
                 ->where('assistance_id', $assistance->id)
                 ->when($search, function ($q, $s) {
@@ -365,9 +378,37 @@ class AssistanceController extends Controller
                     'quantity_given'       => $d->quantity_given,
                     'amount_given'         => $d->amount_given,
                     'status'               => $d->status,
+                    'reference_no'         => $d->reference_no,
                     'notes'                => $d->notes,
                     'is_customized'        => (bool) $d->is_customized,
                     'customization_reason' => $d->customization_reason,
+
+                    /*
+                     * Null on a release that was not tied to any intervention,
+                     * which is legitimate — a fuel subsidy round is not about
+                     * one piece of work. The farmer is deliberately NOT
+                     * repeated in here: it is already on the row above, and
+                     * the intervention belongs to the same farmer by the
+                     * ownership check that let it be linked at all.
+                     */
+                    'intervention' => $d->intervention ? [
+                        'id'       => $d->intervention->id,
+                        'title'    => $d->intervention->display_title,
+                        'source'   => $d->intervention->source,
+                        'status'   => $d->intervention->status,
+                        'priority' => $d->intervention->priority,
+                        // From the intervention's own parcel, falling back to
+                        // the one recorded on the release.
+                        'parcel'   => $d->intervention->parcel?->parcel_number ?? $d->parcel?->parcel_number,
+                        'barangay' => $d->intervention->parcel?->barangay ?? $d->parcel?->barangay,
+                    ] : null,
+
+                    // The land this release concerns, when it concerns one.
+                    'parcel' => $d->parcel ? [
+                        'id'            => $d->parcel->id,
+                        'parcel_number' => $d->parcel->parcel_number,
+                        'barangay'      => $d->parcel->barangay,
+                    ] : null,
                     'items'                => $d->itemIssues->map(fn ($i) => [
                         'item_name'     => $i->item?->item_name,
                         'unit'          => $i->item?->unit,
@@ -490,6 +531,25 @@ class AssistanceController extends Controller
             'amount_given'      => 'nullable|numeric|min:0',
             'notes'             => 'nullable|string',
             'status'            => 'nullable|in:pending,claimed,forfeited',
+
+            /*
+             * What authorised this release, and which land it concerns.
+             *
+             * Both columns and both relations have existed since the workflow
+             * migration; neither was ever accepted here, so every release in
+             * the registry is unlinked and no intervention can show what the
+             * farmer actually received. Optional, because assistance is
+             * legitimately farmer-level as often as it is parcel-level — a
+             * fuel subsidy is not about one field.
+             *
+             * Validated for ownership below rather than trusted: an id posted
+             * from a form must not be able to attach one farmer's release to
+             * another farmer's intervention.
+             */
+            'intervention_id'   => 'nullable|exists:agricultural_interventions,id',
+            'farm_parcel_id'    => 'nullable|exists:farm_parcels,id',
+            // The office's own reference from the voucher or release slip.
+            'reference_no'      => 'nullable|string|max:60',
             // Set when staff departed from the programme's standard package.
             'is_customized'        => 'nullable|boolean',
             'customization_reason' => 'nullable|string|max:255',
@@ -518,6 +578,40 @@ class AssistanceController extends Controller
         // A reason only means something alongside an actual departure.
         if (!$data['is_customized']) {
             $data['customization_reason'] = null;
+        }
+
+        /*
+         * Both links must belong to the farmer being paid.
+         *
+         * Without this, a stale or mistyped id would file this release under
+         * another farmer's intervention or against land they do not hold —
+         * and because both are foreign keys to real rows, the database would
+         * accept it happily. Refused rather than silently dropped: quietly
+         * discarding the link would leave staff believing the release was
+         * recorded against the intervention they chose.
+         */
+        if (! empty($data['intervention_id'])) {
+            $owns = AgriculturalIntervention::whereKey($data['intervention_id'])
+                ->where('farmer_id', $data['farmer_id'])
+                ->exists();
+
+            if (! $owns) {
+                throw ValidationException::withMessages([
+                    'intervention_id' => 'That intervention belongs to a different farmer.',
+                ]);
+            }
+        }
+
+        if (! empty($data['farm_parcel_id'])) {
+            $owns = FarmParcel::whereKey($data['farm_parcel_id'])
+                ->where('farmer_id', $data['farmer_id'])
+                ->exists();
+
+            if (! $owns) {
+                throw ValidationException::withMessages([
+                    'farm_parcel_id' => 'That parcel belongs to a different farmer.',
+                ]);
+            }
         }
 
         try {

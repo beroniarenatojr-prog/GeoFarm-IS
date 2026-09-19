@@ -44,10 +44,42 @@ class AssistanceTypesSeeder extends Seeder
             ['category' => 'Special Programs', 'type_name' => 'Coconut Industry Support', 'description' => 'Support for coconut farmers'],
             ['category' => 'Special Programs', 'type_name' => 'SAAD Program', 'description' => 'Special Area for Agricultural Development'],
             ['category' => 'Special Programs', 'type_name' => 'Disaster Relief', 'description' => 'Emergency assistance for calamities'],
+
+            /*
+             * Fuel support for farm machinery.
+             *
+             * Financial rather than material: the office issues it as a
+             * subsidy against litres bought, not as stock handed over, so it
+             * has no inventory item list. The litres go in the distribution's
+             * quantity_given and the peso value in amount_given — both columns
+             * that already exist.
+             *
+             * Staff could already have created this through the assistance
+             * form's custom-type box, which matches case-insensitively. Seeding
+             * it puts one agreed spelling in the list so reports group cleanly
+             * instead of splitting across "Fuel Subsidy" and "fuel subsidy".
+             */
+            ['category' => 'Financial & Credit', 'type_name' => 'Fuel Subsidy', 'description' => 'Fuel support for farm machinery operation'],
         ];
 
+        /*
+         * Idempotent on purpose.
+         *
+         * This used to be a plain insert, so a second run died on the unique
+         * index over type_name — which meant adding one new type to this list
+         * could not be applied to a database that had already been seeded
+         * without editing rows by hand. updateOrInsert matches on the name and
+         * leaves any type the office added itself untouched.
+         */
         foreach ($types as $type) {
-            DB::table('assistance_types')->insert($type + ['created_at' => now()]);
+            DB::table('assistance_types')->updateOrInsert(
+                ['type_name' => $type['type_name']],
+                [
+                    'category'    => $type['category'],
+                    'description' => $type['description'],
+                    'created_at'  => now(),
+                ],
+            );
         }
 
         $this->command->info('Assistance types seeded successfully.');
