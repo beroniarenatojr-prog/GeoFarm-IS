@@ -25,7 +25,6 @@ import {
 import {
   EMPTY_FILTERS,
   applyFilters,
-  buildLegend,
   buildOptions,
   computeStats,
   featureHectares,
@@ -35,7 +34,6 @@ import {
 import StatCards from '@/Components/GIS/StatCards';
 import GisSearch from '@/Components/GIS/GisSearch';
 import FarmFilters from '@/Components/GIS/FarmFilters';
-import BarangayLegend from '@/Components/GIS/BarangayLegend';
 import ParcelTable from '@/Components/GIS/ParcelTable';
 import SelectedParcelCard from '@/Components/GIS/SelectedParcelCard';
 
@@ -724,16 +722,6 @@ export default function MapIndex({ parcels }) {
 
   const visibleStats = useMemo(() => computeStats(visibleFeatures), [visibleFeatures]);
   const totalStats = useMemo(() => computeStats(geoJsonData.features), [geoJsonData]);
-
-  /** Legend counts follow the filter; legend colours come off the features. */
-  const barangayLegend = useMemo(
-    () => buildLegend(visibleFeatures, NO_BARANGAY_COLOUR),
-    [visibleFeatures],
-  );
-  const barangayLegendTotal = useMemo(
-    () => buildLegend(geoJsonData.features, NO_BARANGAY_COLOUR).length,
-    [geoJsonData],
-  );
 
   const sortedVisible = useMemo(
     () => sortFeatures(visibleFeatures, listSort.key, listSort.dir),
@@ -2224,15 +2212,18 @@ export default function MapIndex({ parcels }) {
                 column so the map keeps its full width.
             */}
             <div className="space-y-4 xl:col-start-1">
-              {showParcels && barangayLegend.length > 0 && (
-                <BarangayLegend
-                  entries={barangayLegend}
-                  totalCount={barangayLegendTotal}
-                  activeBarangay={filters.barangay}
-                  onPick={(name) => setFilters((current) => ({ ...current, barangay: name }))}
-                />
-              )}
+              {/*
+                  The barangay legend is deliberately not rendered.
 
+                  Staff at the Municipal Agriculture Office already know the 46
+                  barangays, so a 46-row colour key is a wall of names rather
+                  than a reference. Parcels are still coloured by barangay, and
+                  a parcel's barangay is on its card when clicked and in the
+                  list below — which is where it is actually asked for.
+
+                  Components/GIS/BarangayLegend.jsx is kept if this is ever
+                  wanted back; nothing imports it, so it is not bundled.
+              */}
               <ParcelTable
                 features={sortedVisible}
                 sort={listSort}
