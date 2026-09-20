@@ -4,7 +4,7 @@ import { router, useForm } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import ModalShell from '@/Components/ui/ModalShell';
 import SuggestSelect from '@/Components/ui/SuggestSelect';
-import { Pencil, Trash2, Coins } from 'lucide-react';
+import { Pencil, Trash2, Coins, ChevronRight } from 'lucide-react';
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
@@ -164,72 +164,57 @@ function Cost({ season, onAdd, mayEdit }) {
 }
 
 /**
- * The year's cost, with what each cropping contributed beneath it.
- *
- * The breakdown is the point: annual cost IS wet plus dry, and a single total
- * with no parts hides which season the money went into.
- */
-function AnnualFigure({ row, onAdd, mayEdit }) {
-    if (row.annual.cost == null) {
-        return mayEdit
-            ? <button onClick={onAdd} className="text-xs font-medium text-[#006400] hover:underline">+ Add cost</button>
-            : <span className="text-gray-300">—</span>;
-    }
-
-    const parts = row.seasons.filter(s => s.production_cost != null);
-
-    return (
-        <div>
-            <p className="font-semibold text-gray-900 tabular-nums">{peso(row.annual.cost, 0)}</p>
-            {parts.length > 1 && (
-                <p className="text-xs tabular-nums text-gray-400">
-                    {parts.map(s => `${s.season} ${peso(s.production_cost, 0)}`).join(' · ')}
-                </p>
-            )}
-        </div>
-    );
-}
-
-/** The year's net income, once both a cost and an income exist for it. */
-function AnnualNet({ row }) {
-    if (row.annual.net_income == null) {
-        return <span className="text-gray-300">—</span>;
-    }
-
-    const loss = row.annual.net_income < 0;
-    const even = row.annual.net_income === 0;
-
-    return (
-        <div>
-            <p className={`font-semibold tabular-nums ${loss ? 'text-red-600' : 'text-gray-900'}`}>
-                {peso(row.annual.net_income, 0)}
-            </p>
-            <p className={`text-xs font-medium ${loss ? 'text-red-600' : even ? 'text-gray-500' : 'text-[#006400]'}`}>
-                {loss ? 'Palugi' : even ? 'Break-even' : 'Profitable'}
-            </p>
-        </div>
-    );
-}
-
-/**
  * What the season cleared, and whether that was a loss.
  *
  * Blank until both figures exist. A season with a cost but no income yet is
  * still being encoded - showing it as a loss would invent one, and these rows
  * are what the risk work will later be measured against.
  */
-function NetIncome({ season }) {
-    if (season.net_farm_income == null) {
-        return <span className="text-gray-300">—</span>;
+/** Nothing recorded — said in words, never as a zero or a dash. */
+function NoData() {
+    return <span className="text-xs font-normal text-gray-400">No data</span>;
+}
+
+/**
+ * Net income for one cropping.
+ *
+ * Prefers the model's own net_farm_income, which is computed only from a
+ * stored total_income. Where that has not been entered but the harvest and the
+ * price both have, it falls back to gross revenue minus production cost —
+ * which is the same subtraction, on a gross the model already derives.
+ *
+ * The two never contradict each other: when total_income exists, gross_revenue
+ * IS that figure. The fallback only fills the gap where the model would
+ * otherwise say nothing.
+ *
+ * Nothing is invented. If either side is missing the answer is "No data",
+ * because a season with a cost and no income recorded is half-encoded, not a
+ * loss — and these rows are what the risk work is measured against.
+ */
+function netIncomeOf(season) {
+    if (season.net_farm_income != null) return Number(season.net_farm_income);
+
+    if (season.gross_revenue != null && season.production_cost != null) {
+        return Number(season.gross_revenue) - Number(season.production_cost);
     }
 
-    const loss = season.financial_outcome === 'loss';
-    const even = season.financial_outcome === 'break_even';
+    return null;
+}
+
+function NetIncome({ season }) {
+    const net = netIncomeOf(season);
+
+    if (net == null) {
+        return <NoData />;
+    }
+
+    const loss = net < 0;
+    const even = net === 0;
 
     return (
         <div>
             <p className={`font-semibold tabular-nums ${loss ? 'text-red-600' : 'text-gray-900'}`}>
-                {peso(season.net_farm_income, 0)}
+                {peso(net, 0)}
             </p>
             <p className={`text-xs font-medium ${loss ? 'text-red-600' : even ? 'text-gray-500' : 'text-[#006400]'}`}>
                 {loss ? 'Palugi' : even ? 'Break-even' : 'Profitable'}
@@ -278,6 +263,26 @@ function Badge({ value }) {
 }
 
 /** One labelled figure. The unit of the detail modal's grids. */
+/**
+ * A label and its value on one line, for the Farm inputs block.
+ *
+ * Separate from Fact because that one stacks label over value in a grid; these
+ * read as a short list where the labels repeat across three columns. Empty
+ * values say "No data" rather than showing a dash or, worse, a zero.
+ */
+function FactLine({ label, children }) {
+    const empty = children === null || children === undefined || children === '';
+
+    return (
+        <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-xs text-gray-500">{label}</dt>
+            <dd className={`text-right ${empty ? '' : 'font-medium text-gray-800'}`}>
+                {empty ? <NoData /> : children}
+            </dd>
+        </div>
+    );
+}
+
 function Fact({ label, children, tone = '' }) {
     return (
         <div>
@@ -308,7 +313,19 @@ function Section({ title, children }) {
  * breakdown, and every agricultural input — had nowhere to be read at all.
  * They live here, one row, whole.
  */
-function SeasonDetail({ season, onClose }) {
+function SeasonDetail({ row, season: opened, onClose }) {
+    /*
+     * The wet and dry croppings of one parcel-year are separate records, and
+     * the office needs to read them apart and against each other. The tab
+     * simply swaps which record the body below is describing — nothing is
+     * merged, and a figure from one season can never appear under the other.
+     *
+     * Opens on whichever season was clicked, so the row that was pressed is
+     * the one being read.
+     */
+    const siblings = row?.seasons ?? [opened];
+    const [season, setSeason] = useState(opened);
+
     const breakdown = season.input_cost_breakdown ?? {};
     const inputs = season.inputs ?? [];
 
@@ -329,6 +346,35 @@ function SeasonDetail({ season, onClose }) {
             }
         >
             <div className="space-y-4">
+
+                {/* Only shown when the year actually holds both croppings. A
+                    lone tab would imply the other season exists and is empty,
+                    when in fact nothing was recorded for it at all. */}
+                {siblings.length > 1 ? (
+                    <div role="tablist" aria-label="Season" className="flex gap-2">
+                        {siblings.map(s => (
+                            <button
+                                key={s.id}
+                                type="button"
+                                role="tab"
+                                aria-selected={s.id === season.id}
+                                onClick={() => setSeason(s)}
+                                className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize transition focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                                    s.id === season.id
+                                        ? 'bg-[#006400] text-white'
+                                        : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                                }`}
+                            >
+                                {s.season} season
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="rounded-xl bg-gray-50 px-4 py-2 text-xs text-gray-600">
+                        Only the <strong className="capitalize">{season.season}</strong> season has
+                        records for this parcel in {season.cropping_year}.
+                    </p>
+                )}
 
                 <Section title="Farmer & land">
                     <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -385,7 +431,73 @@ function SeasonDetail({ season, onClose }) {
                     </dl>
                 </Section>
 
-                <Section title="Agricultural inputs">
+                {/*
+                    The three the Agriculture Office asks for by name, pulled
+                    out of the full list below.
+
+                    Every row here belongs to THIS cropping: seasonal_inputs
+                    hangs off crop_season_id, so a wet-season fertilizer cannot
+                    appear under the dry season, and another parcel's records
+                    cannot appear at all. That is enforced by the schema, not by
+                    a filter that could be got wrong.
+                */}
+                <Section title="Farm inputs">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Fertilizer</p>
+                            <dl className="mt-1.5 space-y-1 text-sm">
+                                <FactLine label="Amount used">
+                                    {season.fertilizer_qty_kg != null
+                                        ? `${Number(season.fertilizer_qty_kg).toLocaleString('en-PH')} kg`
+                                        : null}
+                                </FactLine>
+                                {/*
+                                    The grade, e.g. "Urea 46-0-0" — this column
+                                    holds a formulation, not a numeric code, and
+                                    the registry has no fertilizer-code field.
+                                    Figures such as 24,000 are peso costs and
+                                    appear under Cost in the table below.
+                                */}
+                                <FactLine label="Type / grade">{season.fertilizer_type}</FactLine>
+                                <FactLine label="Classification">
+                                    {season.fertilizer_class
+                                        ? <span className="capitalize">{season.fertilizer_class}</span>
+                                        : null}
+                                </FactLine>
+                            </dl>
+                        </div>
+
+                        {['herbicide', 'pesticide'].map(kind => {
+                            const rows = inputs.filter(i => i.input_type === kind);
+
+                            return (
+                                <div key={kind}>
+                                    <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 capitalize">
+                                        {kind}
+                                    </p>
+                                    {rows.length === 0 ? (
+                                        <p className="mt-1.5"><NoData /></p>
+                                    ) : (
+                                        <div className="mt-1.5 space-y-2">
+                                            {rows.map(r => (
+                                                <dl key={r.id} className="space-y-1 text-sm">
+                                                    <FactLine label="Product">{r.name}</FactLine>
+                                                    <FactLine label="Amount">
+                                                        {r.quantity != null
+                                                            ? Number(r.quantity).toLocaleString('en-PH') : null}
+                                                    </FactLine>
+                                                    <FactLine label="Unit">{r.unit}</FactLine>
+                                                </dl>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </Section>
+
+                <Section title="All recorded inputs">
                     {inputs.length === 0 ? (
                         <p className="text-sm text-gray-400">
                             No inputs recorded for this cropping.
@@ -1200,92 +1312,97 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                         <div className="hidden xl:block overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
+                                    {/* One line per cropping, scannable.
+                                        Fertilizer, herbicide, pesticide and the
+                                        cost breakdown are deliberately NOT here —
+                                        they are what the detail view is for. */}
                                     <tr>
-                                        <th className="px-4 py-3 font-semibold">Farmer &amp; parcel</th>
-                                        <th className="px-4 py-3 font-semibold">Crop &amp; season</th>
+                                        <th className="px-4 py-3 font-semibold">Crop</th>
+                                        <th className="px-4 py-3 font-semibold">Farmer</th>
+                                        <th className="px-4 py-3 font-semibold">Parcel</th>
                                         <th className="px-4 py-3 font-semibold text-right">Area</th>
+                                        <th className="px-4 py-3 font-semibold">Season</th>
+                                        <th className="px-4 py-3 font-semibold text-right">Production cost</th>
+                                        <th className="px-4 py-3 font-semibold text-right">Price/kg</th>
                                         <th className="px-4 py-3 font-semibold text-right">Yield</th>
-                                        <th className="px-4 py-3 font-semibold text-right">Cost</th>
                                         <th className="px-4 py-3 font-semibold text-right">Net income</th>
-                                        <th className="px-4 py-3 font-semibold">Fertilizer</th>
                                         <th className="px-4 py-3 font-semibold text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-green-50">
-                                    {rows.data.map(row => (
-                                        <tr key={row.key} className="hover:bg-green-50/60 transition-colors align-top">
-                                            <td className="px-4 py-3">
-                                                <p className="font-medium text-gray-900">{farmerName(row.seasons[0])}</p>
-                                                <p className="text-xs text-gray-400">{parcelLabel(row.parcel)}</p>
+                                    {/* Flattened to one line per cropping.
+                                        The grouping behind it is unchanged — the
+                                        detail view still opens the whole
+                                        parcel-year so wet and dry can be read
+                                        against each other. */}
+                                    {rows.data.flatMap(row => row.seasons.map(s => (
+                                        <tr
+                                            key={s.id}
+                                            onClick={() => setViewing({ row, season: s })}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    setViewing({ row, season: s });
+                                                }
+                                            }}
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-label={`Open ${row.crop?.crop_name ?? 'cropping'} details for ${farmerName(s)}`}
+                                            className="group cursor-pointer transition-colors hover:bg-green-50/60 focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500"
+                                        >
+                                            <td className="px-4 py-3 font-medium text-gray-900">
+                                                {row.crop?.crop_name ?? <span className="text-gray-300">—</span>}
+                                            </td>
+                                            <td className="px-4 py-3 text-gray-700">{farmerName(s)}</td>
+                                            <td className="px-4 py-3 text-xs text-gray-500">{parcelLabel(row.parcel)}</td>
+                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                                                {s.area_planted_ha != null
+                                                    ? <>{Number(s.area_planted_ha).toFixed(2)}<span className="text-gray-400"> ha</span></>
+                                                    : <NoData />}
                                             </td>
                                             <td className="px-4 py-3">
-                                                <p className="font-medium text-gray-900">{row.crop?.crop_name ?? '—'}</p>
-                                                {/* Each badge opens its own cropping. A parcel
-                                                    worked twice shows Wet and Dry side by side,
-                                                    and either one is a way into that record. */}
-                                                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-400">
-                                                    {row.seasons.map(s => (
-                                                        <button key={s.id} onClick={() => setViewing(s)}
-                                                            title={`Open the ${s.season} season`}
-                                                            className="rounded-full focus:outline-none focus:ring-2 focus:ring-green-500">
-                                                            <Badge value={s.season} />
+                                                <Badge value={s.season} />
+                                                <span className="ml-1.5 text-xs text-gray-400">{row.cropping_year}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                                                {s.production_cost != null ? peso(s.production_cost, 0) : <NoData />}
+                                            </td>
+                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                                                {s.selling_price != null ? peso(s.selling_price, 2) : <NoData />}
+                                            </td>
+                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                                                {s.yield_kg != null
+                                                    ? <>{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {s.production_unit ?? 'kg'}</span></>
+                                                    : <NoData />}
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <NetIncome season={s} />
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {can('edit seasonal') && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); openEdit(s); }}
+                                                            title={`Edit the ${s.season} season`}
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
+                                                            <Pencil className="h-3.5 w-3.5" />
                                                         </button>
-                                                    ))}
-                                                    {row.cropping_year}
-                                                </p>
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {row.annual.area != null
-                                                    ? <>{Number(row.annual.area).toFixed(2)}<span className="text-gray-400"> ha</span></>
-                                                    : <span className="text-gray-300">—</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {row.annual.yield != null
-                                                    ? <>{Number(row.annual.yield).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {row.annual.unit}</span></>
-                                                    : row.annual.mixed_units
-                                                        // Sacks and kilograms do not add up.
-                                                        ? <span className="text-xs text-amber-700">mixed units</span>
-                                                        : <span className="text-gray-300">—</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <AnnualFigure row={row} field="cost"
-                                                    onAdd={() => openEdit(row.seasons[0])} mayEdit={can('edit seasonal')} />
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <AnnualNet row={row} />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {row.seasons.map(s => (
-                                                    <div key={s.id} className="text-xs">
-                                                        <Fertilizer season={s} />
-                                                    </div>
-                                                ))}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                {/* One set per cropping: the two seasons are
-                                                    still separate records to edit or remove. */}
-                                                <div className="flex flex-col items-end gap-1.5">
-                                                    {row.seasons.map(s => (
-                                                        <div key={s.id} className="flex items-center gap-1.5">
-                                                            <span className="text-[10px] uppercase text-gray-400">{s.season}</span>
-                                                            {can('edit seasonal') && (
-                                                                <button onClick={() => openEdit(s)} title={`Edit the ${s.season} season`}
-                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
-                                                                    <Pencil className="h-3.5 w-3.5" />
-                                                                </button>
-                                                            )}
-                                                            {can('delete seasonal') && (
-                                                                <button onClick={() => setDeleting(s)} title={`Delete the ${s.season} season`}
-                                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
+                                                    )}
+                                                    {can('delete seasonal') && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setDeleting(s); }}
+                                                            title={`Delete the ${s.season} season`}
+                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    )}
+                                                    {/* Says the row is a way in, without
+                                                        competing with the two actions. */}
+                                                    <ChevronRight className="h-4 w-4 flex-none text-gray-300 transition-colors group-hover:text-green-700" />
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
+                                    )))}
                                 </tbody>
                             </table>
                         </div>
@@ -1343,7 +1460,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     <div className="mt-3 space-y-1.5">
                                         {row.seasons.map(s => (
                                             <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2">
-                                                <button onClick={() => setViewing(s)} className="flex items-center gap-2 text-xs text-gray-600">
+                                                <button onClick={() => setViewing({ row, season: s })} className="flex items-center gap-2 text-xs text-gray-600">
                                                     <Badge value={s.season} />
                                                     {s.production_cost != null ? peso(s.production_cost, 0) : 'no cost yet'}
                                                 </button>
@@ -1399,7 +1516,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
 
             {/* The whole record for one cropping, opened by clicking its row. */}
             {viewing && (
-                <SeasonDetail season={viewing} onClose={() => setViewing(null)} />
+                <SeasonDetail row={viewing.row} season={viewing.season} onClose={() => setViewing(null)} />
             )}
 
             {/* Add Modal */}
