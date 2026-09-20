@@ -83,14 +83,25 @@ class FarmAnalysisController extends Controller
          */
         $staleBefore = now()->subMonths(ClimateRiskAssessment::STALE_AFTER_MONTHS);
 
+        /*
+         * "The latest assessment is older than the threshold", without raw SQL.
+         *
+         * Expressed as: has one older than the threshold, AND has none at or
+         * after it. That is the same set — if any assessment were newer, the
+         * latest would not be old — and it is built only from whereHas and
+         * whereDoesntHave, which the rest of this application already relies
+         * on. The correlated subquery it replaces said the same thing but was
+         * the one construct here that could not be checked without a database,
+         * and a page that 500s is worse than one that is slightly more verbose.
+         */
+        $latestIsStale = fn ($query) => $query
+            ->whereHas('riskAssessments', fn ($a) => $a->where('assessed_at', '<', $staleBefore))
+            ->whereDoesntHave('riskAssessments', fn ($a) => $a->where('assessed_at', '>=', $staleBefore));
+
         $applyStatus = fn ($query) => $query
             ->when($status === 'assessed', fn ($q) => $q->whereHas('riskAssessments'))
             ->when($status === 'unassessed', fn ($q) => $q->whereDoesntHave('riskAssessments'))
-            ->when($status === 'stale', fn ($q) => $q->whereRaw(
-                '(select assessed_at from climate_risk_assessments
-                    where farmer_id = farmers.id order by assessed_at desc limit 1) < ?',
-                [$staleBefore],
-            ));
+            ->when($status === 'stale', $latestIsStale);
 
         /*
          * The counts come from withCount, not from loading the rows: a page of
@@ -168,11 +179,7 @@ class FarmAnalysisController extends Controller
                 'unassessed' => Farmer::verified()->tap($withSearchAndBarangay)
                     ->whereDoesntHave('riskAssessments')->count(),
                 'stale' => Farmer::verified()->tap($withSearchAndBarangay)
-                    ->whereRaw(
-                        '(select assessed_at from climate_risk_assessments
-                            where farmer_id = farmers.id order by assessed_at desc limit 1) < ?',
-                        [$staleBefore],
-                    )->count(),
+                    ->tap($latestIsStale)->count(),
             ],
             'upcoming'  => app(ParcelRiskAnalyser::class)->upcomingPeriod(),
         ]);
