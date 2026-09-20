@@ -48,7 +48,24 @@ use Illuminate\Support\Facades\Hash;
 class DummyFarmersSeeder extends Seeder
 {
     /** How the accounts are recognised, for both creation and clean-up. */
-    private const EMAIL_PATTERN = 'dummy.farmer%@example.test';
+    public const EMAIL_PATTERN = 'dummy.farmer%@example.test';
+
+    /**
+     * The sign-in password for every dummy account.
+     *
+     * Public and deliberately so: these are fabricated records that exist to be
+     * logged into during testing, and a password nobody knows makes them
+     * useless for that. Shared with the OpenDummyAccounts command so the
+     * seeder and the reset can never drift apart.
+     *
+     * It is worth being clear about what this means. This value is in the
+     * repository, so it is known to anyone who can read the code. It is safe
+     * only for as long as it is attached to nothing but dummy.farmer*@
+     * example.test — accounts holding invented data. It must never be given to
+     * a real farmer's account, and these accounts must never be left active on
+     * a server the public can reach.
+     */
+    public const DUMMY_PASSWORD = '12345678dummy';
 
     private const FARMERS = 55;
 
@@ -307,7 +324,7 @@ class DummyFarmersSeeder extends Seeder
         $user = User::create([
             'name'      => "{$first} {$last}",
             'email'     => $email,
-            'password'  => Hash::make('password'),
+            'password'  => Hash::make(self::DUMMY_PASSWORD),
             // Matches a real registration: the account exists but cannot sign in
             // until the office approves it.
             'is_active' => false,
