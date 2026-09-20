@@ -81,7 +81,9 @@ export default function SelectedParcelCard({
         </button>
       </header>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 p-3">
+      {/* Label/value pairs are short, so these pair up sooner than the filter
+          dropdowns do — but still on the panel's width, not the window's. */}
+      <dl className="grid grid-cols-1 gap-x-4 gap-y-3 p-3 @xs:grid-cols-2">
         <Field label="Farmer" value={properties.farmer_name} />
         <Field label="RSBSA no." value={properties.rsbsa_no} mono />
         <Field label="Barangay" value={properties.barangay} />

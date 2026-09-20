@@ -2353,7 +2353,12 @@ export default function MapIndex({ parcels }) {
                 reachable. The bottom sheet below is an additional shortcut to
                 the two panels needed while actually looking at the map, not a
                 replacement for this one. */}
-            <aside className="space-y-4">
+            {/* @container makes this panel the thing its children measure
+                themselves against, rather than the browser window. It is
+                360 px beside the map on a wide screen and full width when it
+                stacks below the map on a narrow one, so window width says
+                almost the opposite of how much room is actually in here. */}
+            <aside className="@container space-y-4">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800">
                   <MapPinned className="h-4 w-4" />
@@ -2919,7 +2924,7 @@ export default function MapIndex({ parcels }) {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="@container space-y-4">
               <GisSearch
                 value={searchInput}
                 onChange={setSearchInput}

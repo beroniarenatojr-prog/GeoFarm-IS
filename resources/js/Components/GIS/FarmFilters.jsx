@@ -55,7 +55,17 @@ export default function FarmFilters({ filters, options, onChange, onClear, activ
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      {/*
+          Container query, not a viewport one.
+
+          This panel is 360 px wide beside the map on a large screen and full
+          width when it stacks below the map on a small one — so the viewport
+          being wide is exactly when this box is narrowest. `sm:grid-cols-2`
+          would put two dropdowns in 165 px each on a desktop and one per row
+          on a phone, which is backwards. @md keys off the panel's own width,
+          so four selects go side by side only when there is room for them.
+      */}
+      <div className="grid grid-cols-1 gap-3 @md:grid-cols-2">
         <Select
           label="Barangay"
           value={filters.barangay}
