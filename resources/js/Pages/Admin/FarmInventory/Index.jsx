@@ -26,22 +26,69 @@ const MACHINE_TONE = {
 const num = (v, dp = 0) =>
     Number(v || 0).toLocaleString('en-PH', { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-function Stat({ icon: Icon, value, label, tone }) {
-    return (
-        <div className="bg-white rounded-2xl border border-green-100 shadow-sm p-4">
-            <div className="flex items-center gap-3">
-                <span className="hidden sm:flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: tone }}>
-                    <Icon className="h-5 w-5 text-white" />
-                </span>
-                <div className="min-w-0">
-                    <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{value}</p>
-                    <p className="text-xs text-gray-500">{label}</p>
-                </div>
+/**
+ * A summary figure that takes you to the records behind it.
+ *
+ * There is no separate page per category — every asset is listed in a panel
+ * further down this same page — so the card scrolls to its panel rather than
+ * navigating. That keeps the farmer selection and the rest of the page intact,
+ * which a round trip would throw away.
+ *
+ * Rendered as a real <button> when it has somewhere to go, so it is reachable
+ * by keyboard and announced as clickable. A card with no target stays a plain
+ * div rather than pretending to be pressable.
+ */
+function Stat({ icon: Icon, value, label, tone, target }) {
+    const go = () => {
+        const panel = document.getElementById(target);
+        if (!panel) return;
+
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        /*
+         * Move focus as well as the viewport. Scrolling alone leaves a
+         * keyboard user's place at the top of the page, so the next Tab would
+         * walk back through the cards instead of into the records they just
+         * asked for. tabIndex -1 makes the section focusable without adding it
+         * to the tab order.
+         */
+        panel.setAttribute('tabindex', '-1');
+        panel.focus({ preventScroll: true });
+    };
+
+    const body = (
+        <div className="flex items-center gap-3">
+            <span className="hidden sm:flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+                style={{ backgroundColor: tone }}>
+                <Icon className="h-5 w-5 text-white" />
+            </span>
+            <div className="min-w-0 text-left">
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{value}</p>
+                <p className="text-xs text-gray-500">{label}</p>
             </div>
         </div>
     );
+
+    if (!target) {
+        return (
+            <div className="bg-white rounded-2xl border border-green-100 shadow-sm p-4">
+                {body}
+            </div>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={go}
+            title={`Show the ${label.toLowerCase()} records`}
+            className="w-full bg-white rounded-2xl border border-green-100 shadow-sm p-4 text-left transition hover:border-green-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#006400] focus:ring-offset-1"
+        >
+            {body}
+        </button>
+    );
 }
+
 
 function Empty({ icon: Icon, text }) {
     return (
@@ -135,9 +182,13 @@ function ExportMenu({ farmerId, canExport }) {
  * category is now on the page at once and the question is answered by
  * scrolling.
  */
-function Panel({ icon: Icon, title, count, action, children }) {
+function Panel({ icon: Icon, title, count, action, children, id }) {
     return (
-        <section className="bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
+        <section
+            id={id}
+            /* scroll-mt clears the sticky page header, which would otherwise
+               hide the panel's own title the moment we jump to it. */
+            className="scroll-mt-24 bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
             <header className="flex flex-wrap items-center gap-3 border-b border-green-100 bg-green-50/40 px-4 sm:px-5 py-3">
                 <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#006400]">
                     <Icon className="h-4 w-4 text-white" />
@@ -420,20 +471,20 @@ export default function FarmInventoryIndex({
 
             {/* Totals */}
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
-                <Stat icon={Ruler} tone="#006400" value={num(summary?.crop_area, 2)} label="Hectares planted" />
-                <Stat icon={Beef} tone="#228B22" value={num(summary?.livestock)} label="Livestock heads" />
-                <Stat icon={Bird} tone="#4CAF50" value={num(summary?.poultry)} label="Poultry" />
-                <Stat icon={TreePine} tone="#81C784" value={num(summary?.trees)} label="Trees" />
-                <Stat icon={Fish} tone="#2E7D32" value={num(summary?.pond_area, 2)} label="Pond hectares" />
+                <Stat icon={Ruler} tone="#006400" value={num(summary?.crop_area, 2)} label="Hectares planted" target="panel-crops" />
+                <Stat icon={Beef} tone="#228B22" value={num(summary?.livestock)} label="Livestock heads" target="panel-livestock" />
+                <Stat icon={Bird} tone="#4CAF50" value={num(summary?.poultry)} label="Poultry" target="panel-livestock" />
+                <Stat icon={TreePine} tone="#81C784" value={num(summary?.trees)} label="Trees" target="panel-trees" />
+                <Stat icon={Fish} tone="#2E7D32" value={num(summary?.pond_area, 2)} label="Pond hectares" target="panel-fishponds" />
                 {/* Already counted server-side but never shown until now. */}
-                <Stat icon={Tractor} tone="#1B5E20" value={num(summary?.machinery)} label="Machinery" />
+                <Stat icon={Tractor} tone="#1B5E20" value={num(summary?.machinery)} label="Machinery" target="panel-machinery" />
             </div>
 
             {/* Every category on the page at once, in the order the office
                 thinks about them: what is planted, what is standing, what is
                 alive, what is in the water, what is in the shed. */}
             <div className="space-y-5">
-                <Panel icon={Sprout} title="Crops" count={crops.length}
+                <Panel id="panel-crops" icon={Sprout} title="Crops" count={crops.length}
                     action={cropsAddable && <AddButton label="Add crop"
                         onClick={() => setAsset({ category: 'crops', record: null })} />}>
                     {!aggregated && !cropsAddable && can('create seasonal') && parcels.length === 0 && (
@@ -485,7 +536,7 @@ export default function FarmInventoryIndex({
                     />
                 </Panel>
 
-                <Panel icon={TreePine} title="Tree Crops" count={treeCrops.length}
+                <Panel id="panel-trees" icon={TreePine} title="Tree Crops" count={treeCrops.length}
                     action={addable && <AddButton label="Add tree crop"
                         onClick={() => setAsset({ category: 'tree-crops', record: null })} />}>
                                 <DataBlock
@@ -523,7 +574,7 @@ export default function FarmInventoryIndex({
                                 />
                 </Panel>
 
-                <Panel icon={Fish} title="Fishponds" count={fishponds.length}
+                <Panel id="panel-fishponds" icon={Fish} title="Fishponds" count={fishponds.length}
                     action={addable && <AddButton label="Add fishpond"
                         onClick={() => setAsset({ category: 'fishponds', record: null })} />}>
                                 <DataBlock
@@ -560,7 +611,7 @@ export default function FarmInventoryIndex({
 
                 {/* Five separate RSBSA tables sit behind this one section, so
                     adding means choosing which of them the animal belongs to. */}
-                <Panel icon={Beef} title="Livestock & Poultry" count={livestock.length}
+                <Panel id="panel-livestock" icon={Beef} title="Livestock & Poultry" count={livestock.length}
                     action={addable && [
                         ['large-ruminants', 'Cattle / Carabao'],
                         ['small-ruminants', 'Goat / Sheep'],
@@ -621,7 +672,7 @@ export default function FarmInventoryIndex({
                             />
                 </Panel>
 
-                <Panel icon={Tractor} title="Machinery" count={machinery.length}
+                <Panel id="panel-machinery" icon={Tractor} title="Machinery" count={machinery.length}
                     action={addable && <AddButton label="Add machinery"
                         onClick={() => setAsset({ category: 'machinery', record: null })} />}>
                             <DataBlock
