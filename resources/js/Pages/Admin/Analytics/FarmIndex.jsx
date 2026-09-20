@@ -28,7 +28,7 @@ const UNASSESSED = {
     dot: 'bg-slate-300',
 };
 
-export default function FarmIndex({ farmers, filters, barangays = [], upcoming }) {
+export default function FarmIndex({ farmers, filters, barangays = [], upcoming, statusCounts = { all: 0, assessed: 0, unassessed: 0, stale: 0 } }) {
     const [search, setSearch] = useState(filters.search ?? '');
 
     const apply = (next) => {
@@ -49,7 +49,8 @@ export default function FarmIndex({ farmers, filters, barangays = [], upcoming }
         router.get('/admin/analytics/farms', {}, { preserveState: true, replace: true });
     };
 
-    const filtered = filters.search || filters.barangay;
+    // Status counts as a filter too, so Clear shows when only it is set.
+    const filtered = filters.search || filters.barangay || filters.status;
 
     return (
         <AdminLayout title="Farm Analysis">
@@ -88,6 +89,31 @@ export default function FarmIndex({ farmers, filters, barangays = [], upcoming }
                         {barangays.map((b) => (
                             <option key={b} value={b}>{b}</option>
                         ))}
+                    </select>
+
+                    {/*
+                        Assessment status.
+
+                        A select rather than buttons so it sits in the same row
+                        as the barangay filter and does not push the list down
+                        on a narrow screen. Each option carries its own count,
+                        which is what makes it worth opening — "Not assessed
+                        (43)" answers the question before you have filtered
+                        anything. The counts respect the search and barangay
+                        already set, so they never contradict the list below.
+                    */}
+                    <select
+                        value={filters.status ?? ''}
+                        onChange={(e) => apply({ status: e.target.value || undefined })}
+                        aria-label="Filter by assessment status"
+                        className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm focus:border-transparent focus:ring-2 focus:ring-green-500 sm:min-w-52"
+                    >
+                        <option value="">All farmers ({statusCounts.all})</option>
+                        <option value="assessed">Assessed ({statusCounts.assessed})</option>
+                        <option value="unassessed">Not assessed ({statusCounts.unassessed})</option>
+                        {/* Assessed, but the newest one is over a year old —
+                            the set that needs doing again rather than doing. */}
+                        <option value="stale">Needs re-assessment ({statusCounts.stale})</option>
                     </select>
 
                     {filtered && (

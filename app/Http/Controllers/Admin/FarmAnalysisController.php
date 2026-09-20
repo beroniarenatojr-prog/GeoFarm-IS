@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AgriculturalIntervention;
 use App\Models\Barangay;
+use App\Models\ClimateRiskAssessment;
 use App\Models\Farmer;
 use App\Models\FarmerMessage;
 use App\Models\FinancialAssistance;
@@ -51,10 +52,45 @@ class FarmAnalysisController extends Controller
         $filters = $request->validate([
             'search'   => 'nullable|string|max:100',
             'barangay' => 'nullable|string|max:50',
+            // assessed / unassessed / stale. Anything else is rejected rather
+            // than quietly ignored, so a bad value cannot silently widen the list.
+            'status'   => 'nullable|in:assessed,unassessed,stale',
         ]);
 
         $search = $filters['search'] ?? null;
         $barangay = $filters['barangay'] ?? null;
+        $status = $filters['status'] ?? null;
+
+        /*
+         * Everything except the status filter.
+         *
+         * Shared by the list and by the counts beside each status button, so
+         * "43 not assessed" always means "within the search and barangay you
+         * have set" rather than across the whole register — a count that
+         * ignored the other filters would contradict the list under it.
+         */
+        $withSearchAndBarangay = fn ($query) => $query
+            ->when($search, fn ($q) => $q->where(fn ($w) => $w
+                ->where('first_name', 'like', "%{$search}%")
+                ->orWhere('last_name', 'like', "%{$search}%")
+                ->orWhere('rsbsa_no', 'like', "%{$search}%")))
+            ->when($barangay, fn ($q) => $q->where('barangay', $barangay));
+
+        /*
+         * "Stale" means the LATEST assessment is old, not that some old one
+         * exists. The threshold is read from the model so this and the badge
+         * on the card can never disagree about what counts as out of date.
+         */
+        $staleBefore = now()->subMonths(ClimateRiskAssessment::STALE_AFTER_MONTHS);
+
+        $applyStatus = fn ($query) => $query
+            ->when($status === 'assessed', fn ($q) => $q->whereHas('riskAssessments'))
+            ->when($status === 'unassessed', fn ($q) => $q->whereDoesntHave('riskAssessments'))
+            ->when($status === 'stale', fn ($q) => $q->whereRaw(
+                '(select assessed_at from climate_risk_assessments
+                    where farmer_id = farmers.id order by assessed_at desc limit 1) < ?',
+                [$staleBefore],
+            ));
 
         /*
          * The counts come from withCount, not from loading the rows: a page of
@@ -86,11 +122,8 @@ class FarmAnalysisController extends Controller
                 ),
                 'fishponds as fishponds',
             ])
-            ->when($search, fn ($q) => $q->where(fn ($w) => $w
-                ->where('first_name', 'like', "%{$search}%")
-                ->orWhere('last_name', 'like', "%{$search}%")
-                ->orWhere('rsbsa_no', 'like', "%{$search}%")))
-            ->when($barangay, fn ($q) => $q->where('barangay', $barangay))
+            ->tap($withSearchAndBarangay)
+            ->tap($applyStatus)
             // Highest risk first, then the unassessed, then the rest. The point
             // of the page is to reach the farms that need attention soonest.
             ->orderByRaw("FIELD((select risk_level from climate_risk_assessments where farmer_id = farmers.id order by assessed_at desc limit 1), 'high', 'moderate', 'low')")
@@ -116,8 +149,31 @@ class FarmAnalysisController extends Controller
 
         return Inertia::render('Admin/Analytics/FarmIndex', [
             'farmers'   => $farmers,
-            'filters'   => ['search' => $search, 'barangay' => $barangay],
+            'filters'   => ['search' => $search, 'barangay' => $barangay, 'status' => $status],
             'barangays' => Barangay::where('is_active', true)->orderBy('name')->pluck('name'),
+
+            /*
+             * How many fall into each status, within the search and barangay
+             * currently set but ignoring the status itself — so the buttons
+             * show what switching to each one would give, which is the only
+             * reading that makes a filter worth clicking.
+             *
+             * Counted in SQL. Counting in PHP would need every farmer loaded
+             * on a page that deliberately paginates twelve at a time.
+             */
+            'statusCounts' => [
+                'all' => Farmer::verified()->tap($withSearchAndBarangay)->count(),
+                'assessed' => Farmer::verified()->tap($withSearchAndBarangay)
+                    ->whereHas('riskAssessments')->count(),
+                'unassessed' => Farmer::verified()->tap($withSearchAndBarangay)
+                    ->whereDoesntHave('riskAssessments')->count(),
+                'stale' => Farmer::verified()->tap($withSearchAndBarangay)
+                    ->whereRaw(
+                        '(select assessed_at from climate_risk_assessments
+                            where farmer_id = farmers.id order by assessed_at desc limit 1) < ?',
+                        [$staleBefore],
+                    )->count(),
+            ],
             'upcoming'  => app(ParcelRiskAnalyser::class)->upcomingPeriod(),
         ]);
     }
