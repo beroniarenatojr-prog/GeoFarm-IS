@@ -39,7 +39,27 @@ class LookupController extends Controller
         return Inertia::render('Admin/Lookups/Index', [
             'crops'          => $this->withUsage(Crop::orderBy('crop_name')->get()),
             'farmTypes'      => $this->withUsage(FarmType::orderBy('type_name')->get()),
-            'livestockTypes' => $this->withUsage(LivestockType::orderBy('type_name')->get()),
+            /*
+             * Livestock types are NOT listed here any more.
+             *
+             * The list configured nothing. Animals are recorded in the five
+             * RSBSA tables — large_ruminants, small_ruminants, native_pigs,
+             * swine_hybrid and poultry — and each one takes its options from a
+             * database ENUM, not from livestock_types. Editing a row here
+             * changed no form anywhere, and the two vocabularies had already
+             * drifted apart: this table says "Duck" where poultry.bird_type
+             * says "Ducks", it has no Goose, and its single "Swine" entry
+             * matches neither native_pigs nor swine_hybrid's White/Brown.
+             *
+             * A settings screen that appears to control something it does not
+             * is worse than no screen: staff change it, nothing happens, and
+             * they are left doubting the rest of the page.
+             *
+             * The TABLE is deliberately left in place. FarmerController and
+             * GISController still read farmer.livestock.livestockType for the
+             * profile's Livestock tab, and dropping it would break those reads
+             * for no gain. Only the management UI is withdrawn.
+             */
             'associations'   => $this->withUsage(Association::orderBy('association_name')->get()),
         ]);
     }

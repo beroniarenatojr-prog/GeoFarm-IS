@@ -3,7 +3,7 @@ import { useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-    Plus, Search, Pencil, Trash2, Check, X, Lock, Sprout, Tractor, Beef, Users, Library,
+    Plus, Search, Pencil, Trash2, Check, X, Lock, Sprout, Tractor, Users, Library,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -229,7 +229,7 @@ function LookupCard({
     );
 }
 
-export default function LookupsIndex({ farmTypes, crops, livestockTypes, associations }) {
+export default function LookupsIndex({ farmTypes, crops, associations }) {
     return (
         <AdminLayout title="Lookup Table Management">
             <div className="mb-5 flex items-start gap-3 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
@@ -262,12 +262,21 @@ export default function LookupsIndex({ farmTypes, crops, livestockTypes, associa
                     extraKey="description" extraLabel="Description"
                     route="/admin/lookups/farm-types" />
 
-                <LookupCard
-                    title="Livestock Types" icon={Beef}
-                    blurb="Chosen when recording livestock"
-                    items={livestockTypes} nameKey="type_name" nameLabel="Type name"
-                    extraKey="category" extraLabel="Category (e.g. Poultry)"
-                    route="/admin/lookups/livestock-types" />
+                {/*
+                    The Livestock Types card was removed from here.
+
+                    Its blurb said "Chosen when recording livestock", and that
+                    was not true: animals are recorded in the five RSBSA tables
+                    (large_ruminants, small_ruminants, native_pigs,
+                    swine_hybrid, poultry) and each takes its options from a
+                    database ENUM. Nothing typed into this card ever reached a
+                    form, and the two lists had already drifted — "Duck" here
+                    against "Ducks" in poultry.bird_type, no Goose, and a
+                    "Swine" entry matching neither native_pigs nor swine_hybrid.
+
+                    The table itself is untouched; the farmer profile still
+                    reads it. Only this control is withdrawn.
+                */}
 
                 <LookupCard
                     title="Associations" icon={Users}
