@@ -133,6 +133,61 @@ class FarmInventoryController extends Controller
      * dialog handles both paper and "Save as PDF", which is what the office
      * actually does with it.
      */
+    /**
+     * Which farmers are behind one line of the livestock summary.
+     *
+     * The panel shows "Goat — 29 farmers — 338 heads", which answers how many
+     * but never who. This answers who, for one animal type, on demand: the
+     * summary itself stays a handful of grouped rows rather than carrying
+     * every holder of every species on each page load.
+     *
+     * The source is matched against ANIMAL_SOURCES rather than trusted, so a
+     * table name cannot be posted in through the URL.
+     */
+    public function animalHolders(Request $request, string $source)
+    {
+        $config = collect(self::ANIMAL_SOURCES)->firstWhere('route', $source);
+
+        if (! $config) {
+            abort(404, 'Unknown animal type.');
+        }
+
+        $key = $request->query('key');
+
+        $rows = $config['model']::query()
+            ->with('farmer:id,first_name,middle_name,last_name,suffix,barangay,rsbsa_no')
+            // native_pigs has no discriminator column — every row is a native
+            // pig — so it is queried whole and `key` is ignored for it.
+            ->when($config['field'] && $key !== null, fn ($q) => $q->where($config['field'], $key))
+            ->get()
+            ->map(fn ($row) => [
+                'id'        => $row->id,
+                'farmer_id' => $row->farmer_id,
+                'farmer'    => $row->farmer?->full_name ?? 'Unknown farmer',
+                'barangay'  => $row->farmer?->barangay,
+                'rsbsa_no'  => $row->farmer?->rsbsa_no,
+                'male'      => (int) $row->male_count,
+                'female'    => (int) $row->female_count,
+                // Read, never written: total_heads is a generated column.
+                'total'     => (int) $row->total_heads,
+            ])
+            ->sortByDesc('total')
+            ->values();
+
+        return response()->json([
+            'label'  => $key !== null && $key !== '' ? $key : $config['category'],
+            'rows'   => $rows,
+            // Totalled here so the modal's footer and the panel's row cannot
+            // disagree — both are sums of the same records.
+            'totals' => [
+                'farmers' => $rows->pluck('farmer_id')->unique()->count(),
+                'male'    => $rows->sum('male'),
+                'female'  => $rows->sum('female'),
+                'total'   => $rows->sum('total'),
+            ],
+        ]);
+    }
+
     public function print($farmerId)
     {
         $farmer = Farmer::findOrFail($farmerId);
@@ -174,7 +229,7 @@ class FarmInventoryController extends Controller
             ->select('crop_type')
             ->selectRaw('SUM(quantity) as total_quantity')
             ->selectRaw('SUM(area_hectares) as total_area')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->groupBy('crop_type')
             ->get();
 
@@ -182,7 +237,7 @@ class FarmInventoryController extends Controller
         $fishponds = DB::table('fishponds')
             ->select('species')
             ->selectRaw('SUM(area_hectares) as total_area')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->groupBy('species')
             ->get();
 
@@ -195,12 +250,17 @@ class FarmInventoryController extends Controller
             ->selectRaw('SUM(male_count) as total_male')
             ->selectRaw('SUM(female_count) as total_female')
             ->selectRaw('SUM(total_heads) as total_heads')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->groupBy('animal_type')
             ->get()
             ->map(fn($r) => (object)[
                 'type' => $r->animal_type,
                 'category' => 'Large Ruminant',
+                // Which table this row came from, and the value that
+                // identifies it there — the drill-down needs both, because the
+                // label on screen is not always the stored value.
+                'source' => 'large-ruminants',
+                'key' => $r->animal_type,
                 'male' => $r->total_male,
                 'female' => $r->total_female,
                 'total' => $r->total_heads,
@@ -213,12 +273,14 @@ class FarmInventoryController extends Controller
             ->selectRaw('SUM(male_count) as total_male')
             ->selectRaw('SUM(female_count) as total_female')
             ->selectRaw('SUM(total_heads) as total_heads')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->groupBy('animal_type')
             ->get()
             ->map(fn($r) => (object)[
                 'type' => $r->animal_type,
                 'category' => 'Small Ruminant',
+                'source' => 'small-ruminants',
+                'key' => $r->animal_type,
                 'male' => $r->total_male,
                 'female' => $r->total_female,
                 'total' => $r->total_heads,
@@ -230,13 +292,15 @@ class FarmInventoryController extends Controller
             ->selectRaw('SUM(male_count) as total_male')
             ->selectRaw('SUM(female_count) as total_female')
             ->selectRaw('SUM(total_heads) as total_heads')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->first();
         
         if ($nativePigs && $nativePigs->total_heads > 0) {
             $livestock->push((object)[
                 'type' => 'Native Pig',
                 'category' => 'Swine',
+                'source' => 'native-pigs',
+                'key' => null,
                 'male' => $nativePigs->total_male,
                 'female' => $nativePigs->total_female,
                 'total' => $nativePigs->total_heads,
@@ -250,12 +314,16 @@ class FarmInventoryController extends Controller
             ->selectRaw('SUM(male_count) as total_male')
             ->selectRaw('SUM(female_count) as total_female')
             ->selectRaw('SUM(total_heads) as total_heads')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->groupBy('variety')
             ->get()
             ->map(fn($r) => (object)[
                 'type' => "Swine Hybrid ({$r->variety})",
                 'category' => 'Swine',
+                // The label reads "Swine Hybrid (White)" but the column holds
+                // just "White", so the key is the variety on its own.
+                'source' => 'swine-hybrid',
+                'key' => $r->variety,
                 'male' => $r->total_male,
                 'female' => $r->total_female,
                 'total' => $r->total_heads,
@@ -268,12 +336,14 @@ class FarmInventoryController extends Controller
             ->selectRaw('SUM(male_count) as total_male')
             ->selectRaw('SUM(female_count) as total_female')
             ->selectRaw('SUM(total_heads) as total_heads')
-            ->selectRaw('COUNT(*) as farmer_count')
+            ->selectRaw('COUNT(DISTINCT farmer_id) as farmer_count')
             ->groupBy('bird_type')
             ->get()
             ->map(fn($r) => (object)[
                 'type' => $r->bird_type,
                 'category' => 'Poultry',
+                'source' => 'poultry',
+                'key' => $r->bird_type,
                 'male' => $r->total_male,
                 'female' => $r->total_female,
                 'total' => $r->total_heads,

@@ -8,6 +8,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
 import AssetModal from '@/Components/FarmInventory/AssetModal';
+import AnimalHoldersModal from '@/Components/FarmInventory/AnimalHoldersModal';
 import ModalShell from '@/Components/ui/ModalShell';
 
 const HEALTH_TONE = {
@@ -244,7 +245,14 @@ function DeleteDialog({ target, onCancel, onConfirm, busy }) {
 }
 
 /** Table on desktop, stacked cards below lg. */
-function DataBlock({ columns, rows, renderCard, empty }) {
+/**
+ * A table of records, optionally with rows that open something.
+ *
+ * onRowClick is opt-in: most blocks here are already the detail, and making
+ * every row look pressable when nothing happens would be a lie. Where it is
+ * given, the row becomes keyboard-reachable and shows it is pressable.
+ */
+function DataBlock({ columns, rows, renderCard, empty, onRowClick }) {
     if (!rows || rows.length === 0) return empty;
 
     return (
@@ -263,7 +271,16 @@ function DataBlock({ columns, rows, renderCard, empty }) {
                     </thead>
                     <tbody className="divide-y divide-green-50">
                         {rows.map((r, i) => (
-                            <tr key={i} className="hover:bg-green-50/60 transition-colors">
+                            <tr key={i}
+                                onClick={onRowClick ? () => onRowClick(r) : undefined}
+                                onKeyDown={onRowClick ? (e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(r); }
+                                } : undefined}
+                                tabIndex={onRowClick ? 0 : undefined}
+                                role={onRowClick ? 'button' : undefined}
+                                className={`transition-colors hover:bg-green-50/60 ${
+                                    onRowClick ? 'cursor-pointer focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500' : ''
+                                }`}>
                                 {columns.map(c => (
                                     <td key={c.key}
                                         className={`px-4 py-3 ${c.align === 'right' ? 'text-right tabular-nums font-semibold text-[#006400]' : 'text-gray-700'}`}>
@@ -292,6 +309,8 @@ export default function FarmInventoryIndex({
     const [term, setTerm] = useState(farmerSearch ?? '');
     // { category, record } — record is null when adding.
     const [asset, setAsset] = useState(null);
+    // Which livestock summary row is drilled into, or null.
+    const [holders, setHolders] = useState(null);
     // { category, id, what, details } while a delete is awaiting confirmation.
     const [pendingDelete, setPendingDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);
@@ -622,7 +641,11 @@ export default function FarmInventoryIndex({
                         <AddButton key={cat} label={label}
                             onClick={() => setAsset({ category: cat, record: null })} />
                     ))}>
+                            {/* Rows drill into their farmers only in the
+                                combined view — a single farmer's panel already
+                                IS the detail, so there is nothing to open. */}
                             <DataBlock
+                                onRowClick={aggregated ? (r) => setHolders(r) : undefined}
                                 columns={[
                                     { key: 'type', label: 'Animal', render: r => <span className="font-medium text-gray-900">{r.type ?? '—'}</span> },
                                     { key: 'cat', label: 'Category', render: r => (
@@ -744,6 +767,16 @@ export default function FarmInventoryIndex({
                     parcels={parcels}
                     cropOptions={cropOptions}
                     onClose={() => setAsset(null)}
+                />
+            )}
+
+            {holders && (
+                <AnimalHoldersModal
+                    // Keyed so opening a different animal remounts and refetches
+                    // rather than showing the previous one's farmers.
+                    key={`${holders.source}-${holders.key ?? 'all'}`}
+                    row={holders}
+                    onClose={() => setHolders(null)}
                 />
             )}
 
