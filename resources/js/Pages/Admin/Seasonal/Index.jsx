@@ -1335,7 +1335,22 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                         detail view still opens the whole
                                         parcel-year so wet and dry can be read
                                         against each other. */}
-                                    {rows.data.flatMap(row => row.seasons.map(s => (
+                                    {/*
+                                        Grouped by parcel-year, one line per
+                                        season inside it.
+
+                                        A parcel cropped Wet AND Dry is one
+                                        cropping year, and the farmer declared
+                                        it as one schedule — so crop, farmer,
+                                        parcel and area are written once and
+                                        span both lines. What is NOT merged is
+                                        the money: the two seasons are separate
+                                        harvests with their own yield, cost and
+                                        price, and adding them together would
+                                        hide a dry season that failed behind a
+                                        wet one that did not.
+                                    */}
+                                    {rows.data.flatMap(row => row.seasons.map((s, i) => (
                                         <tr
                                             key={s.id}
                                             onClick={() => setViewing({ row, season: s })}
@@ -1348,18 +1363,41 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             tabIndex={0}
                                             role="button"
                                             aria-label={`Open ${row.crop?.crop_name ?? 'cropping'} details for ${farmerName(s)}`}
-                                            className="group cursor-pointer transition-colors hover:bg-green-50/60 focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500"
+                                            /* A heavier rule starts each cropping
+                                               year, so the seasons inside one
+                                               read as belonging together rather
+                                               than as unrelated parcels. */
+                                            className={`group cursor-pointer transition-colors hover:bg-green-50/60 focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500 ${
+                                                i === 0 ? 'border-t-2 border-green-100' : ''
+                                            }`}
                                         >
-                                            <td className="px-4 py-3 font-medium text-gray-900">
-                                                {row.crop?.crop_name ?? <span className="text-gray-300">—</span>}
-                                            </td>
-                                            <td className="px-4 py-3 text-gray-700">{farmerName(s)}</td>
-                                            <td className="px-4 py-3 text-xs text-gray-500">{parcelLabel(row.parcel)}</td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {s.area_planted_ha != null
-                                                    ? <>{Number(s.area_planted_ha).toFixed(2)}<span className="text-gray-400"> ha</span></>
-                                                    : <NoData />}
-                                            </td>
+                                            {/* Written once for the whole cropping
+                                                year, spanning its seasons. */}
+                                            {i === 0 && (
+                                                <>
+                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top font-medium text-gray-900">
+                                                        {row.crop?.crop_name ?? <span className="text-gray-300">—</span>}
+                                                        {row.seasons.length > 1 && (
+                                                            /* The farmer declared this parcel as
+                                                               Wet/Dry, and both were cropped. */
+                                                            <span className="mt-0.5 block text-[11px] font-normal text-gray-400">
+                                                                Wet / Dry
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top text-gray-700">
+                                                        {farmerName(s)}
+                                                    </td>
+                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top text-xs text-gray-500">
+                                                        {parcelLabel(row.parcel)}
+                                                    </td>
+                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top text-right tabular-nums text-gray-700">
+                                                        {s.area_planted_ha != null
+                                                            ? <>{Number(s.area_planted_ha).toFixed(2)}<span className="text-gray-400"> ha</span></>
+                                                            : <NoData />}
+                                                    </td>
+                                                </>
+                                            )}
                                             <td className="px-4 py-3">
                                                 <Badge value={s.season} />
                                                 <span className="ml-1.5 text-xs text-gray-400">{row.cropping_year}</span>
