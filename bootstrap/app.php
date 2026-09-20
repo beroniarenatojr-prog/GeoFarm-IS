@@ -41,12 +41,71 @@ return Application::configure(basePath: dirname(__DIR__))
          * redirect also hands back a fresh session and CSRF token.
          */
         $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
-            if ($response->getStatusCode() !== 419) {
-                return $response;
+            if ($response->getStatusCode() === 419) {
+                $response = redirect()
+                    ->guest(route('login'))
+                    ->with('error', 'Your session expired because the page was open for a while. Please sign in again.');
             }
 
-            return redirect()
-                ->guest(route('login'))
-                ->with('error', 'Your session expired because the page was open for a while. Please sign in again.');
+            /*
+             * A refused action should say so in the app, not replace it.
+             *
+             * abort(403) renders Symfony's bare "Oops! An Error Occurred"
+             * page, which Inertia then shows in a modal over the interface —
+             * so a staff member told "you may not delete Admin users", which
+             * is an ordinary and correct answer, instead saw a crash. Sent
+             * back where they were with the reason flashed, it becomes the
+             * toast every other refusal on this system already uses.
+             *
+             * Only for Inertia requests. A JSON or API caller still gets a
+             * real 403, because a redirect would tell it the action worked.
+             */
+            if ($response->getStatusCode() === 403 && $request->header('X-Inertia')) {
+                $reason = $e->getMessage();
+                $message = $reason !== '' ? $reason : 'You do not have permission to do that.';
+
+                /*
+                 * Never back to the page that just refused.
+                 *
+                 * url()->previous() is the referer, and for a GET that lands
+                 * straight on a forbidden address the referer can be that same
+                 * address — which would bounce between the two forever.
+                 *
+                 * The fallback is the site root, not the admin dashboard:
+                 * /admin is itself gated on role, so sending a Farmer there
+                 * would answer one 403 with another and loop anyway. The root
+                 * is public and redirects each role onward from there.
+                 */
+                $previous = url()->previous();
+
+                $response = $previous === $request->fullUrl()
+                    ? redirect('/')->with('error', $message)
+                    : back()->with('error', $message);
+            }
+
+            /*
+             * Redirects answering PUT, PATCH or DELETE must be 303.
+             *
+             * This is what produced the 405. A 302 tells the browser to repeat
+             * the request at the new address WITH THE SAME METHOD, so a
+             * DELETE that was redirected to the login page arrived as
+             * DELETE /login — and /login accepts only GET and POST, so
+             * Laravel answered 405 Method Not Allowed and the user got a raw
+             * error page instead of the sign-in screen. 303 See Other is the
+             * status that tells the browser to switch to GET, and it is what
+             * the Inertia protocol requires for these verbs.
+             *
+             * Inertia's own middleware normally applies this, but it is
+             * appended to the web group AFTER VerifyCsrfToken — so a 419
+             * thrown by CSRF never reaches it, and the redirect above went out
+             * as a 302. Doing it here covers every exception path, including
+             * the authentication redirect.
+             */
+            if ($response->isRedirect()
+                && in_array($request->method(), ['PUT', 'PATCH', 'DELETE'], true)) {
+                $response->setStatusCode(303);
+            }
+
+            return $response;
         });
     })->create();
