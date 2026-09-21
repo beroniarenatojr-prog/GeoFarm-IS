@@ -2177,7 +2177,7 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                                     </p>
                                                     <div className="mt-2 pt-2 border-t border-blue-200">
                                                         <p className="text-xs text-blue-700">
-                                                            Need help? Download guide: <a href="/FARMER_DOCUMENT_GUIDE.pdf" className="underline font-semibold hover:text-blue-900" target="_blank">Document Compilation Guide</a>
+                                                            Need help compiling? Visit the Agriculture Office or call the hotline for assistance.
                                                         </p>
                                                     </div>
                                                 </div>
