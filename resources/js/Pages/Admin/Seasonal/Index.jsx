@@ -1350,11 +1350,6 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                             >
                                                 <td className="px-4 py-3 font-medium text-gray-900">
                                                     {row.crop?.crop_name ?? <span className="text-gray-300">—</span>}
-                                                    {row.seasons.length > 1 && (
-                                                        <span className="mt-0.5 block text-[11px] font-normal text-gray-400">
-                                                            Wet / Dry
-                                                        </span>
-                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3 text-gray-700">
                                                     {farmerName(firstSeason)}
