@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \App\Http\Middleware\PreventBackHistory::class,
+            \App\Http\Middleware\PreventConcurrentLogins::class, // Check for concurrent logins
             // Inertia keeps each visited page in window.history.state so Back
             // can restore it without a round trip. That state holds whatever
             // the page was showing - farmer records, assistance lists - in

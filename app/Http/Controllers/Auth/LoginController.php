@@ -45,6 +45,10 @@ class LoginController extends Controller
 
         $user->update(['last_login' => now()]);
 
+        // Prevent concurrent logins: store the current session ID
+        // Any old sessions will be invalidated by the middleware
+        $user->update(['active_session_id' => $request->session()->getId()]);
+
         $request->session()->regenerate();
         
         // Redirect based on user role
@@ -57,6 +61,11 @@ class LoginController extends Controller
 
     public function destroy(Request $request)
     {
+        // Clear the active session ID so user can login again
+        if (Auth::check()) {
+            Auth::user()->update(['active_session_id' => null]);
+        }
+        
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

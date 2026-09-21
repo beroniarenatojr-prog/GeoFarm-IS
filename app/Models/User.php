@@ -11,7 +11,7 @@ class User extends Authenticatable
 {
     use Notifiable, HasRoles;
 
-    protected $fillable = ['name', 'email', 'password', 'is_active', 'last_login', 'avatar_path'];
+    protected $fillable = ['name', 'email', 'password', 'is_active', 'last_login', 'active_session_id', 'avatar_path'];
 
     /**
      * The profile picture's URL, or null for the initial-letter fallback.

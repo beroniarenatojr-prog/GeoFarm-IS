@@ -1,0 +1,141 @@
+==========================================
+DEPLOY: Prevent Concurrent Logins
+==========================================
+
+WHAT THIS DOES:
+---------------
+Prevents users from logging in on multiple
+devices/browsers at the same time.
+
+When User A logs in on Computer 1, then logs in
+on Computer 2, Computer 1 is automatically logged
+out.
+
+
+==========================================
+FILES TO UPLOAD
+==========================================
+
+1. NEW MIGRATION
+   database/migrations/2026_09_22_000001_add_session_id_to_users_table.php
+   → ~/public_html/database/migrations/
+
+
+2. NEW MIDDLEWARE
+   app/Http/Middleware/PreventConcurrentLogins.php
+   → ~/public_html/app/Http/Middleware/
+
+
+3. UPDATED FILES
+   app/Http/Controllers/Auth/LoginController.php
+   app/Models/User.php
+   bootstrap/app.php
+   → Upload to same paths on server
+
+
+==========================================
+COMMANDS TO RUN
+==========================================
+
+ssh your-server
+cd ~/public_html
+
+# Add column to users table
+php artisan migrate --force
+
+# Clear caches
+php artisan cache:clear
+php artisan config:clear
+php artisan route:clear
+
+
+==========================================
+TEST IT
+==========================================
+
+1. Open Chrome, log in as a test user
+2. Open Firefox, log in as same user
+3. Go back to Chrome, try to click anything
+4. Chrome should log you out with message:
+   "Your account was logged in from another 
+    device or browser. You have been logged out."
+
+
+==========================================
+HOW IT WORKS
+==========================================
+
+LOGIN:
+------
+When user logs in, their session ID is saved
+in the database (users.active_session_id)
+
+EVERY REQUEST:
+--------------
+Middleware checks if current session ID matches
+the one in database
+
+IF DIFFERENT:
+-------------
+User is logged out (their session was replaced
+by a newer login from another device)
+
+LOGOUT:
+-------
+Session ID is cleared from database, so user
+can log in again from any device
+
+
+==========================================
+BENEFITS
+==========================================
+
+✅ Prevents account sharing
+✅ One user per account at a time
+✅ Security improvement
+✅ Detects unauthorized access
+✅ Works automatically (no user action needed)
+
+
+==========================================
+USER IMPACT
+==========================================
+
+BEFORE:
+- Users could log in on multiple devices
+- No way to enforce single session
+
+AFTER:
+- Only one active session per user
+- Old session logged out automatically
+- User sees clear message explaining why
+
+
+==========================================
+CONFIGURATION
+==========================================
+
+Make sure in .env:
+
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+
+(Session lifetime in minutes)
+
+
+==========================================
+ROLLBACK (if needed)
+==========================================
+
+If you need to undo this:
+
+1. Comment out in bootstrap/app.php:
+   // \App\Http\Middleware\PreventConcurrentLogins::class,
+
+2. Rollback migration:
+   php artisan migrate:rollback --step=1
+
+3. Restore old files from backup
+
+
+==========================================
