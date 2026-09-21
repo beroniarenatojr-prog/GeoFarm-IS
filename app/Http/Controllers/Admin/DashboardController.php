@@ -10,8 +10,8 @@ use App\Models\CropSeason;
 use App\Models\Farmer;
 use App\Models\FarmerMessage;
 use App\Models\FarmParcel;
-use App\Models\Livestock;
 use App\Services\ClimateRiskScorer;
+use App\Services\LivestockTally;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
@@ -47,6 +47,7 @@ class DashboardController extends Controller
     private function headline(): array
     {
         $parcels = FarmParcel::selectRaw('COUNT(*) AS n, COALESCE(SUM(total_area_ha), 0) AS ha')->first();
+        $tally = app(LivestockTally::class)->totals();
 
         return [
             // Verified only — a pending online registration is not a farmer yet.
@@ -56,8 +57,16 @@ class DashboardController extends Controller
             'total_parcels'   => (int) $parcels->n,
             'hectares_mapped' => round((float) $parcels->ha, 2),
 
-            'total_livestock' => (int) Livestock::sum('count'),
-            'livestock_types' => Livestock::distinct('livestock_type_id')->count('livestock_type_id'),
+            /*
+             * From the five RSBSA tables, not the `livestock` table.
+             *
+             * These two read Livestock::sum('count') and a distinct count of
+             * livestock_type_id — a table nothing in this application writes
+             * to, so both reported 0 permanently while Farm Inventory showed
+             * hundreds of heads from large_ruminants, poultry and the rest.
+             */
+            'total_livestock' => $tally['heads'],
+            'livestock_types' => $tally['kinds'],
 
             'assistance_total'  => round((float) AssistanceDistribution::sum('amount_given'), 2),
             'farmers_assisted'  => AssistanceDistribution::distinct('farmer_id')->count('farmer_id'),
@@ -95,7 +104,21 @@ class DashboardController extends Controller
             // whereHas rather than a join: a farmer with three parcels must
             // count once, not three times.
             'with_parcels'   => (clone $verified)->whereHas('parcels')->count(),
-            'with_livestock' => (clone $verified)->whereHas('livestock')->count(),
+            /*
+             * Any of the five RSBSA tables, not the dead `livestock` relation.
+             *
+             * Kept as whereHas inside the verified query rather than handed to
+             * LivestockTally, because this figure is "verified farmers holding
+             * animals" — a service counting every holder would quietly include
+             * pending registrations. Grouped in a closure so the ORs cannot
+             * escape and widen the verified condition around them.
+             */
+            'with_livestock' => (clone $verified)->where(fn ($q) => $q
+                ->whereHas('largeRuminants')
+                ->orWhereHas('smallRuminants')
+                ->orWhereHas('nativePigs')
+                ->orWhereHas('swineHybrid')
+                ->orWhereHas('poultry'))->count(),
             'assisted'       => (clone $verified)->whereHas('distributions')->count(),
         ];
     }
@@ -104,29 +127,22 @@ class DashboardController extends Controller
      * Livestock by the categories the office actually uses.
      *
      * "193 heads" on its own answers nothing — the question is 193 of what.
-     * Grouped on livestock_types.category, which is where those groupings
-     * already live; types with no category fall under their own name rather
-     * than being dropped or lumped into "Other".
+     * Grouped as Large Ruminant / Small Ruminant / Swine / Poultry, which is
+     * how the RSBSA tables themselves divide, with native pigs and hybrids
+     * counted together as Swine.
      */
     private function livestockOverview(): array
     {
-        $rows = Livestock::query()
-            ->join('livestock_types', 'livestock.livestock_type_id', '=', 'livestock_types.id')
-            ->selectRaw('COALESCE(NULLIF(livestock_types.category, ""), livestock_types.type_name) AS name')
-            ->selectRaw('SUM(livestock.count) AS heads')
-            ->selectRaw('COUNT(DISTINCT livestock.livestock_type_id) AS types')
-            ->groupBy('name')
-            ->orderByDesc('heads')
-            ->get();
-
-        return [
-            'total'      => (int) $rows->sum('heads'),
-            'categories' => $rows->map(fn ($r) => [
-                'name'  => $r->name,
-                'heads' => (int) $r->heads,
-                'types' => (int) $r->types,
-            ])->values(),
-        ];
+        /*
+         * Grouped by the RSBSA tables' own categories rather than by
+         * livestock_types.category.
+         *
+         * The old query joined `livestock` to `livestock_types`, and since
+         * nothing writes to `livestock` the join returned no rows — so this
+         * panel said "No livestock records yet" no matter how many animals
+         * the office had recorded.
+         */
+        return app(LivestockTally::class)->categories();
     }
 
     private function assistanceOverview(): array
