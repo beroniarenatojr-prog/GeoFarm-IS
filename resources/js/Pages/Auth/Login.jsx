@@ -21,55 +21,71 @@ export default function Login() {
             {/* Centered Login Card */}
             <div className="w-full max-w-5xl flex rounded-3xl shadow-2xl overflow-hidden bg-white">
                 {/* Left Panel - Dark Green */}
-                <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#1a3a2e] to-[#0d1f19] p-12 flex-col justify-between relative overflow-hidden">
+                <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#004d00] via-[#006400] to-[#228B22] p-12 flex-col justify-center items-center relative overflow-hidden">
                     {/* Decorative Background Pattern */}
                     <div className="absolute inset-0 opacity-10">
-                        <div className="absolute top-20 left-20 w-64 h-64 border border-[#f4d58d] rounded-full"></div>
-                        <div className="absolute bottom-20 right-20 w-96 h-96 border border-[#f4d58d] rounded-full"></div>
+                        <div className="absolute top-10 left-10 w-72 h-72 border-2 border-white/30 rounded-full"></div>
+                        <div className="absolute bottom-10 right-10 w-96 h-96 border-2 border-white/30 rounded-full"></div>
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] border border-white/20 rounded-full"></div>
                     </div>
 
-                    {/* Logo and Branding */}
-                    <div className="relative z-10">
-                        <div className="flex items-center space-x-3 mb-8">
+                    {/* Content Container - Centered */}
+                    <div className="relative z-10 flex flex-col items-center text-center space-y-8 max-w-md">
+                        {/* Logo - Large and Centered */}
+                        <div className="flex flex-col items-center space-y-4">
                             <img
                                 src="/images/Logo.jpeg"
                                 alt="Seal of the Municipality of Tumauini, Isabela"
-                                className="h-14 w-14 flex-shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-white/30"
+                                className="h-32 w-32 rounded-full bg-white object-contain p-2 ring-4 ring-white/40 shadow-2xl"
                             />
-                            <div>
-                                <h1 className="text-2xl font-bold text-white">GeoFarm-IS</h1>
-                                <p className="text-[#f4d58d] text-sm">Geographic Farm Information System</p>
+                            
+                            {/* Municipal Office Title */}
+                            <div className="space-y-2">
+                                <h2 className="text-xl font-bold text-white tracking-wide">
+                                    MUNICIPAL AGRICULTURIST OFFICE
+                                </h2>
+                                <p className="text-[#90EE90] text-lg font-semibold tracking-wider">
+                                    TUMAUINI, ISABELA
+                                </p>
                             </div>
                         </div>
 
-                        <div className="h-px bg-[#f4d58d]/30 mb-8"></div>
+                        {/* Divider */}
+                        <div className="w-32 h-px bg-white/40"></div>
 
-                        <div className="space-y-2 text-sm text-[#f4d58d]/80">
-                            <p>LGU AGRICULTURE OFFICE • TUMAUINI,</p>
-                            <p>ISABELA</p>
+                        {/* System Branding */}
+                        <div className="space-y-2">
+                            <h1 className="text-3xl font-bold text-white">GeoFarm-IS</h1>
+                            <p className="text-[#90EE90] text-base font-medium">
+                                Geographic Farm Information System
+                            </p>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="w-32 h-px bg-white/40"></div>
+
+                        {/* Tagline */}
+                        <div className="space-y-3">
+                            <h3 className="text-2xl font-bold text-white leading-snug">
+                                Every parcel,<br />
+                                <span className="text-[#FFD700] italic">mapped and known.</span>
+                            </h3>
+                            <p className="text-white/90 text-sm leading-relaxed">
+                                Manage farmer records, monitor harvests,<br />
+                                and coordinate assistance programs<br />
+                                across Tumauini's fields.
+                            </p>
                         </div>
                     </div>
 
-                    {/* Main Content */}
-                    <div className="relative z-10">
-                        <h2 className="text-5xl font-bold text-white mb-4 leading-tight">
-                            Every parcel,<br />
-                            <span className="text-[#f4d58d] italic">mapped and</span><br />
-                            <span className="text-[#f4d58d] italic">known.</span>
-                        </h2>
-                        <p className="text-gray-300 text-lg">
-                            Sign in to manage farmer records, monitor<br />
-                            harvests, and coordinate assistance programs<br />
-                            across Tumauini's fields.
-                        </p>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="relative z-10">
-                        <div className="h-px bg-[#f4d58d]/30 mb-4"></div>
-                        <p className="text-gray-400 text-sm">
-                            © 2026 GeoFarm Information System
-                        </p>
+                    {/* Footer - Absolute Bottom */}
+                    <div className="absolute bottom-8 left-0 right-0 px-12">
+                        <div className="relative z-10">
+                            <div className="h-px bg-white/20 mb-3"></div>
+                            <p className="text-white/60 text-xs text-center">
+                                © 2026 GeoFarm Information System
+                            </p>
+                        </div>
                     </div>
                 </div>
 
