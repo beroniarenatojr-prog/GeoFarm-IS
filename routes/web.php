@@ -303,10 +303,10 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->na
 
     // Farm Inventory
     Route::get('farm-inventory', [FarmInventoryController::class, 'index'])->middleware('permission:view inventory')->name('farm-inventory.index');
-    // Who is behind one line of the livestock summary. Declared before the
+    // Who is behind one line of any inventory panel. Declared before the
     // {farmer} routes below so "animals" is never read as a farmer id.
-    Route::get('farm-inventory/animals/{source}', [FarmInventoryController::class, 'animalHolders'])
-        ->middleware('permission:view inventory')->name('farm-inventory.animals');
+    Route::get('farm-inventory/holders/{source}', [FarmInventoryController::class, 'holders'])
+        ->middleware('permission:view inventory')->name('farm-inventory.holders');
     Route::get('farm-inventory/{farmer}/export', [FarmInventoryController::class, 'export'])->middleware('permission:export reports')->name('farm-inventory.export');
     // Printing is a viewing act, not an export, so it follows "view inventory".
     Route::get('farm-inventory/{farmer}/print', [FarmInventoryController::class, 'print'])->middleware('permission:view inventory')->name('farm-inventory.print');

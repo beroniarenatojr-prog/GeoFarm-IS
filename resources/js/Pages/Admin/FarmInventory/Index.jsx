@@ -8,7 +8,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDate } from '@/utils/dateFormatter';
 import AssetModal from '@/Components/FarmInventory/AssetModal';
-import AnimalHoldersModal from '@/Components/FarmInventory/AnimalHoldersModal';
+import HoldersModal from '@/Components/FarmInventory/HoldersModal';
 import ModalShell from '@/Components/ui/ModalShell';
 
 const HEALTH_TONE = {
@@ -293,8 +293,22 @@ function DataBlock({ columns, rows, renderCard, empty, onRowClick }) {
                 </table>
             </div>
 
+            {/* The same row, as a card. It gets the click too — the table above
+                is hidden below lg, so without this the drill-down would exist
+                only on a desktop. */}
             <div className="lg:hidden divide-y divide-green-50">
-                {rows.map((r, i) => <div key={i} className="py-3">{renderCard(r)}</div>)}
+                {rows.map((r, i) => (onRowClick ? (
+                    <button
+                        key={i}
+                        type="button"
+                        onClick={() => onRowClick(r)}
+                        className="w-full py-3 text-left transition-colors hover:bg-green-50/60 focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500"
+                    >
+                        {renderCard(r)}
+                    </button>
+                ) : (
+                    <div key={i} className="py-3">{renderCard(r)}</div>
+                )))}
             </div>
         </>
     );
@@ -309,7 +323,7 @@ export default function FarmInventoryIndex({
     const [term, setTerm] = useState(farmerSearch ?? '');
     // { category, record } — record is null when adding.
     const [asset, setAsset] = useState(null);
-    // Which livestock summary row is drilled into, or null.
+    // Which inventory summary row is drilled into, or null. Any panel.
     const [holders, setHolders] = useState(null);
     // { category, id, what, details } while a delete is awaiting confirmation.
     const [pendingDelete, setPendingDelete] = useState(null);
@@ -328,6 +342,18 @@ export default function FarmInventoryIndex({
     };
 
     const aggregated = !selectedFarmer;
+
+    /*
+     * The drill-down, and why it is only offered when combined.
+     *
+     * In combined mode every row is a group across farmers, so "who is in
+     * this row" is a real question. With one farmer picked the rows are that
+     * farmer's own records and the answer would be the farmer already named at
+     * the top of the page — so the rows stay unclickable rather than opening a
+     * modal that repeats what the header says.
+     */
+    const drillDown = (map) => (aggregated ? (row) => setHolders(map(row)) : undefined);
+
     const crops = inventory?.crops ?? [];
     const treeCrops = inventory?.tree_crops ?? [];
     const fishponds = inventory?.fishponds ?? [];
@@ -522,6 +548,7 @@ export default function FarmInventoryIndex({
                         </p>
                     )}
                     <DataBlock
+                        onRowClick={drillDown(r => ({ source: "crops", label: r.crop_name, query: { key: r.crop_id, season: r.season, year: r.cropping_year } }))}
                         columns={[
                             { key: 'crop', label: 'Crop', render: r => <span className="font-medium text-gray-900">{r.crop_name ?? '—'}</span> },
                             { key: 'season', label: 'Season', render: r => seasonChip(r.season) },
@@ -559,6 +586,7 @@ export default function FarmInventoryIndex({
                     action={addable && <AddButton label="Add tree crop"
                         onClick={() => setAsset({ category: 'tree-crops', record: null })} />}>
                                 <DataBlock
+                                    onRowClick={drillDown(r => ({ source: "tree-crops", label: r.crop_type, query: { key: r.crop_type } }))}
                                     columns={[
                                         { key: 'type', label: 'Crop', render: r => <span className="font-medium text-gray-900">{r.crop_type ?? '—'}</span> },
                                         ...(aggregated ? [{ key: 'farmers', label: 'Farmers', render: r => r.farmer_count ?? '—' }] : [
@@ -597,6 +625,7 @@ export default function FarmInventoryIndex({
                     action={addable && <AddButton label="Add fishpond"
                         onClick={() => setAsset({ category: 'fishponds', record: null })} />}>
                                 <DataBlock
+                                    onRowClick={drillDown(r => ({ source: "fishponds", label: r.species, query: { key: r.species } }))}
                                     columns={[
                                         { key: 'species', label: 'Species', render: r => <span className="font-medium text-gray-900">{r.species ?? '—'}</span> },
                                         ...(aggregated ? [{ key: 'farmers', label: 'Farmers', render: r => r.farmer_count ?? '—' }] : [
@@ -645,7 +674,14 @@ export default function FarmInventoryIndex({
                                 combined view — a single farmer's panel already
                                 IS the detail, so there is nothing to open. */}
                             <DataBlock
-                                onRowClick={aggregated ? (r) => setHolders(r) : undefined}
+                                // Source varies per row: each animal line comes
+                                // from a different RSBSA table, and the row
+                                // carries which one.
+                                onRowClick={drillDown(r => ({
+                                    source: r.source,
+                                    label: r.type,
+                                    query: { key: r.key },
+                                }))}
                                 columns={[
                                     { key: 'type', label: 'Animal', render: r => <span className="font-medium text-gray-900">{r.type ?? '—'}</span> },
                                     { key: 'cat', label: 'Category', render: r => (
@@ -699,6 +735,7 @@ export default function FarmInventoryIndex({
                     action={addable && <AddButton label="Add machinery"
                         onClick={() => setAsset({ category: 'machinery', record: null })} />}>
                             <DataBlock
+                                onRowClick={drillDown(r => ({ source: "machinery", label: r.machinery_type, query: { key: r.machinery_type } }))}
                                 columns={aggregated ? [
                                     { key: 'type', label: 'Machinery', render: r => <span className="font-medium text-gray-900">{r.machinery_type}</span> },
                                     { key: 'farmers', label: 'Farmers', render: r => num(r.farmer_count) },
@@ -771,11 +808,13 @@ export default function FarmInventoryIndex({
             )}
 
             {holders && (
-                <AnimalHoldersModal
-                    // Keyed so opening a different animal remounts and refetches
-                    // rather than showing the previous one's farmers.
-                    key={`${holders.source}-${holders.key ?? 'all'}`}
-                    row={holders}
+                <HoldersModal
+                    // Keyed so opening a different row remounts and refetches
+                    // rather than showing the previous row's farmers.
+                    key={`${holders.source}-${JSON.stringify(holders.query ?? {})}`}
+                    source={holders.source}
+                    label={holders.label}
+                    query={holders.query}
                     onClose={() => setHolders(null)}
                 />
             )}

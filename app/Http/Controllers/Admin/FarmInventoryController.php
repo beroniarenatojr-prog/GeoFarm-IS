@@ -31,6 +31,34 @@ class FarmInventoryController extends Controller
         ['model' => SwineHybrid::class,   'route' => 'swine-hybrid',    'category' => 'Swine',          'field' => 'variety', 'prefix' => 'Swine Hybrid'],
         ['model' => Poultry::class,       'route' => 'poultry',         'category' => 'Poultry',        'field' => 'bird_type'],
     ];
+    /**
+     * Every panel on this page groups records; this says who is behind one group.
+     *
+     * "Goat — 29 farmers — 338 heads" answers how many but never who, and the
+     * same was true of crops, tree crops, fishponds and machinery. One endpoint
+     * serves all five, because they differ only in which table they read and
+     * which figures they carry.
+     *
+     * The COLUMNS come back with the rows. The alternative — teaching the modal
+     * that goats have male/female and fishponds have hectares — would put the
+     * shape of every table into the front end, where it would fall out of step
+     * with the database the first time a column moved.
+     *
+     * Fetched on demand. The summary is a few dozen grouped rows; carrying
+     * every holder of every category on each page load would be most of the
+     * register.
+     */
+    private const HOLDER_SOURCES = [
+        'large-ruminants' => ['model' => LargeRuminant::class, 'field' => 'animal_type', 'shape' => 'heads'],
+        'small-ruminants' => ['model' => SmallRuminant::class, 'field' => 'animal_type', 'shape' => 'heads'],
+        'native-pigs'     => ['model' => NativePig::class,     'field' => null,           'shape' => 'heads'],
+        'swine-hybrid'    => ['model' => SwineHybrid::class,   'field' => 'variety',      'shape' => 'heads'],
+        'poultry'         => ['model' => Poultry::class,       'field' => 'bird_type',    'shape' => 'heads'],
+        'tree-crops'      => ['model' => TreeCrop::class,      'field' => 'crop_type',    'shape' => 'trees'],
+        'fishponds'       => ['model' => Fishpond::class,      'field' => 'species',      'shape' => 'ponds'],
+        'machinery'       => ['model' => FarmMachinery::class, 'field' => 'machinery_type', 'shape' => 'machines'],
+        'crops'           => ['model' => CropSeason::class,    'field' => 'crop_id',      'shape' => 'crops'],
+    ];
 
     public function index(Request $request)
     {
@@ -125,6 +153,149 @@ class FarmInventoryController extends Controller
         ];
     }
 
+    public function holders(Request $request, string $source)
+    {
+        $config = self::HOLDER_SOURCES[$source] ?? null;
+
+        if (! $config) {
+            abort(404, 'Unknown inventory category.');
+        }
+
+        $key = $request->query('key');
+
+        /*
+         * Crops hang off a parcel, not a farmer, so the farmer is reached
+         * through it — and the grouping on screen is crop AND season AND year,
+         * so all three narrow the list or a 2026 wet row would show the dry
+         * season's growers too.
+         */
+        $isCrop = $source === 'crops';
+
+        $query = $config['model']::query()
+            ->when($isCrop,
+                fn ($q) => $q->with(['parcel.farmer:id,first_name,middle_name,last_name,suffix,barangay,rsbsa_no', 'crop']),
+                fn ($q) => $q->with('farmer:id,first_name,middle_name,last_name,suffix,barangay,rsbsa_no'),
+            )
+            // native_pigs has no discriminator column — every row is a native
+            // pig — so it is read whole and `key` does not apply.
+            ->when($config['field'] && $key !== null && $key !== '',
+                fn ($q) => $q->where($config['field'], $key));
+
+        if ($isCrop) {
+            $query->when($request->query('season'), fn ($q, $s) => $q->where('season', $s))
+                ->when($request->query('year'), fn ($q, $y) => $q->where('cropping_year', $y));
+        }
+
+        $rows = $query->get()->map(function ($row) use ($config, $isCrop) {
+            $farmer = $isCrop ? $row->parcel?->farmer : $row->farmer;
+
+            $base = [
+                'id'        => $row->id,
+                'farmer_id' => $farmer?->id,
+                'farmer'    => $farmer?->full_name ?? 'Unassigned',
+                'barangay'  => $farmer?->barangay,
+                'rsbsa_no'  => $farmer?->rsbsa_no,
+            ];
+
+            return $base + match ($config['shape']) {
+                // total_heads is a generated column: read, never written.
+                'heads' => [
+                    'male'   => (int) $row->male_count,
+                    'female' => (int) $row->female_count,
+                    'total'  => (int) $row->total_heads,
+                ],
+                'trees' => [
+                    'quantity' => $row->quantity === null ? null : (int) $row->quantity,
+                    'area'     => $row->area_hectares === null ? null : (float) $row->area_hectares,
+                ],
+                'ponds' => [
+                    'pond_type' => $row->pond_type,
+                    'area'      => $row->area_hectares === null ? null : (float) $row->area_hectares,
+                ],
+                'machines' => [
+                    'brand'  => trim(($row->brand ?? '') . ' ' . ($row->model ?? '')) ?: null,
+                    'status' => $row->status,
+                    'year'   => $row->year_acquired,
+                ],
+                'crops' => [
+                    'parcel' => $row->parcel?->parcel_number ?: ($row->parcel_id ? "Parcel #{$row->parcel_id}" : null),
+                    'season' => $row->season,
+                    'year'   => $row->cropping_year,
+                    'area'   => $row->area_planted_ha === null ? null : (float) $row->area_planted_ha,
+                    'yield'  => $row->yield_kg === null ? null : (float) $row->yield_kg,
+                ],
+            };
+        });
+
+        /*
+         * Column definitions travel with the data, and the sums are computed
+         * here from the same rows the modal lists — so a footer total can
+         * never disagree with the figures above it, or with the panel row that
+         * was clicked.
+         */
+        [$columns, $totals] = match ($config['shape']) {
+            'heads' => [
+                [
+                    ['key' => 'male',   'label' => 'Male',        'align' => 'right'],
+                    ['key' => 'female', 'label' => 'Female',      'align' => 'right'],
+                    ['key' => 'total',  'label' => 'Total heads', 'align' => 'right', 'strong' => true],
+                ],
+                ['male' => $rows->sum('male'), 'female' => $rows->sum('female'), 'total' => $rows->sum('total')],
+            ],
+            'trees' => [
+                [
+                    ['key' => 'quantity', 'label' => 'Trees',    'align' => 'right', 'strong' => true],
+                    ['key' => 'area',     'label' => 'Hectares', 'align' => 'right', 'dp' => 2],
+                ],
+                ['quantity' => $rows->sum('quantity'), 'area' => round($rows->sum('area'), 2)],
+            ],
+            'ponds' => [
+                [
+                    ['key' => 'pond_type', 'label' => 'Pond type'],
+                    ['key' => 'area',      'label' => 'Hectares', 'align' => 'right', 'dp' => 2, 'strong' => true],
+                ],
+                ['area' => round($rows->sum('area'), 2)],
+            ],
+            'machines' => [
+                [
+                    ['key' => 'brand',  'label' => 'Brand / model'],
+                    ['key' => 'year',   'label' => 'Acquired', 'align' => 'right'],
+                    ['key' => 'status', 'label' => 'Status'],
+                ],
+                // A count of units, since machines have no quantity column.
+                ['units' => $rows->count()],
+            ],
+            'crops' => [
+                [
+                    ['key' => 'parcel', 'label' => 'Parcel'],
+                    ['key' => 'season', 'label' => 'Season'],
+                    ['key' => 'area',   'label' => 'Area (ha)', 'align' => 'right', 'dp' => 2],
+                    ['key' => 'yield',  'label' => 'Yield (kg)', 'align' => 'right', 'strong' => true],
+                ],
+                ['area' => round($rows->sum('area'), 2), 'yield' => round($rows->sum('yield'), 2)],
+            ],
+        };
+
+        // Biggest first on whichever figure the category is actually about.
+        $sortBy = match ($config['shape']) {
+            'heads'    => 'total',
+            'trees'    => 'quantity',
+            'ponds', 'crops' => 'area',
+            default    => 'farmer',
+        };
+
+        $rows = $rows->sortByDesc($sortBy)->values();
+
+        return response()->json([
+            'columns' => $columns,
+            'rows'    => $rows,
+            'totals'  => $totals + [
+                'farmers' => $rows->pluck('farmer_id')->filter()->unique()->count(),
+                'records' => $rows->count(),
+            ],
+        ]);
+    }
+
     /**
      * The printable record for one farmer — every category on one sheet,
      * unlike the screen which shows a tab at a time.
@@ -133,61 +304,6 @@ class FarmInventoryController extends Controller
      * dialog handles both paper and "Save as PDF", which is what the office
      * actually does with it.
      */
-    /**
-     * Which farmers are behind one line of the livestock summary.
-     *
-     * The panel shows "Goat — 29 farmers — 338 heads", which answers how many
-     * but never who. This answers who, for one animal type, on demand: the
-     * summary itself stays a handful of grouped rows rather than carrying
-     * every holder of every species on each page load.
-     *
-     * The source is matched against ANIMAL_SOURCES rather than trusted, so a
-     * table name cannot be posted in through the URL.
-     */
-    public function animalHolders(Request $request, string $source)
-    {
-        $config = collect(self::ANIMAL_SOURCES)->firstWhere('route', $source);
-
-        if (! $config) {
-            abort(404, 'Unknown animal type.');
-        }
-
-        $key = $request->query('key');
-
-        $rows = $config['model']::query()
-            ->with('farmer:id,first_name,middle_name,last_name,suffix,barangay,rsbsa_no')
-            // native_pigs has no discriminator column — every row is a native
-            // pig — so it is queried whole and `key` is ignored for it.
-            ->when($config['field'] && $key !== null, fn ($q) => $q->where($config['field'], $key))
-            ->get()
-            ->map(fn ($row) => [
-                'id'        => $row->id,
-                'farmer_id' => $row->farmer_id,
-                'farmer'    => $row->farmer?->full_name ?? 'Unknown farmer',
-                'barangay'  => $row->farmer?->barangay,
-                'rsbsa_no'  => $row->farmer?->rsbsa_no,
-                'male'      => (int) $row->male_count,
-                'female'    => (int) $row->female_count,
-                // Read, never written: total_heads is a generated column.
-                'total'     => (int) $row->total_heads,
-            ])
-            ->sortByDesc('total')
-            ->values();
-
-        return response()->json([
-            'label'  => $key !== null && $key !== '' ? $key : $config['category'],
-            'rows'   => $rows,
-            // Totalled here so the modal's footer and the panel's row cannot
-            // disagree — both are sums of the same records.
-            'totals' => [
-                'farmers' => $rows->pluck('farmer_id')->unique()->count(),
-                'male'    => $rows->sum('male'),
-                'female'  => $rows->sum('female'),
-                'total'   => $rows->sum('total'),
-            ],
-        ]);
-    }
-
     public function print($farmerId)
     {
         $farmer = Farmer::findOrFail($farmerId);
