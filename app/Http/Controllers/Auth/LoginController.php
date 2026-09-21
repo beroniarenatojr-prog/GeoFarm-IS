@@ -45,11 +45,11 @@ class LoginController extends Controller
 
         $user->update(['last_login' => now()]);
 
-        // Prevent concurrent logins: store the current session ID
+        $request->session()->regenerate();
+
+        // Prevent concurrent logins: store the current session ID AFTER regeneration
         // Any old sessions will be invalidated by the middleware
         $user->update(['active_session_id' => $request->session()->getId()]);
-
-        $request->session()->regenerate();
         
         // Redirect based on user role
         if ($user->hasRole('Farmer')) {

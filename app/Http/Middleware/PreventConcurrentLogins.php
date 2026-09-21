@@ -24,7 +24,7 @@ class PreventConcurrentLogins
     public function handle(Request $request, Closure $next): Response
     {
         // Skip checking on login/logout routes to allow new sessions to be created
-        if ($request->routeIs('login') || $request->routeIs('logout')) {
+        if ($request->is('login') || $request->is('logout') || $request->routeIs('login') || $request->routeIs('logout')) {
             return $next($request);
         }
 
