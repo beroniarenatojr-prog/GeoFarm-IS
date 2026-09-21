@@ -1,0 +1,130 @@
+==========================================
+UPLOAD LIST FOR PRODUCTION SERVER
+==========================================
+
+Upload these files to: geo-farm.pitonmain.com (~/public_html/)
+
+==========================================
+1. PHP FILES (3 files)
+==========================================
+
+Source: C:\xampp\htdocs\geofarm_is\
+Destination: ~/public_html/ (maintain folder structure)
+
+✓ app/Models/AssistanceProgramItem.php
+  → Upload to: ~/public_html/app/Models/
+
+✓ app/Http/Controllers/Admin/AssistanceController.php
+  → Upload to: ~/public_html/app/Http/Controllers/Admin/
+
+✓ database/migrations/2026_09_21_000001_make_assistance_items_text_based.php
+  → Upload to: ~/public_html/database/migrations/
+
+==========================================
+2. BUILD ASSETS (extract zip)
+==========================================
+
+Source: C:\xampp\htdocs\geofarm_is\build.zip
+Destination: ~/public_html/public/
+
+✓ build.zip
+  → Upload to: ~/public_html/public/
+  → Extract there (will create build/ folder)
+  → Delete zip after extraction
+
+Contents after extraction:
+  ~/public_html/public/build/assets/app-DdTiyMSF.js
+  ~/public_html/public/build/assets/app-DAgC4U03.css
+  ~/public_html/public/build/assets/app-voBrSrcx.css
+  ~/public_html/public/build/assets/index-4UINrHII.js
+  ~/public_html/public/build/assets/maplibre-gl-worker-B8OLt8TZ.js
+  ~/public_html/public/build/assets/togeojson.es-Bmet8L7i.js
+  ~/public_html/public/build/manifest.json
+
+==========================================
+3. SSH COMMANDS TO RUN
+==========================================
+
+After uploading files, run these commands via SSH:
+
+cd ~/public_html
+php artisan migrate --force
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
+
+==========================================
+4. VERIFICATION
+==========================================
+
+After deployment:
+1. Go to: https://geo-farm.pitonmain.com
+2. Login as admin
+3. Navigate to: Assistance Distribution
+4. Click: Create Program
+5. Click: + Add item
+6. Verify: Text inputs appear (not dropdown)
+7. Test: Type "Test Item", unit: "pcs", save
+8. Result: Should save without errors
+
+==========================================
+UPLOAD METHODS
+==========================================
+
+Method 1: cPanel File Manager
+  1. Login to cPanel
+  2. Open File Manager
+  3. Navigate to public_html
+  4. Upload files
+  5. Extract build.zip
+
+Method 2: FTP (FileZilla)
+  1. Connect via FTP
+  2. Navigate to public_html
+  3. Upload files maintaining structure
+  4. Use cPanel to extract build.zip
+
+Method 3: SCP/SFTP
+  scp app/Models/AssistanceProgramItem.php user@server:~/public_html/app/Models/
+  scp app/Http/Controllers/Admin/AssistanceController.php user@server:~/public_html/app/Http/Controllers/Admin/
+  scp database/migrations/2026_09_21_000001_make_assistance_items_text_based.php user@server:~/public_html/database/migrations/
+  scp build.zip user@server:~/public_html/public/
+
+==========================================
+TROUBLESHOOTING
+==========================================
+
+Issue: Form still shows dropdown
+Fix: Clear browser cache (Ctrl+Shift+Delete or Ctrl+F5)
+
+Issue: "Column not found: item_name"
+Fix: Migration not run. SSH and run: php artisan migrate --force
+
+Issue: 500 Error
+Fix: Check logs at ~/public_html/storage/logs/laravel.log
+
+Issue: Changes not visible
+Fix: php artisan config:clear && php artisan cache:clear
+
+==========================================
+TIME ESTIMATE
+==========================================
+
+File Upload: 5 minutes
+Migration: 1 minute
+Cache Clear: 30 seconds
+Testing: 5 minutes
+
+Total: ~12 minutes
+
+==========================================
+BACKUP REMINDER
+==========================================
+
+Before uploading, backup these files on production:
+  - app/Models/AssistanceProgramItem.php
+  - app/Http/Controllers/Admin/AssistanceController.php
+
+Download them first, then upload new versions.
+
+==========================================

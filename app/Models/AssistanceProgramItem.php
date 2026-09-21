@@ -17,6 +17,8 @@ class AssistanceProgramItem extends Model
     protected $fillable = [
         'assistance_id',
         'inventory_item_id',
+        'item_name',
+        'unit',
         'quantity_per_farmer',
         'total_quantity',
     ];
@@ -51,5 +53,23 @@ class AssistanceProgramItem extends Model
         return $this->total_quantity === null
             ? null
             : round((float) $this->total_quantity - $this->issued(), 2);
+    }
+
+    /**
+     * Get the display name for this item.
+     * Prioritizes the free-text item_name, falls back to inventory item if linked.
+     */
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->item_name ?? $this->item?->item_name ?? 'Unknown item';
+    }
+
+    /**
+     * Get the display unit for this item.
+     * Prioritizes the free-text unit, falls back to inventory item if linked.
+     */
+    public function getDisplayUnitAttribute(): ?string
+    {
+        return $this->unit ?? $this->item?->unit;
     }
 }

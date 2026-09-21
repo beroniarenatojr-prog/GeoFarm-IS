@@ -296,19 +296,38 @@ class AssistanceController extends Controller
 
         $lines = $request->validate([
             'items'                     => 'array',
-            'items.*.inventory_item_id' => 'required|exists:inventory_items,id',
+            // inventory_item_id is now optional - can use text-based items instead
+            'items.*.inventory_item_id' => 'nullable|exists:inventory_items,id',
+            'items.*.item_name'         => 'nullable|string|max:100',
+            'items.*.unit'              => 'nullable|string|max:20',
             'items.*.quantity_per_farmer' => 'required|numeric|min:0.01',
             'items.*.total_quantity'    => 'nullable|numeric|min:0',
         ])['items'] ?? [];
 
-        // Keyed by item so a duplicated row updates rather than violating the
-        // unique index.
+        // Keyed by item (either inventory_item_id or item_name) so a duplicated 
+        // row updates rather than violating the unique index.
         $keep = [];
 
         foreach ($lines as $line) {
+            // Require either inventory_item_id OR item_name
+            if (empty($line['inventory_item_id']) && empty($line['item_name'])) {
+                continue;
+            }
+
+            // Use inventory_item_id as key if present, otherwise use item_name
+            $uniqueKey = !empty($line['inventory_item_id']) 
+                ? ['inventory_item_id' => $line['inventory_item_id']]
+                : [
+                    'inventory_item_id' => null,
+                    'item_name' => $line['item_name']
+                  ];
+
             $row = $assistance->programItems()->updateOrCreate(
-                ['inventory_item_id' => $line['inventory_item_id']],
+                $uniqueKey,
                 [
+                    'item_name'           => $line['item_name'] ?? null,
+                    'unit'                => $line['unit'] ?? null,
+                    'inventory_item_id'   => $line['inventory_item_id'] ?? null,
                     'quantity_per_farmer' => $line['quantity_per_farmer'],
                     'total_quantity'      => $line['total_quantity'] ?? null,
                 ],
@@ -329,12 +348,13 @@ class AssistanceController extends Controller
                 'programItems.item:id,item_name,unit,quantity,min_level',
             ]),
             'filters' => ['search' => $search],
-            // What this programme hands out, with live warehouse stock beside
-            // each entitlement so staff see shortfalls before they promise.
+            // What this programme hands out. For text-based items, show the 
+            // item_name/unit directly; for inventory-linked items, fall back to
+            // the inventory item details.
             'programItems' => $assistance->programItems->map(fn ($line) => [
                 'inventory_item_id'   => $line->inventory_item_id,
-                'item_name'           => $line->item?->item_name,
-                'unit'                => $line->item?->unit,
+                'item_name'           => $line->display_name,
+                'unit'                => $line->display_unit,
                 'quantity_per_farmer' => (float) $line->quantity_per_farmer,
                 'total_quantity'      => $line->total_quantity === null ? null : (float) $line->total_quantity,
                 'in_stock'            => (float) ($line->item?->quantity ?? 0),
@@ -553,11 +573,14 @@ class AssistanceController extends Controller
             // Set when staff departed from the programme's standard package.
             'is_customized'        => 'nullable|boolean',
             'customization_reason' => 'nullable|string|max:255',
-            // [{inventory_item_id, quantity}] — the goods actually handed over.
-            // Defaults to the standard package; may be adjusted, and may include
-            // items the programme does not normally give.
+            // [{inventory_item_id, quantity}] OR [{item_name, unit, quantity}]
+            // The goods actually handed over. Defaults to the standard package; 
+            // may be adjusted, and may include items the programme does not normally give.
+            // Now supports both inventory-linked items AND free-text items.
             'items'                       => 'nullable|array',
-            'items.*.inventory_item_id'   => 'required|exists:inventory_items,id',
+            'items.*.inventory_item_id'   => 'nullable|exists:inventory_items,id',
+            'items.*.item_name'           => 'nullable|string|max:100',
+            'items.*.unit'                => 'nullable|string|max:20',
             'items.*.quantity'            => 'required|numeric|min:0',
         ]);
 
@@ -636,20 +659,25 @@ class AssistanceController extends Controller
                 ]);
 
                 foreach ($items as $line) {
-                    // Throws when stock is short, rolling the whole payout back.
-                    $inventory->distribute(
-                        InventoryItem::findOrFail($line['inventory_item_id']),
-                        [
-                            'farmer_id'                  => $data['farmer_id'],
-                            'assistance_id'              => $assistance->id,
-                            'assistance_distribution_id' => $payout->id,
-                            'quantity'                   => $line['quantity'],
-                            'distribution_date'          => $data['distribution_date'],
-                            // Matches the payout: the goods went with the farmer.
-                            'status'                     => $data['status'] ?? 'claimed',
-                        ],
-                        $request->user()?->id,
-                    );
+                    // For inventory-linked items, deduct from stock
+                    if (!empty($line['inventory_item_id'])) {
+                        // Throws when stock is short, rolling the whole payout back.
+                        $inventory->distribute(
+                            InventoryItem::findOrFail($line['inventory_item_id']),
+                            [
+                                'farmer_id'                  => $data['farmer_id'],
+                                'assistance_id'              => $assistance->id,
+                                'assistance_distribution_id' => $payout->id,
+                                'quantity'                   => $line['quantity'],
+                                'distribution_date'          => $data['distribution_date'],
+                                // Matches the payout: the goods went with the farmer.
+                                'status'                     => $data['status'] ?? 'claimed',
+                            ],
+                            $request->user()?->id,
+                        );
+                    }
+                    // For text-based items (no inventory tracking), just record them
+                    // in a simple format - no stock deduction needed
                 }
 
                 // The stock movements were already logged by InventoryService.

@@ -42,8 +42,11 @@ export function useProgramForm(program) {
         // server-side from the item list rather than asked for.
         new_type_name:         '',
         // What a material programme hands out. Empty for cash-only assistance.
+        // Now supports both inventory-linked items AND free-text items
         items: (program?.program_items ?? []).map(i => ({
-            inventory_item_id:   i.inventory_item_id,
+            inventory_item_id:   i.inventory_item_id ?? null,
+            item_name:           i.item_name ?? '',
+            unit:                i.unit ?? '',
             quantity_per_farmer: i.quantity_per_farmer ?? '',
             total_quantity:      i.total_quantity ?? '',
         })),
@@ -94,7 +97,7 @@ export function ProgramFormFields({
 
     const addItem = () => setData('items', [
         ...data.items,
-        { inventory_item_id: '', quantity_per_farmer: '', total_quantity: '' },
+        { inventory_item_id: null, item_name: '', unit: '', quantity_per_farmer: '', total_quantity: '' },
     ]);
 
     const removeItem = index => setData('items', data.items.filter((_, i) => i !== index));
@@ -232,7 +235,7 @@ export function ProgramFormFields({
                         <label className={`${label} mb-0`}>
                             Items in the package
                             <span className="ml-1.5 font-normal text-gray-400">
-                                — deducted from warehouse stock as each farmer is served
+                                — distributed to farmers as part of this program
                             </span>
                         </label>
                         <button type="button" onClick={addItem}
@@ -262,20 +265,26 @@ export function ProgramFormFields({
                                     <div key={i} className="rounded-lg border border-gray-200 p-2">
                                         <div className="flex flex-wrap items-end gap-2">
                                             <div className="min-w-[10rem] flex-1">
-                                                <label className="mb-0.5 block text-[11px] text-gray-500">Item</label>
-                                                {/* Typed, not scrolled. A warehouse list runs to
-                                                    hundreds of lines, and staff know "urea", not
-                                                    where it falls alphabetically. The stock figure
-                                                    stays on each row, since choosing something the
-                                                    store barely has is the mistake worth catching
-                                                    at this point rather than on hand-out day. */}
-                                                <SuggestSelect
-                                                    value={line.inventory_item_id}
-                                                    onChange={id => setItem(i, 'inventory_item_id', id)}
-                                                    options={itemOptions}
-                                                    placeholder="Type an item name…"
+                                                <label className="mb-0.5 block text-[11px] text-gray-500">Item Name</label>
+                                                {/* Free-text input instead of inventory dropdown */}
+                                                <input
+                                                    type="text"
+                                                    value={line.item_name}
+                                                    onChange={e => setItem(i, 'item_name', e.target.value)}
+                                                    placeholder="e.g., Fertilizer, Seeds, etc."
                                                     className={field}
-                                                    emptyHint="No stock items are on file yet. Add them under Farm Assets first."
+                                                    required
+                                                />
+                                            </div>
+
+                                            <div className="w-24">
+                                                <label className="mb-0.5 block text-[11px] text-gray-500">Unit</label>
+                                                <input
+                                                    type="text"
+                                                    value={line.unit}
+                                                    onChange={e => setItem(i, 'unit', e.target.value)}
+                                                    placeholder="kg, bags"
+                                                    className={field}
                                                 />
                                             </div>
 
@@ -306,8 +315,11 @@ export function ProgramFormFields({
                                                 currently in stock — distributions will stop once it runs out.
                                             </p>
                                         )}
-                                        {errors[`items.${i}.inventory_item_id`] && (
-                                            <p className={errorText}>{errors[`items.${i}.inventory_item_id`]}</p>
+                                        {errors[`items.${i}.item_name`] && (
+                                            <p className={errorText}>{errors[`items.${i}.item_name`]}</p>
+                                        )}
+                                        {errors[`items.${i}.unit`] && (
+                                            <p className={errorText}>{errors[`items.${i}.unit`]}</p>
                                         )}
                                         {errors[`items.${i}.quantity_per_farmer`] && (
                                             <p className={errorText}>{errors[`items.${i}.quantity_per_farmer`]}</p>
