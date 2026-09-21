@@ -1,0 +1,296 @@
+==========================================
+FARMER REGISTRATION DOCUMENT REQUIREMENTS
+MGA KINAKAILANGANG DOKUMENTO NG MAGSASAKA
+==========================================
+
+⚠️ IMPORTANT / MAHALAGA:
+
+ALL 4 DOCUMENTS MUST BE COMPILED INTO ONE (1) PDF FILE
+ANG 4 NA DOKUMENTO AY DAPAT ISANG (1) PDF FILE LAMANG
+
+==========================================
+REQUIRED DOCUMENTS / KINAKAILANGANG DOKUMENTO
+==========================================
+
+1. RSBSA Georeferencing Stub
+   (Resibo mula sa RSBSA georeferencing)
+
+2. RSBSA Form (Complete)
+   (Kumpleto na RSBSA form)
+
+3. Barangay Certification
+   (Sertipikasyon mula sa barangay)
+
+4. Valid Government-Issued ID (2 pieces)
+   (Dalawang valid government ID)
+
+   Examples / Halimbawa:
+   - Driver's License
+   - Passport  
+   - PhilSys ID / National ID
+   - SSS ID
+   - GSIS ID
+   - Postal ID
+   - Voter's ID
+
+==========================================
+DOCUMENT QUALITY REQUIREMENTS
+PAMANTAYAN NG KALIDAD NG DOKUMENTO
+==========================================
+
+✅ MUST HAVE / DAPAT:
+- Clear and readable text
+  (Malinaw at mabasa ang teksto)
+  
+- Complete document (no cut-off parts)
+  (Kompleto ang dokumento, walang putol)
+  
+- Straight orientation (not tilted)
+  (Tuwid, hindi baluktot)
+  
+- PDF format ONLY
+  (PDF format LAMANG)
+  
+- File size: 500 KB - 10 MB
+  (Laki ng file: 500 KB - 10 MB)
+
+❌ NOT ACCEPTED / HINDI TATANGGAPIN:
+- Blurry images (Malabong imahe)
+- Incomplete documents (Hindi kompleto)
+- Wrong format (Hindi PDF)
+- File too small (<100 KB) or too large (>10 MB)
+- Separate files (Hiwalay-hiwalay na files)
+
+==========================================
+HOW TO COMPILE DOCUMENTS
+PAANO I-COMPILE ANG MGA DOKUMENTO
+==========================================
+
+OPTION 1: Use Online Tool (Gamitin ang Online Tool)
+----------------------------------------------------
+1. Go to / Pumunta sa:
+   - www.ilovepdf.com
+   - www.smallpdf.com
+   - www.pdf2go.com
+
+2. Click "JPG to PDF" or "Merge PDF"
+
+3. Upload all your images / documents
+   (I-upload ang lahat ng imahe / dokumento)
+
+4. Arrange in correct order / I-ayos sa tamang pagkakasunod-sunod:
+   Page 1: RSBSA Georeferencing Stub
+   Page 2: RSBSA Form
+   Page 3: Barangay Certification
+   Page 4-5: Valid IDs (2 pieces)
+
+5. Click "Convert" or "Merge"
+
+6. Download the PDF file
+
+
+OPTION 2: Use Mobile App (Gamitin ang Mobile App)
+---------------------------------------------------
+Download any of these apps:
+- CamScanner (Most popular / Pinakasikat)
+- Adobe Scan (Free / Libre)
+- Microsoft Lens (Free / Libre)
+- Google Drive (Built-in scan feature)
+
+Steps:
+1. Open the app
+2. Scan each document
+3. Adjust if needed
+4. Save all as ONE PDF file
+
+
+OPTION 3: Use Computer (Gamitin ang Computer)
+-----------------------------------------------
+A. Using Microsoft Word:
+   1. Open Word
+   2. Insert all images (Insert > Pictures)
+   3. Save as PDF (File > Save As > PDF)
+
+B. Using Windows:
+   1. Open all images in Photos app
+   2. Print (Ctrl+P)
+   3. Select "Microsoft Print to PDF"
+   4. Save the file
+
+==========================================
+TIPS FOR CLEAR IMAGES
+MGA TIP PARA SA MALINAW NA IMAHE
+==========================================
+
+✅ DO / GAWIN:
+- Use good lighting (natural light is best)
+  (Gumamit ng magandang ilaw)
+  
+- Lay document flat on table
+  (Ipatong ng patag ang dokumento)
+  
+- Take photo from directly above
+  (Kunan mula sa itaas)
+  
+- Use scanner if available (best quality)
+  (Gumamit ng scanner kung meron)
+  
+- Check if text is readable before saving
+  (Tingnan kung mabasa bago i-save)
+
+❌ DON'T / HUWAG:
+- Take photos in dim light
+  (Kumuha ng litrato sa madilim)
+  
+- Include fingers in the photo
+  (Isama ang mga daliri sa litrato)
+  
+- Take at an angle
+  (Kumuha ng baluktot)
+  
+- Use flash (causes glare)
+  (Gumamit ng flash - nakaka-glare)
+
+==========================================
+FILE NAMING GUIDE
+GABAY SA PAGPANGALAN NG FILE
+==========================================
+
+Good filename format:
+RSBSA_[YourLastName]_[YourFirstName].pdf
+
+Example:
+RSBSA_DelaCruz_Juan.pdf
+RSBSA_Santos_Maria.pdf
+
+==========================================
+BEFORE UPLOADING CHECKLIST
+CHECKLIST BAGO MAG-UPLOAD
+==========================================
+
+□ File is in PDF format (.pdf)
+  (Ang file ay PDF format)
+
+□ All 4 documents are included
+  (May 4 na dokumento)
+
+□ Documents are clear and readable
+  (Malinaw at mabasa ang dokumento)
+
+□ File size is 500 KB - 10 MB
+  (Ang laki ay 500 KB - 10 MB)
+
+□ Documents are in correct order
+  (Tama ang pagkakasunod-sunod)
+
+□ No blurry or cut-off parts
+  (Walang malabo o putol na parte)
+
+==========================================
+HELP AND SUPPORT
+TULONG AT SUPORTA
+==========================================
+
+If you need help compiling documents:
+Kung kailangan ninyo ng tulong:
+
+1. Visit Agriculture Office
+   (Bisitahin ang Agriculture Office)
+   - Staff will help you scan and compile
+   - Address: [INSERT ADDRESS]
+   - Hours: Monday-Friday, 8AM-5PM
+
+2. Call Hotline
+   (Tumawag sa Hotline)
+   - Phone: [INSERT PHONE NUMBER]
+
+3. Email Us
+   (Mag-email)
+   - Email: [INSERT EMAIL]
+
+4. Ask at Barangay Hall
+   (Magtanong sa Barangay Hall)
+   - They have computers and printers
+
+==========================================
+FREQUENTLY ASKED QUESTIONS (FAQ)
+MGA MADALAS ITANONG
+==========================================
+
+Q: Can I upload 4 separate PDF files?
+   Pwede bang 4 na hiwalay-hiwalay na PDF files?
+
+A: NO. Must be ONE PDF file with all 4 documents.
+   HINDI. Dapat ISANG PDF file na may 4 na dokumento.
+
+
+Q: Can I upload JPG or PNG images?
+   Pwede bang JPG o PNG imahe?
+
+A: NO. PDF format ONLY.
+   HINDI. PDF format LAMANG.
+
+
+Q: What if my file is too large?
+   Paano kung masyadong malaki ang file?
+
+A: Compress it using www.ilovepdf.com/compress_pdf
+   I-compress gamit ang www.ilovepdf.com/compress_pdf
+
+
+Q: What if I don't have a scanner?
+   Paano kung wala akong scanner?
+
+A: Use your phone camera with good lighting.
+   Gamitin ang camera ng phone sa maayos na ilaw.
+   Or visit the Agriculture Office for help.
+   O bisitahin ang Agriculture Office para sa tulong.
+
+
+Q: Can I upload a photo of my ID instead of scan?
+   Pwede bang litrato ng ID instead ng scan?
+
+A: YES, but make sure it's clear and readable.
+   OO, pero siguraduhing malinaw at mabasa.
+
+
+Q: How long does verification take?
+   Gaano katagal ang verification?
+
+A: Usually 3-5 business days after submission.
+   Karaniwang 3-5 business days pagkatapos mag-submit.
+
+==========================================
+COMMON MISTAKES TO AVOID
+MGA KARANIWANG MALI NA IWASAN
+==========================================
+
+❌ Uploading 4 separate files
+   (Mag-upload ng 4 na hiwalay na files)
+   
+❌ Using wrong format (.jpg, .zip, .rar)
+   (Gumamit ng maling format)
+   
+❌ Blurry or dark photos
+   (Malabo o madilim na litrato)
+   
+❌ Missing documents
+   (Kulang ang dokumento)
+   
+❌ File too large or too small
+   (Masyadong malaki o maliit ang file)
+   
+❌ Documents not in order
+   (Hindi ayos ang pagkakasunod-sunod)
+
+==========================================
+
+For more help, visit:
+Para sa karagdagang tulong, bisitahin:
+
+Website: [INSERT WEBSITE]
+Facebook: [INSERT FACEBOOK PAGE]
+
+Thank you! / Salamat po!
+
+==========================================

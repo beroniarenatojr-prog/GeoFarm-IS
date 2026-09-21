@@ -2145,13 +2145,49 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
 
                                     {/* ID Proof */}
                                     <div>
-                                        <div className="flex items-center gap-2 mb-3">
+                                        <div className="flex items-center gap-2 mb-2">
                                             <FileCheck className="h-5 w-5 text-gray-600" />
                                             <label className="block text-sm font-semibold text-gray-700">
                                                 Proof of ID / Land Ownership <span className="text-gray-500">(Patunay ng Pagkakakilanlan o Lupa)</span>
                                             </label>
                                         </div>
-                                        <p className="text-sm text-gray-500 mb-3">PDF, JPG or PNG — scanned copy for verification</p>
+                                        
+                                        {/* Instructions Box */}
+                                        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded-r-lg">
+                                            <div className="flex items-start gap-2">
+                                                <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                                                <div className="text-sm">
+                                                    <p className="font-semibold text-blue-900 mb-2">
+                                                        📄 Required: Compile ALL 4 documents into ONE PDF file
+                                                        <span className="block text-blue-700 font-normal mt-1">
+                                                            Kailangan: I-compile ang 4 na dokumento sa ISANG PDF file
+                                                        </span>
+                                                    </p>
+                                                    <ol className="list-decimal list-inside space-y-1 text-blue-800 ml-2">
+                                                        <li>RSBSA Georeferencing Stub</li>
+                                                        <li>RSBSA Form (completed)</li>
+                                                        <li>Barangay Certification</li>
+                                                        <li>Valid ID (2 government-issued IDs)</li>
+                                                    </ol>
+                                                    <p className="mt-3 font-medium text-blue-900">
+                                                        ⚠️ Upload CLEAR scanned or photographed images
+                                                        <span className="block text-blue-700 font-normal">
+                                                            Mag-upload ng MALINAW na scanned o litrato
+                                                        </span>
+                                                    </p>
+                                                    <div className="mt-2 pt-2 border-t border-blue-200">
+                                                        <p className="text-xs text-blue-700">
+                                                            Need help? Download guide: <a href="/FARMER_DOCUMENT_GUIDE.pdf" className="underline font-semibold hover:text-blue-900" target="_blank">Document Compilation Guide</a>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-sm text-gray-600 mb-3 font-medium">
+                                            ✅ PDF format only • Max size: 10MB • Clear and readable images required
+                                        </p>
+                                        
                                         <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gray-50 hover:bg-gray-100 transition">
                                             {idProofPreview ? (
                                                 <div className="flex items-center gap-6">
@@ -2176,6 +2212,12 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                                             <FileCheck className="h-10 w-10 text-gray-400" />
                                                         </div>
                                                     </div>
+                                                    <p className="text-sm text-gray-600 mb-4">
+                                                        Upload ONE PDF file containing all 4 required documents
+                                                        <span className="block text-gray-500 mt-1">
+                                                            Mag-upload ng ISANG PDF file na may 4 na dokumento
+                                                        </span>
+                                                    </p>
                                                     <button
                                                         type="button"
                                                         onClick={() => document.getElementById('id-proof-input').click()}
@@ -2188,11 +2230,17 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                             <input
                                                 id="id-proof-input"
                                                 type="file"
-                                                accept="image/*,application/pdf"
+                                                accept=".pdf,application/pdf"
                                                 onChange={handleIdProofChange}
                                                 className="hidden"
                                             />
                                         </div>
+                                        {errors.id_proof && (
+                                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
+                                                <X className="h-4 w-4" />
+                                                {errors.id_proof}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>

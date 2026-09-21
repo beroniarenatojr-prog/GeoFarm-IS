@@ -1,0 +1,150 @@
+==========================================
+QUICK DEPLOY: Farmer Document Instructions
+==========================================
+
+WHAT THIS DOES:
+---------------
+Adds clear instructions for farmers to compile
+their 4 required documents into ONE PDF file.
+
+Reduces confusion and speeds up verification!
+
+
+==========================================
+FILES TO UPLOAD
+==========================================
+
+1. UPDATED FORM
+   resources/js/Pages/Admin/Farmers/FormRSBSA.jsx
+   → ~/public_html/resources/js/Pages/Admin/Farmers/
+
+2. GUIDE DOCUMENTS
+   public/FARMER_DOCUMENT_GUIDE.pdf.md
+   public/DOCUMENT_REQUIREMENTS.txt
+   → ~/public_html/public/
+
+3. BUILD ASSETS
+   Extract build.zip to:
+   → ~/public_html/public/build/
+
+
+==========================================
+COMMANDS TO RUN
+==========================================
+
+ssh your-server
+cd ~/public_html
+php artisan cache:clear
+php artisan view:clear
+
+
+==========================================
+WHAT FARMERS WILL SEE
+==========================================
+
+On the registration form, a BLUE BOX appears with:
+
+📄 Required: Compile ALL 4 documents into ONE PDF
+
+1. RSBSA Georeferencing Stub
+2. RSBSA Form (completed)  
+3. Barangay Certification
+4. Valid ID (2 government-issued IDs)
+
+⚠️ Upload CLEAR scanned or photographed images
+
+✅ PDF format only • Max 10MB • Clear images required
+
+
+==========================================
+REQUIRED DOCUMENTS (All in ONE PDF)
+==========================================
+
+1. RSBSA Georeferencing Stub
+2. RSBSA Form
+3. Barangay Certification
+4. Valid ID (2 pieces)
+
+Examples of Valid ID:
+- Driver's License
+- Passport
+- PhilSys ID / National ID
+- SSS ID, GSIS ID
+- Postal ID, Voter's ID
+
+
+==========================================
+TOOLS FOR FARMERS TO USE
+==========================================
+
+Online (Free):
+- www.ilovepdf.com (Merge PDF)
+- www.smallpdf.com
+- www.pdf2go.com
+
+Mobile Apps (Free):
+- CamScanner
+- Adobe Scan
+- Microsoft Lens
+- Google Drive (has scan feature)
+
+Computer:
+- Microsoft Word (Insert images, Save as PDF)
+- Windows Print to PDF
+
+
+==========================================
+SHARE WITH FARMERS
+==========================================
+
+Direct link to guide:
+https://geo-farm.pitonmain.com/DOCUMENT_REQUIREMENTS.txt
+
+Or print and post at:
+- Agriculture Office
+- Barangay halls
+- Farmers' cooperatives
+
+
+==========================================
+BENEFITS
+==========================================
+
+FOR FARMERS:
+✅ Clear instructions
+✅ Know what to compile
+✅ Less rejections
+✅ Faster processing
+
+FOR STAFF:
+✅ Organized submissions
+✅ Easier verification
+✅ Less rework
+✅ Time savings
+
+
+==========================================
+VALIDATION
+==========================================
+
+Form now accepts:
+- PDF format ONLY (no more JPG, PNG)
+- Max file size: 10 MB
+- Clear warning messages
+
+Old: accept="image/*,application/pdf"
+New: accept=".pdf,application/pdf"
+
+
+==========================================
+TIME ESTIMATE
+==========================================
+
+Upload: 5 minutes
+Cache clear: 30 seconds
+Testing: 5 minutes
+
+Total: ~10 minutes
+
+
+==========================================
