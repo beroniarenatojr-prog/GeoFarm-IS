@@ -1,0 +1,192 @@
+==========================================
+🚨 EMERGENCY FIX FOR 500 ERROR
+==========================================
+
+QUICK DIAGNOSIS:
+================
+
+1. Upload test_db.php to ~/public_html/
+
+2. Access: https://geo-farm.pitonmain.com/test_db.php
+
+3. Read the results:
+   ✅ = Working
+   ❌ = Problem found
+   
+4. Follow the fix for whatever is ❌
+
+
+==========================================
+MOST LIKELY CAUSE: Migration Not Run
+==========================================
+
+SYMPTOMS:
+- ❌ Columns 'item_name' and 'unit' don't exist
+- ❌ Migration hasn't run
+
+FIX:
+----
+ssh your-server
+cd ~/public_html
+php artisan migrate --force
+php artisan cache:clear
+
+
+==========================================
+SECOND MOST LIKELY: Wrong Files Uploaded
+==========================================
+
+SYMPTOMS:
+- Migration shows as run
+- But still getting errors
+
+FIX:
+----
+RE-UPLOAD these files (make sure they're the LATEST):
+
+1. app/Models/AssistanceProgramItem.php
+   → Must have array_key_exists checks in accessors
+
+2. app/Http/Controllers/Admin/AssistanceController.php
+   → Must have ?? fallbacks for item_name/unit
+
+Then:
+ssh your-server
+cd ~/public_html
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
+
+
+==========================================
+THIRD POSSIBILITY: PHP Cache
+==========================================
+
+SYMPTOMS:
+- Files uploaded correctly
+- Migration ran
+- Still showing 500
+
+FIX:
+----
+# Restart PHP-FPM (clear opcache)
+sudo systemctl restart php-fpm
+# or
+sudo service php8.2-fpm restart
+
+# Or via cPanel: Restart PHP application
+
+
+==========================================
+NUCLEAR OPTION: Rollback Everything
+==========================================
+
+If nothing else works, rollback:
+
+1. Restore OLD files from backup:
+   - app/Models/AssistanceProgramItem.php
+   - app/Http/Controllers/Admin/AssistanceController.php
+
+2. Rollback migration:
+   php artisan migrate:rollback --step=1
+
+3. Clear caches:
+   php artisan cache:clear
+   php artisan config:clear
+
+4. Site should work again (without new features)
+
+
+==========================================
+GET DETAILED ERROR INFO
+==========================================
+
+METHOD 1: Check Laravel Log
+----------------------------
+ssh your-server
+tail -100 ~/public_html/storage/logs/laravel.log
+
+
+METHOD 2: Enable Debug (DANGEROUS - Turn off after!)
+----------------------------------------------------
+1. Edit .env:
+   nano ~/public_html/.env
+   
+2. Change:
+   APP_DEBUG=false
+   to:
+   APP_DEBUG=true
+
+3. Refresh page - see full error
+
+4. IMMEDIATELY change back to:
+   APP_DEBUG=false
+
+
+METHOD 3: Check Web Server Error Log
+-------------------------------------
+# Apache
+tail -50 /var/log/apache2/error.log
+
+# Nginx
+tail -50 /var/log/nginx/error.log
+
+
+==========================================
+VERIFICATION CHECKLIST
+==========================================
+
+Run these commands and check results:
+
+□ php artisan migrate:status
+  → Should show migration as "Ran"
+
+□ php artisan tinker
+  Schema::hasColumn('assistance_program_items', 'item_name')
+  → Should return: true
+
+□ ls -la app/Models/AssistanceProgramItem.php
+  → Check file date is recent
+
+□ grep "array_key_exists" app/Models/AssistanceProgramItem.php
+  → Should find the safe accessor code
+
+□ php artisan route:list | grep assistance
+  → Should list assistance routes
+
+□ php artisan config:cache
+  → Should clear and rebuild config
+
+
+==========================================
+STILL STUCK?
+==========================================
+
+Send me these 3 things:
+
+1. Output of test_db.php
+   (screenshot or copy-paste)
+
+2. Last 50 lines of Laravel log:
+   tail -50 storage/logs/laravel.log
+
+3. Migration status:
+   php artisan migrate:status
+
+
+==========================================
+ALTERNATIVE: Test on Different Page
+==========================================
+
+If profile page gives 500 but other pages work:
+
+Test these URLs:
+- /admin/dashboard
+- /admin/farmers
+- /admin/users
+
+If they work: Problem is specific to profile page
+If they don't: Problem is general PHP/Laravel issue
+
+
+==========================================

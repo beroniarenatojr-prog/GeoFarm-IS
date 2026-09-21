@@ -1,0 +1,98 @@
+==========================================
+QUICK UPLOAD: 3-DOT ACTION MENU
+==========================================
+
+WHAT THIS DOES:
+---------------
+Replaces the 4 inline action buttons with a single
+3-dot menu button that opens a dropdown.
+
+BEFORE:  [👁️] [✏️] [🗑️] [🔒]
+AFTER:   [⋮] → Click to see all actions
+
+
+==========================================
+FILES TO UPLOAD
+==========================================
+
+1. NEW COMPONENT
+   Source: resources/js/Components/ui/ActionMenu.jsx
+   Upload to: ~/public_html/resources/js/Components/ui/
+
+
+2. UPDATED PAGE
+   Source: resources/js/Pages/Admin/Assistance/Index.jsx
+   Upload to: ~/public_html/resources/js/Pages/Admin/Assistance/
+
+
+3. BUILD ASSETS
+   Source: build_action_menu.zip
+   Extract to: ~/public_html/public/build/
+
+
+==========================================
+SSH COMMANDS
+==========================================
+
+ssh your-server
+cd ~/public_html
+php artisan cache:clear
+php artisan view:clear
+
+
+==========================================
+TEST IT
+==========================================
+
+1. Go to: https://geo-farm.pitonmain.com/admin/assistance
+
+2. Look at the "Actions" column
+
+3. You should see a 3-dot button (⋮)
+
+4. Click it → Dropdown menu appears with:
+   • View
+   • Edit
+   • Delete  
+   • Lock/Unlock
+
+5. Click outside the menu → It closes
+
+6. Try each action → Should work like before
+
+
+==========================================
+BENEFITS
+==========================================
+
+✅ 75% less space (1 button instead of 4)
+✅ Cleaner table appearance
+✅ All actions in one place
+✅ Better for mobile
+✅ Professional look
+✅ Easy to add more actions later
+
+
+==========================================
+ROLLBACK (if needed)
+==========================================
+
+If you want to go back to the old buttons:
+
+1. Restore old Index.jsx from backup
+2. Upload it
+3. Run: php artisan view:clear
+
+
+==========================================
+TIME ESTIMATE
+==========================================
+
+Upload: 5 minutes
+Cache clear: 30 seconds
+Testing: 2 minutes
+
+Total: ~8 minutes
+
+
+==========================================

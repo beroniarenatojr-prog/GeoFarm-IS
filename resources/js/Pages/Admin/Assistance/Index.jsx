@@ -2,7 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import { Lock, Unlock, Plus } from 'lucide-react';
-import { ViewButton, EditButton, DeleteButton } from '@/Components/ui/ActionButtons';
+import { StandardActionMenu } from '@/Components/ui/ActionMenu';
 import ModalShell from '@/Components/ui/ModalShell';
 import LockConfirmModal from '@/Components/ui/LockConfirmModal';
 import { ProgramFormFields, useProgramForm } from '@/Components/Assistance/ProgramForm';
@@ -210,36 +210,33 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
             <td className="px-4 py-3">{p.distributions_count}</td>
 
             <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                    <ViewButton href={`/admin/assistance/${p.id}`} permission="view assistance" />
-
-                    <EditButton
-                        onClick={onEdit}
-                        permission="edit assistance"
-                        disabled={locked}
-                        disabledTitle="Locked — unlock this program before editing"
-                    />
-
-                    <DeleteButton
-                        permission="delete assistance"
-                        disabled={locked}
-                        disabledTitle="Locked — unlock this program before deleting"
-                        onConfirm={() => router.delete(`/admin/assistance/${p.id}`, {
-                            preserveState: true,
-                            preserveScroll: true,
-                        })}
-                    />
-
-                    <LockButton
-                        locked={locked}
-                        canLock={canLock}
-                        busy={busy === 'lock'}
-                        note={lockedNote}
-                        // Opens the confirm dialog; the request is sent from
-                        // there, once the lock password checks out.
-                        onToggle={onToggleLock}
-                    />
-                </div>
+                <StandardActionMenu
+                    viewHref={`/admin/assistance/${p.id}`}
+                    viewPermission="view assistance"
+                    editOnClick={onEdit}
+                    editPermission="edit assistance"
+                    editDisabled={locked}
+                    editDisabledTitle="Locked — unlock this program before editing"
+                    deletePermission="delete assistance"
+                    deleteDisabled={locked}
+                    deleteDisabledTitle="Locked — unlock this program before deleting"
+                    onDelete={() => router.delete(`/admin/assistance/${p.id}`, {
+                        preserveState: true,
+                        preserveScroll: true,
+                    })}
+                    customActions={
+                        canLock ? [{
+                            label: locked ? 'Unlock' : 'Lock',
+                            icon: locked ? Unlock : Lock,
+                            onClick: onToggleLock,
+                            variant: locked ? 'warning' : 'default',
+                            disabled: busy === 'lock',
+                            disabledTitle: locked 
+                                ? `Locked${lockedNote} — click to unlock` 
+                                : 'Lock this program (freezes edits, deletion and new distributions)',
+                        }] : []
+                    }
+                />
             </td>
         </tr>
     );
@@ -288,46 +285,6 @@ function StatusToggle({ status, locked, busy, canEdit, onToggle }) {
                 }`} />
             </span>
             {badge}
-        </button>
-    );
-}
-
-/**
- * Shown to everyone so the state is legible, but actionable only for roles
- * holding "lock assistance" — for anyone else it is a padlock indicator.
- */
-function LockButton({ locked, canLock, busy, note, onToggle }) {
-    if (!canLock) {
-        // Nothing useful to say about a record that is already open.
-        if (!locked) return null;
-        return (
-            <span
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600"
-                title={`Locked${note}. Only an administrator can unlock it.`}
-            >
-                <Lock className="h-4 w-4" />
-            </span>
-        );
-    }
-
-    const Icon = locked ? Lock : Unlock;
-
-    return (
-        <button
-            type="button"
-            onClick={onToggle}
-            disabled={busy}
-            aria-pressed={locked}
-            title={locked
-                ? `Locked${note} — click to unlock`
-                : 'Lock this program (freezes edits, deletion and new distributions)'}
-            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
-                locked
-                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-            }`}
-        >
-            <Icon className="h-4 w-4" />
         </button>
     );
 }
