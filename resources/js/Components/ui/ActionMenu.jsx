@@ -44,7 +44,7 @@ export function ActionMenu({ actions = [], children }) {
                 ref={buttonRef}
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 transition-all hover:shadow-sm"
                 aria-label="Actions"
                 aria-expanded={isOpen}
             >
@@ -54,7 +54,7 @@ export function ActionMenu({ actions = [], children }) {
             {isOpen && (
                 <div
                     ref={menuRef}
-                    className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                    className="absolute right-0 mt-1 min-w-[200px] w-max bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50"
                 >
                     {children || validActions.map((action, index) => (
                         <ActionMenuItem
@@ -88,21 +88,29 @@ function ActionMenuItem({
     }
 
     const variantClasses = {
-        default: 'text-gray-700 hover:bg-gray-50',
-        danger: 'text-red-600 hover:bg-red-50',
-        warning: 'text-amber-600 hover:bg-amber-50',
+        default: 'text-gray-700 hover:bg-green-50 hover:text-green-700',
+        danger: 'text-red-600 hover:bg-red-100',
+        warning: 'text-amber-600 hover:bg-amber-100',
     };
 
-    const baseClasses = `flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
+    const baseClasses = `flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all whitespace-nowrap ${
         disabled 
-            ? 'text-gray-300 cursor-not-allowed' 
+            ? 'text-gray-300 cursor-not-allowed bg-gray-50' 
             : variantClasses[variant]
     }`;
 
+    const iconClasses = disabled 
+        ? 'h-4 w-4 text-gray-300' 
+        : variant === 'danger' 
+            ? 'h-4 w-4 text-red-500' 
+            : variant === 'warning'
+                ? 'h-4 w-4 text-amber-500'
+                : 'h-4 w-4 text-green-600';
+
     const content = (
         <>
-            {Icon && <Icon className="h-4 w-4" />}
-            <span>{label}</span>
+            {Icon && <Icon className={iconClasses} />}
+            <span className="flex-1">{label}</span>
         </>
     );
 

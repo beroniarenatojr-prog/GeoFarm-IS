@@ -2,7 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import {
-    Search, X, Plus, Pencil, Trash2, ShieldCheck, UserCog, Sprout, Eye, Users as UsersIcon,
+    Search, X, Plus, Pencil, Trash2, ShieldCheck, UserCog, Sprout, Users as UsersIcon,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { formatDateTime } from '@/utils/dateFormatter';
@@ -170,7 +170,6 @@ function EditDialog({ user, roles, onClose }) {
 export default function UsersIndex({
     users, roles, canCreateAdmin, canDeleteAdmin, canCreate, currentUserId, filters, stats,
 }) {
-    const { can } = usePermissions();
     const [f, setF] = useState(filters ?? {});
     const [pendingDelete, setPendingDelete] = useState(null);
     const [deleting, setDeleting] = useState(false);

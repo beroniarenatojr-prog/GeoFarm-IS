@@ -15,11 +15,11 @@ import { formatDate } from '@/utils/dateFormatter';
 const TOGGLEABLE = ['draft', 'active', 'inactive'];
 
 const STATUS_STYLE = {
-    active:    'bg-green-100 text-green-700',
-    inactive:  'bg-amber-100 text-amber-700',
-    draft:     'bg-gray-100 text-gray-600',
-    completed: 'bg-emerald-100 text-emerald-700',
-    cancelled: 'bg-red-100 text-red-700',
+    active:    'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 ring-1 ring-green-200',
+    inactive:  'bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 ring-1 ring-amber-200',
+    draft:     'bg-gradient-to-r from-gray-100 to-slate-100 text-gray-600 ring-1 ring-gray-200',
+    completed: 'bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 ring-1 ring-emerald-200',
+    cancelled: 'bg-gradient-to-r from-red-100 to-rose-100 text-red-700 ring-1 ring-red-200',
 };
 
 export default function AssistanceIndex({
@@ -37,23 +37,22 @@ export default function AssistanceIndex({
             <div className="flex justify-end mb-4">
                 {can('create assistance') && (
                     <button type="button" onClick={() => setEditing('new')}
-                        className="inline-flex items-center gap-1.5 bg-green-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-800">
+                        className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:from-green-700 hover:to-green-800 shadow-md hover:shadow-lg transition-all">
                         <Plus className="h-4 w-4" /> New Program
                     </button>
                 )}
             </div>
-            <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+            <div className="bg-white rounded-xl shadow-md border border-green-100 overflow-hidden">
                 <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500 text-left">
+                    <thead className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-b-2 border-green-200 text-gray-700 text-left">
                         <tr>
-                            <th className="px-4 py-3">Program</th>
-                            <th className="px-4 py-3">Type</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Budget</th>
-                            <th className="px-4 py-3">Period</th>
-                            <th className="px-4 py-3">Barangays</th>
-                            <th className="px-4 py-3">Distributions</th>
-                            <th className="px-4 py-3">Actions</th>
+                            <th className="px-4 py-3.5 font-semibold">Program</th>
+                            <th className="px-4 py-3.5 font-semibold">Type</th>
+                            <th className="px-4 py-3.5 font-semibold">Status</th>
+                            <th className="px-4 py-3.5 font-semibold">Period</th>
+                            <th className="px-4 py-3.5 font-semibold">Barangays</th>
+                            <th className="px-4 py-3.5 font-semibold">Distributions</th>
+                            <th className="px-4 py-3.5 font-semibold text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -69,7 +68,7 @@ export default function AssistanceIndex({
                         ))}
                         {programs.data.length === 0 && (
                             <tr>
-                                <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
+                                <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
                                     No assistance programs yet.
                                 </td>
                             </tr>
@@ -165,18 +164,21 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
         : '';
 
     return (
-        <tr className={`border-t ${locked ? 'bg-amber-50/40' : 'hover:bg-gray-50'}`}>
-            <td className="px-4 py-3 font-medium">
-                <span className="flex items-center gap-1.5">
+        <tr className={`border-t border-green-50 ${locked ? 'bg-gradient-to-r from-amber-50/50 to-yellow-50/30' : 'hover:bg-gradient-to-r hover:from-green-50/40 hover:to-emerald-50/20 transition-all'}`}>
+            <td className="px-4 py-3.5 font-semibold text-gray-900">
+                <span className="flex items-center gap-2">
                     {p.program_name}
                     {locked && (
-                        <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="Locked" />
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                            <Lock className="h-3 w-3 shrink-0" aria-label="Locked" />
+                            Locked
+                        </span>
                     )}
                 </span>
             </td>
 
-            <td className="px-4 py-3">
-                <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+            <td className="px-4 py-3.5">
+                <span className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 text-xs font-semibold px-3 py-1 rounded-full ring-1 ring-green-200">
                     {p.assistance_type?.type_name || '—'}
                 </span>
             </td>
@@ -191,25 +193,28 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
                 />
             </td>
 
-            <td className="px-4 py-3">
-                {p.total_budget != null
-                    ? `₱${Number(p.total_budget).toLocaleString()}`
-                    : <span className="text-gray-300">—</span>}
+            <td className="px-4 py-3.5 text-gray-600 text-xs whitespace-nowrap">
+                <div className="flex flex-col gap-0.5">
+                    <span className="font-medium">{formatDate(p.start_date, 'date-only')}</span>
+                    <span className="text-gray-400">to {formatDate(p.end_date, 'date-only')}</span>
+                </div>
             </td>
 
-            <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                {formatDate(p.start_date, 'date-only')} – {formatDate(p.end_date, 'date-only')}
-            </td>
-
-            <td className="px-4 py-3">
+            <td className="px-4 py-3.5">
                 {p.barangays && p.barangays.length > 0
-                    ? <span className="text-xs text-gray-600">{p.barangays.length} selected</span>
-                    : <span className="text-xs text-gray-400">All</span>}
+                    ? <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-medium px-2 py-1 rounded-full ring-1 ring-blue-200">
+                        {p.barangays.length} selected
+                    </span>
+                    : <span className="text-xs text-gray-400 italic">All barangays</span>}
             </td>
 
-            <td className="px-4 py-3">{p.distributions_count}</td>
+            <td className="px-4 py-3.5">
+                <span className="inline-flex items-center justify-center bg-purple-50 text-purple-700 font-bold text-sm px-2.5 py-1 rounded-lg ring-1 ring-purple-200">
+                    {p.distributions_count}
+                </span>
+            </td>
 
-            <td className="px-4 py-3">
+            <td className="px-4 py-3.5 text-right">
                 <div className="flex items-center gap-2">
                     {/* Lock/Unlock button - visible outside dropdown */}
                     {canLock && (
@@ -221,10 +226,10 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
                             title={locked
                                 ? `Locked${lockedNote} — click to unlock`
                                 : 'Lock this program (freezes edits, deletion and new distributions)'}
-                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-50 shadow-sm hover:shadow ${
                                 locked
-                                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                                    ? 'bg-gradient-to-r from-amber-100 to-yellow-100 text-amber-700 hover:from-amber-200 hover:to-yellow-200 ring-1 ring-amber-300'
+                                    : 'bg-gradient-to-r from-gray-50 to-slate-50 text-gray-500 hover:from-gray-100 hover:to-slate-100 hover:text-gray-700 ring-1 ring-gray-200'
                             }`}
                         >
                             {locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
@@ -259,7 +264,7 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
  */
 function StatusToggle({ status, locked, busy, canEdit, onToggle }) {
     const badge = (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${STATUS_STYLE[status] ?? STATUS_STYLE.draft}`}>
+        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${STATUS_STYLE[status] ?? STATUS_STYLE.draft}`}>
             {status}
         </span>
     );
