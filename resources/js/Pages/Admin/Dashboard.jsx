@@ -10,6 +10,7 @@ import {
     AlertTriangle, Mail, ArrowRight, ShieldAlert, Coins, Globe,
 } from 'lucide-react';
 import { formatDate } from '@/utils/dateFormatter';
+import { usePermissions } from '@/hooks/usePermissions';
 
 /*
  * One family of greens, deep to pale. Using tints of a single hue instead of
@@ -136,6 +137,7 @@ function BarRow({ name, value, total, href, suffix }) {
 export default function Dashboard({
     metrics, attention, farmers, livestock, assistance, risk, charts, activity, quickStats,
 }) {
+    const { can } = usePermissions();
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     const farmersData = (charts?.farmers_per_month ?? []).map(r => ({ month: months[r.month - 1], count: r.count }));
@@ -245,39 +247,32 @@ export default function Dashboard({
             <section aria-labelledby="kpi-heading" className="mb-6">
                 <h2 id="kpi-heading" className="sr-only">Summary</h2>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-                    <MetricCard
-                        label="Registered Farmers" value={num(metrics?.total_farmers)}
-                        hint={metrics ? `${num(metrics.pending_verification)} awaiting verification` : 'Verified by the office'}
-                        icon={Users} tone="deep" href="/admin/farmers" loading={metrics === undefined}
-                    />
-                    <MetricCard
-                        label="Farm Parcels" value={num(metrics?.total_parcels)}
-                        hint={metrics ? `${num(metrics.hectares_mapped)} hectares mapped` : 'Mapped land'}
-                        icon={MapPin} tone="forest" href="/admin/parcels" loading={metrics === undefined}
-                    />
-                    <MetricCard
-                        label="Livestock Heads" value={num(metrics?.total_livestock)}
-                        hint={metrics ? `${num(metrics.livestock_types)} ${metrics.livestock_types === 1 ? 'type' : 'types'} recorded` : 'Across all farmers'}
-                        icon={Beef} tone="mid" href="/admin/farm-inventory" loading={metrics === undefined}
-                    />
-                    <MetricCard
-                        label="Assistance" value={metrics ? peso(metrics.assistance_total) : '—'}
-                        hint={metrics ? `${num(metrics.farmers_assisted)} farmers assisted` : 'Distributed'}
-                        icon={HandHeart} tone="light" href="/admin/assistance" loading={metrics === undefined}
-                    />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    {can('view farmers') && (
+                        <MetricCard
+                            label="Registered Farmers" value={num(metrics?.total_farmers)}
+                            hint={metrics ? `${num(metrics.pending_verification)} awaiting verification` : 'Verified by the office'}
+                            icon={Users} tone="deep" href="/admin/farmers" loading={metrics === undefined}
+                        />
+                    )}
+                    {can('view parcels') && (
+                        <MetricCard
+                            label="Farm Parcels" value={num(metrics?.total_parcels)}
+                            hint={metrics ? `${num(metrics.hectares_mapped)} hectares mapped` : 'Mapped land'}
+                            icon={MapPin} tone="forest" href="/admin/parcels" loading={metrics === undefined}
+                        />
+                    )}
+                    {can('view inventory') && (
+                        <MetricCard
+                            label="Livestock Heads" value={num(metrics?.total_livestock)}
+                            hint={metrics ? `${num(metrics.livestock_types)} ${metrics.livestock_types === 1 ? 'type' : 'types'} recorded` : 'Across all farmers'}
+                            icon={Beef} tone="mid" href="/admin/farm-inventory" loading={metrics === undefined}
+                        />
+                    )}
                     <MetricCard
                         label="Needs Attention" value={num(todo.reduce((n, i) => n + i.count, 0))}
                         hint={todo.length === 0 ? 'Nothing outstanding' : `Across ${todo.length} ${todo.length === 1 ? 'area' : 'areas'}`}
                         icon={AlertTriangle} tone="sage" loading={attention === undefined}
-                    />
-                    <MetricCard
-                        label="Messages Sent"
-                        // null means the messages table has not been migrated
-                        // yet — saying so beats printing a confident zero.
-                        value={metrics?.unread_messages === null ? '—' : num(metrics?.unread_messages)}
-                        hint={metrics?.unread_messages === null ? 'Not available yet' : 'To farmers, all time'}
-                        icon={Mail} tone="forest" href="/admin/farmer-email" loading={metrics === undefined}
                     />
                 </div>
             </section>
