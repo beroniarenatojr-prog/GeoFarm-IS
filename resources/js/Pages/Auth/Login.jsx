@@ -132,6 +132,7 @@ export default function Login() {
                                             type="email"
                                             value={data.email}
                                             onChange={e => setData('email', e.target.value)}
+                                            placeholder="Enter Email address"
                                             className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1a3a2e] focus:border-transparent transition-all"
                                             required
                                         />
