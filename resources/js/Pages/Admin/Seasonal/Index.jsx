@@ -1312,10 +1312,7 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                         <div className="hidden xl:block overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 text-left text-xs uppercase tracking-wider text-gray-500">
-                                    {/* One line per cropping, scannable.
-                                        Fertilizer, herbicide, pesticide and the
-                                        cost breakdown are deliberately NOT here —
-                                        they are what the detail view is for. */}
+                                    {/* One row per cropping year showing wet AND dry side by side */}
                                     <tr>
                                         <th className="px-4 py-3 font-semibold">Crop</th>
                                         <th className="px-4 py-3 font-semibold">Farmer</th>
@@ -1330,117 +1327,126 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-green-50">
-                                    {/* Flattened to one line per cropping.
-                                        The grouping behind it is unchanged — the
-                                        detail view still opens the whole
-                                        parcel-year so wet and dry can be read
-                                        against each other. */}
-                                    {/*
-                                        Grouped by parcel-year, one line per
-                                        season inside it.
-
-                                        A parcel cropped Wet AND Dry is one
-                                        cropping year, and the farmer declared
-                                        it as one schedule — so crop, farmer,
-                                        parcel and area are written once and
-                                        span both lines. What is NOT merged is
-                                        the money: the two seasons are separate
-                                        harvests with their own yield, cost and
-                                        price, and adding them together would
-                                        hide a dry season that failed behind a
-                                        wet one that did not.
-                                    */}
-                                    {rows.data.flatMap(row => row.seasons.map((s, i) => (
-                                        <tr
-                                            key={s.id}
-                                            onClick={() => setViewing({ row, season: s })}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                    e.preventDefault();
-                                                    setViewing({ row, season: s });
-                                                }
-                                            }}
-                                            tabIndex={0}
-                                            role="button"
-                                            aria-label={`Open ${row.crop?.crop_name ?? 'cropping'} details for ${farmerName(s)}`}
-                                            /* A heavier rule starts each cropping
-                                               year, so the seasons inside one
-                                               read as belonging together rather
-                                               than as unrelated parcels. */
-                                            className={`group cursor-pointer transition-colors hover:bg-green-50/60 focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500 ${
-                                                i === 0 ? 'border-t-2 border-green-100' : ''
-                                            }`}
-                                        >
-                                            {/* Written once for the whole cropping
-                                                year, spanning its seasons. */}
-                                            {i === 0 && (
-                                                <>
-                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top font-medium text-gray-900">
-                                                        {row.crop?.crop_name ?? <span className="text-gray-300">—</span>}
-                                                        {row.seasons.length > 1 && (
-                                                            /* The farmer declared this parcel as
-                                                               Wet/Dry, and both were cropped. */
-                                                            <span className="mt-0.5 block text-[11px] font-normal text-gray-400">
-                                                                Wet / Dry
-                                                            </span>
+                                    {/* ONE row per parcel-crop-year, showing wet and dry data together */}
+                                    {rows.data.map(row => {
+                                        const wetSeason = row.seasons.find(s => s.season === 'wet');
+                                        const drySeason = row.seasons.find(s => s.season === 'dry');
+                                        const firstSeason = wetSeason || drySeason;
+                                        
+                                        return (
+                                            <tr
+                                                key={row.key}
+                                                onClick={() => setViewing({ row, season: firstSeason })}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        setViewing({ row, season: firstSeason });
+                                                    }
+                                                }}
+                                                tabIndex={0}
+                                                role="button"
+                                                aria-label={`Open ${row.crop?.crop_name ?? 'cropping'} details for ${farmerName(firstSeason)}`}
+                                                className="group cursor-pointer transition-colors hover:bg-green-50/60 focus:bg-green-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-green-500 border-t-2 border-green-100"
+                                            >
+                                                <td className="px-4 py-3 font-medium text-gray-900">
+                                                    {row.crop?.crop_name ?? <span className="text-gray-300">—</span>}
+                                                    {row.seasons.length > 1 && (
+                                                        <span className="mt-0.5 block text-[11px] font-normal text-gray-400">
+                                                            Wet / Dry
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 text-gray-700">
+                                                    {farmerName(firstSeason)}
+                                                </td>
+                                                <td className="px-4 py-3 text-xs text-gray-500">
+                                                    {parcelLabel(row.parcel)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right tabular-nums text-gray-700">
+                                                    {firstSeason.area_planted_ha != null
+                                                        ? <>{Number(firstSeason.area_planted_ha).toFixed(2)}<span className="text-gray-400"> ha</span></>
+                                                        : <NoData />}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {/* Show both season badges */}
+                                                    <div className="flex flex-col gap-1">
+                                                        {wetSeason && <div className="flex items-center gap-1.5"><Badge value="wet" /><span className="text-xs text-gray-400">{row.cropping_year}</span></div>}
+                                                        {drySeason && <div className="flex items-center gap-1.5"><Badge value="dry" /><span className="text-xs text-gray-400">{row.cropping_year}</span></div>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    {/* Show both wet AND dry costs stacked */}
+                                                    <div className="flex flex-col gap-1 tabular-nums text-gray-700">
+                                                        {wetSeason && <div className="text-sm">{wetSeason.production_cost != null ? peso(wetSeason.production_cost, 0) : <NoData />}</div>}
+                                                        {drySeason && <div className="text-sm">{drySeason.production_cost != null ? peso(drySeason.production_cost, 0) : <NoData />}</div>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex flex-col gap-1 tabular-nums text-gray-700">
+                                                        {wetSeason && <div className="text-sm">{wetSeason.selling_price != null ? peso(wetSeason.selling_price, 2) : <NoData />}</div>}
+                                                        {drySeason && <div className="text-sm">{drySeason.selling_price != null ? peso(drySeason.selling_price, 2) : <NoData />}</div>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex flex-col gap-1 tabular-nums text-gray-700">
+                                                        {wetSeason && <div className="text-sm">{wetSeason.yield_kg != null ? <>{Number(wetSeason.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {wetSeason.production_unit ?? 'kg'}</span></> : <NoData />}</div>}
+                                                        {drySeason && <div className="text-sm">{drySeason.yield_kg != null ? <>{Number(drySeason.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {drySeason.production_unit ?? 'kg'}</span></> : <NoData />}</div>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <div className="flex flex-col gap-1">
+                                                        {wetSeason && <div className="text-sm"><NetIncome season={wetSeason} /></div>}
+                                                        {drySeason && <div className="text-sm"><NetIncome season={drySeason} /></div>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {wetSeason && (
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                {can('edit seasonal') && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); openEdit(wetSeason); }}
+                                                                        title="Edit wet season"
+                                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
+                                                                        <Pencil className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                {can('delete seasonal') && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setDeleting(wetSeason); }}
+                                                                        title="Delete wet season"
+                                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
-                                                    </td>
-                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top text-gray-700">
-                                                        {farmerName(s)}
-                                                    </td>
-                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top text-xs text-gray-500">
-                                                        {parcelLabel(row.parcel)}
-                                                    </td>
-                                                    <td rowSpan={row.seasons.length} className="px-4 py-3 align-top text-right tabular-nums text-gray-700">
-                                                        {s.area_planted_ha != null
-                                                            ? <>{Number(s.area_planted_ha).toFixed(2)}<span className="text-gray-400"> ha</span></>
-                                                            : <NoData />}
-                                                    </td>
-                                                </>
-                                            )}
-                                            <td className="px-4 py-3">
-                                                <Badge value={s.season} />
-                                                <span className="ml-1.5 text-xs text-gray-400">{row.cropping_year}</span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {s.production_cost != null ? peso(s.production_cost, 0) : <NoData />}
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {s.selling_price != null ? peso(s.selling_price, 2) : <NoData />}
-                                            </td>
-                                            <td className="px-4 py-3 text-right tabular-nums text-gray-700">
-                                                {s.yield_kg != null
-                                                    ? <>{Number(s.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {s.production_unit ?? 'kg'}</span></>
-                                                    : <NoData />}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <NetIncome season={s} />
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-end gap-1.5">
-                                                    {can('edit seasonal') && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); openEdit(s); }}
-                                                            title={`Edit the ${s.season} season`}
-                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
-                                                            <Pencil className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    )}
-                                                    {can('delete seasonal') && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setDeleting(s); }}
-                                                            title={`Delete the ${s.season} season`}
-                                                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </button>
-                                                    )}
-                                                    {/* Says the row is a way in, without
-                                                        competing with the two actions. */}
-                                                    <ChevronRight className="h-4 w-4 flex-none text-gray-300 transition-colors group-hover:text-green-700" />
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )))}
+                                                        {drySeason && (
+                                                            <div className="flex items-center justify-end gap-1.5">
+                                                                {can('edit seasonal') && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); openEdit(drySeason); }}
+                                                                        title="Edit dry season"
+                                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-green-50 text-green-700 hover:bg-green-100">
+                                                                        <Pencil className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                                {can('delete seasonal') && (
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); setDeleting(drySeason); }}
+                                                                        title="Delete dry season"
+                                                                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 hover:bg-red-100">
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        <ChevronRight className="h-4 w-4 flex-none text-gray-300 transition-colors group-hover:text-green-700 mx-auto" />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
