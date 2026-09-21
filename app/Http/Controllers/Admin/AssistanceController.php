@@ -353,8 +353,8 @@ class AssistanceController extends Controller
             // the inventory item details.
             'programItems' => $assistance->programItems->map(fn ($line) => [
                 'inventory_item_id'   => $line->inventory_item_id,
-                'item_name'           => $line->display_name,
-                'unit'                => $line->display_unit,
+                'item_name'           => $line->item_name ?? $line->item?->item_name ?? 'Unknown item',
+                'unit'                => $line->unit ?? $line->item?->unit,
                 'quantity_per_farmer' => (float) $line->quantity_per_farmer,
                 'total_quantity'      => $line->total_quantity === null ? null : (float) $line->total_quantity,
                 'in_stock'            => (float) ($line->item?->quantity ?? 0),

@@ -58,18 +58,30 @@ class AssistanceProgramItem extends Model
     /**
      * Get the display name for this item.
      * Prioritizes the free-text item_name, falls back to inventory item if linked.
+     * Safe to call even if migration hasn't run yet.
      */
     public function getDisplayNameAttribute(): string
     {
-        return $this->item_name ?? $this->item?->item_name ?? 'Unknown item';
+        // Check if item_name column exists in attributes (migration has run)
+        if (array_key_exists('item_name', $this->attributes) && $this->attributes['item_name']) {
+            return $this->attributes['item_name'];
+        }
+        
+        return $this->item?->item_name ?? 'Unknown item';
     }
 
     /**
      * Get the display unit for this item.
      * Prioritizes the free-text unit, falls back to inventory item if linked.
+     * Safe to call even if migration hasn't run yet.
      */
     public function getDisplayUnitAttribute(): ?string
     {
-        return $this->unit ?? $this->item?->unit;
+        // Check if unit column exists in attributes (migration has run)
+        if (array_key_exists('unit', $this->attributes) && $this->attributes['unit']) {
+            return $this->attributes['unit'];
+        }
+        
+        return $this->item?->unit;
     }
 }

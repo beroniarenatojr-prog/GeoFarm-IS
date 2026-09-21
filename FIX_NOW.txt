@@ -1,0 +1,81 @@
+==========================================
+QUICK FIX FOR 500 ERROR - DO THIS NOW
+==========================================
+
+STEP 1: UPLOAD THIS FILE
+--------------------------
+Upload the UPDATED file:
+  app/Models/AssistanceProgramItem.php
+  
+To: ~/public_html/app/Models/
+
+(This file is now safe - won't crash if columns don't exist yet)
+
+
+STEP 2: UPLOAD MIGRATION
+--------------------------
+Upload:
+  database/migrations/2026_09_21_000001_make_assistance_items_text_based.php
+  
+To: ~/public_html/database/migrations/
+
+
+STEP 3: SSH AND RUN THESE COMMANDS
+-----------------------------------
+ssh your-server
+cd ~/public_html
+php artisan migrate --force
+php artisan cache:clear
+php artisan config:clear
+
+
+STEP 4: TEST
+------------
+Visit: https://geo-farm.pitonmain.com/admin/assistance
+
+Should work now! ✅
+
+
+STEP 5: UPLOAD CONTROLLER (After migration works)
+--------------------------------------------------
+Upload:
+  app/Http/Controllers/Admin/AssistanceController.php
+  
+To: ~/public_html/app/Http/Controllers/Admin/
+
+
+STEP 6: UPLOAD BUILD ASSETS
+----------------------------
+Extract build.zip to ~/public_html/public/build/
+
+
+STEP 7: FINAL CACHE CLEAR
+--------------------------
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
+
+
+==========================================
+WHY THIS HAPPENED
+==========================================
+
+You uploaded PHP files BEFORE running the migration.
+The code tried to access columns that didn't exist yet.
+
+The UPDATED model file (Step 1) is now safe - it checks
+if columns exist before trying to access them.
+
+==========================================
+WHAT WAS CHANGED IN AssistanceProgramItem.php
+==========================================
+
+The accessors now use:
+  array_key_exists('item_name', $this->attributes)
+  
+Instead of:
+  $this->item_name
+  
+This prevents errors when columns don't exist yet.
+
+==========================================
