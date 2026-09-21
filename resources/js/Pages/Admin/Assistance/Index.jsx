@@ -210,33 +210,44 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
             <td className="px-4 py-3">{p.distributions_count}</td>
 
             <td className="px-4 py-3">
-                <StandardActionMenu
-                    viewHref={`/admin/assistance/${p.id}`}
-                    viewPermission="view assistance"
-                    editOnClick={onEdit}
-                    editPermission="edit assistance"
-                    editDisabled={locked}
-                    editDisabledTitle="Locked — unlock this program before editing"
-                    deletePermission="delete assistance"
-                    deleteDisabled={locked}
-                    deleteDisabledTitle="Locked — unlock this program before deleting"
-                    onDelete={() => router.delete(`/admin/assistance/${p.id}`, {
-                        preserveState: true,
-                        preserveScroll: true,
-                    })}
-                    customActions={
-                        canLock ? [{
-                            label: locked ? 'Unlock' : 'Lock',
-                            icon: locked ? Unlock : Lock,
-                            onClick: onToggleLock,
-                            variant: locked ? 'warning' : 'default',
-                            disabled: busy === 'lock',
-                            disabledTitle: locked 
-                                ? `Locked${lockedNote} — click to unlock` 
-                                : 'Lock this program (freezes edits, deletion and new distributions)',
-                        }] : []
-                    }
-                />
+                <div className="flex items-center gap-2">
+                    {/* Lock/Unlock button - visible outside dropdown */}
+                    {canLock && (
+                        <button
+                            type="button"
+                            onClick={onToggleLock}
+                            disabled={busy === 'lock'}
+                            aria-pressed={locked}
+                            title={locked
+                                ? `Locked${lockedNote} — click to unlock`
+                                : 'Lock this program (freezes edits, deletion and new distributions)'}
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
+                                locked
+                                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                    : 'bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                            }`}
+                        >
+                            {locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        </button>
+                    )}
+                    
+                    {/* Action dropdown menu */}
+                    <StandardActionMenu
+                        viewHref={`/admin/assistance/${p.id}`}
+                        viewPermission="view assistance"
+                        editOnClick={onEdit}
+                        editPermission="edit assistance"
+                        editDisabled={locked}
+                        editDisabledTitle="Locked — unlock this program before editing"
+                        deletePermission="delete assistance"
+                        deleteDisabled={locked}
+                        deleteDisabledTitle="Locked — unlock this program before deleting"
+                        onDelete={() => router.delete(`/admin/assistance/${p.id}`, {
+                            preserveState: true,
+                            preserveScroll: true,
+                        })}
+                    />
+                </div>
             </td>
         </tr>
     );

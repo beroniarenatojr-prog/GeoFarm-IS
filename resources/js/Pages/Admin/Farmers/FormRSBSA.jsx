@@ -2175,11 +2175,6 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                                             Mag-upload ng MALINAW na scanned o litrato
                                                         </span>
                                                     </p>
-                                                    <div className="mt-2 pt-2 border-t border-blue-200">
-                                                        <p className="text-xs text-blue-700">
-                                                            Need help compiling? Visit the Agriculture Office or call the hotline for assistance.
-                                                        </p>
-                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
