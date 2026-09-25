@@ -421,6 +421,10 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
     id: p.id,
     parcel_number: p.parcel_number || '—',
     barangay: p.barangay,
+    // An em dash rather than a blank, matching the other columns: an empty
+    // cell reads as a rendering fault, "—" reads as nothing recorded.
+    city_municipality: p.city_municipality || '—',
+    province: p.province || '—',
     area: `${p.total_area_ha} ha`,
     // What is actually grown or raised on the parcel, with the head/tree count
     // beside it when one was recorded — the RSBSA form asks for the pair.
@@ -457,6 +461,11 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
   const parcelsColumns = [
     { header: 'Parcel #', accessorKey: 'parcel_number' },
     { header: 'Barangay', accessorKey: 'barangay' },
+    // Barangay alone is ambiguous — several municipalities in Isabela share
+    // barangay names, and a farmer may hold land outside Tumauini. Both
+    // columns are already on farm_parcels and were simply never shown.
+    { header: 'City / Municipality', accessorKey: 'city_municipality' },
+    { header: 'Province', accessorKey: 'province' },
     { header: 'Area', accessorKey: 'area' },
     // Shown exactly as stored. The values are inconsistently cased ("Corn"
     // beside "corn"); tidying that belongs in the data, not behind a CSS class
