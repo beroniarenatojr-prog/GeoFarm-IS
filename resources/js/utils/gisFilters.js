@@ -242,6 +242,7 @@ export function buildOptions(features) {
   return {
     barangays: sorted(barangays),
     municipalities: sorted(municipalities),
+    commodities: sorted(commodities),
     farmTypes: sorted(farmTypes),
     farmers: [...farmers.entries()]
       .map(([id, { name, rsbsa }]) => ({
