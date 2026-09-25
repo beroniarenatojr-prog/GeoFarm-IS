@@ -2621,12 +2621,29 @@ export default function MapIndex({ parcels }) {
                 reachable. The bottom sheet below is an additional shortcut to
                 the two panels needed while actually looking at the map, not a
                 replacement for this one. */}
+            {/*
+                Explicitly placed in column 2, row 1 — beside the MAP.
+
+                This grid has three children, not two: the map, the parcel
+                table (pinned to column 1 so it sits under the map), and this
+                panel. Auto-placement put this panel in the next free cell
+                AFTER the table, which is column 2 of row TWO — so it started
+                level with the table and left the whole space beside the map
+                empty, pushing the page title some 300 px down the screen.
+
+                Spanning both rows lets it run the full height of the map and
+                the table together, which is what the 360 px column is for.
+                All of it is xl:-prefixed, so below that breakpoint the grid is
+                a single column and this stacks under the map exactly as it
+                did — the placement only applies once there are two columns to
+                place it in.
+            */}
             {/* @container makes this panel the thing its children measure
                 themselves against, rather than the browser window. It is
                 360 px beside the map on a wide screen and full width when it
                 stacks below the map on a narrow one, so window width says
                 almost the opposite of how much room is actually in here. */}
-            <aside className="@container space-y-4">
+            <aside className="@container space-y-4 xl:col-start-2 xl:row-start-1 xl:row-span-2">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800">
                   <MapPinned className="h-4 w-4" />
