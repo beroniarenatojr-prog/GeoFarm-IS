@@ -18,6 +18,7 @@ import {
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   BASEMAPS,
+  NAVIGABLE_BOUNDS,
   TUMAUINI_BOUNDS,
   TUMAUINI_BOUNDARY_COLLECTION,
   TUMAUINI_CENTER,
@@ -287,9 +288,9 @@ function sanitiseParcels(collection) {
 function allowedBounds(collection) {
   const features = collection?.features ?? [];
 
-  if (!features.length) return TUMAUINI_BOUNDS;
+  if (!features.length) return NAVIGABLE_BOUNDS;
 
-  const [[bw, bs], [be, bn]] = TUMAUINI_BOUNDS;
+  const [[bw, bs], [be, bn]] = NAVIGABLE_BOUNDS;
   let [w, s, e, n] = [bw, bs, be, bn];
 
   for (const feature of features) {
@@ -316,7 +317,7 @@ function allowedBounds(collection) {
    * increase, so equality means nothing extended it.
    */
   if (w === bw && s === bs && e === be && n === bn) {
-    return TUMAUINI_BOUNDS;
+    return NAVIGABLE_BOUNDS;
   }
 
   // Breathing room, so a parcel on the very edge is not pinned against it and
@@ -1223,12 +1224,28 @@ export default function MapIndex({ parcels }) {
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: getBasemapStyle(),
+      // Opens on Tumauini, as it always has — that is the office's own ground
+      // and where Recenter returns to.
       center: TUMAUINI_CENTER,
       zoom: 12.35,
       pitch: 35,
       bearing: -8,
-      maxBounds: TUMAUINI_BOUNDS,
-      minZoom: 11,
+      /*
+       * But panning is allowed across the region, not just the municipality.
+       *
+       * This was TUMAUINI_BOUNDS, which meant staff could never reach the next
+       * town to draw a parcel a farmer holds there. Where the map OPENS and how
+       * far it MAY BE MOVED are two different questions, and using one value
+       * for both is what made out-of-town land unrecordable.
+       *
+       * Set here as well as in the setData effect because the map is created
+       * before any parcel has loaded; without it the first seconds of every
+       * visit are still locked to the municipality.
+       */
+      maxBounds: NAVIGABLE_BOUNDS,
+      // Region-wide panning needs a little more room to zoom out than a single
+      // municipality did, or the far edges cannot be brought into view.
+      minZoom: 8,
       maxZoom: 19,
       attributionControl: false,
     });

@@ -18,6 +18,30 @@ export const TUMAUINI_BOUNDS = [
 ];
 
 /*
+ * How far the map may be panned — which is not the same as where it opens.
+ *
+ * TUMAUINI_BOUNDS is the focus area: the map centres there, Recenter returns
+ * there, and the dashed box is drawn from it. It was also used as maxBounds,
+ * and that conflated two different things. A farmer may hold land in Cabagan
+ * or Ilagan, and staff have to be able to pan there to draw or import that
+ * parcel — but with the pan limit set to the municipality they could not,
+ * which left the boundary uncreatable.
+ *
+ * Deriving the limit from the parcels already on the map does not solve it
+ * either: you cannot reach a place to record the first parcel in it.
+ *
+ * So the limit is Cagayan Valley, the region Tumauini sits in. Wide enough to
+ * reach any municipality a Tumauini farmer realistically holds land in, narrow
+ * enough to keep the guard that stops somebody drifting onto empty ocean and
+ * wondering where their data went. A parcel outside even this still widens the
+ * limit to reach it — see allowedBounds in MapIndex.
+ */
+export const NAVIGABLE_BOUNDS = [
+  [120.60, 15.70],
+  [122.80, 18.80],
+];
+
+/*
  * The dashed rectangle on the map. Deliberately labelled "approximate extent"
  * rather than "municipal boundary": it is a bounding box, and presenting a box
  * as an administrative outline on a government system would be a lie staff
