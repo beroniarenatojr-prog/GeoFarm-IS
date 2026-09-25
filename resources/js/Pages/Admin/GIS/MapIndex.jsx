@@ -2622,37 +2622,6 @@ export default function MapIndex({ parcels }) {
               )}
             </div>
 
-            {/*
-                Legend and parcel list, below the map on a wide screen and
-                stacked under it on a narrow one. Both sit in the grid's first
-                column so the map keeps its full width.
-            */}
-            <div className="space-y-4 xl:col-start-1">
-              {/*
-                  The barangay legend is deliberately not rendered.
-
-                  Staff at the Municipal Agriculture Office already know the 46
-                  barangays, so a 46-row colour key is a wall of names rather
-                  than a reference. Parcels are still coloured by barangay, and
-                  a parcel's barangay is on its card when clicked and in the
-                  list below — which is where it is actually asked for.
-
-                  Components/GIS/BarangayLegend.jsx is kept if this is ever
-                  wanted back; nothing imports it, so it is not bundled.
-              */}
-              <ParcelTable
-                features={sortedVisible}
-                sort={listSort}
-                onSort={(key) => setListSort((current) => ({
-                  key,
-                  // Same column toggles direction; a new column starts ascending.
-                  dir: current.key === key && current.dir === 'asc' ? 'desc' : 'asc',
-                }))}
-                onPick={pickFeature}
-                selectedId={selectedParcel}
-                loading={dataStatus === 'loading' && allFeatures.length === 0}
-              />
-            </div>
 
             {/* Always rendered: on a narrow screen the grid collapses to one
                 column and this stacks under the map, which keeps every control
@@ -2660,28 +2629,34 @@ export default function MapIndex({ parcels }) {
                 the two panels needed while actually looking at the map, not a
                 replacement for this one. */}
             {/*
-                Explicitly placed in column 2, row 1 — beside the MAP.
+                Column 2, and exactly as tall as the map — no taller.
 
-                This grid has three children, not two: the map, the parcel
-                table (pinned to column 1 so it sits under the map), and this
-                panel. Auto-placement put this panel in the next free cell
-                AFTER the table, which is column 2 of row TWO — so it started
-                level with the table and left the whole space beside the map
-                empty, pushing the page title some 300 px down the screen.
+                The grid is now two children on one row: the map and this
+                panel. The parcel table moved out below them, because no
+                arrangement of three items in two columns avoided a tall band
+                of white space — this panel runs some 900 px longer than the
+                map, and a grid pads the shorter column to match the longer
+                one.
 
-                Spanning both rows lets it run the full height of the map and
-                the table together, which is what the 360 px column is for.
-                All of it is xl:-prefixed, so below that breakpoint the grid is
-                a single column and this stacks under the map exactly as it
-                did — the placement only applies once there are two columns to
-                place it in.
+                So the panel is capped to the map's own height and scrolls
+                inside itself. The two columns end level, there is nothing to
+                pad, and the controls are all still reachable — just by
+                scrolling this panel rather than the whole page.
+
+                row-span is deliberately NOT set: with a single row it would
+                create an empty implicit second row and put the white space
+                straight back.
+
+                Every rule here is xl:-prefixed. Below that breakpoint the grid
+                is one column, and this stacks under the map at its natural
+                full height with no inner scrollbar, exactly as before.
             */}
             {/* @container makes this panel the thing its children measure
                 themselves against, rather than the browser window. It is
                 360 px beside the map on a wide screen and full width when it
                 stacks below the map on a narrow one, so window width says
                 almost the opposite of how much room is actually in here. */}
-            <aside className="@container space-y-4 xl:col-start-2 xl:row-start-1 xl:row-span-2">
+            <aside className="@container space-y-4 xl:col-start-2 xl:row-start-1 xl:h-[calc(100vh-13rem)] xl:min-h-[420px] xl:max-h-[820px] xl:overflow-y-auto xl:pr-1">
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-emerald-800">
                   <MapPinned className="h-4 w-4" />
@@ -3220,6 +3195,46 @@ export default function MapIndex({ parcels }) {
                 </div>
               </div>
             </aside>
+          </div>
+
+          {/*
+              The parcel list, full width and BELOW the two columns.
+
+              It used to sit in the grid's first column under the map, which
+              gave it about half the page for six columns and still left a tall
+              band of white space: the control panel beside the map runs some
+              900 px longer than the map and the table together, and in a
+              two-column grid the shorter column is padded to match.
+
+              Out here it spans the whole width, so Municipality and Commodity
+              stop being squeezed, and the grid above is a single row of two
+              equal-height columns with nothing left over.
+          */}
+          <div className="mt-4 space-y-4">
+            {/*
+                The barangay legend is deliberately not rendered.
+
+                Staff at the Municipal Agriculture Office already know the 46
+                barangays, so a 46-row colour key is a wall of names rather
+                than a reference. Parcels are still coloured by barangay, and
+                a parcel's barangay is on its card when clicked and in the
+                list below — which is where it is actually asked for.
+
+                Components/GIS/BarangayLegend.jsx is kept if this is ever
+                wanted back; nothing imports it, so it is not bundled.
+            */}
+            <ParcelTable
+              features={sortedVisible}
+              sort={listSort}
+              onSort={(key) => setListSort((current) => ({
+                key,
+                // Same column toggles direction; a new column starts ascending.
+                dir: current.key === key && current.dir === 'asc' ? 'desc' : 'asc',
+              }))}
+              onPick={pickFeature}
+              selectedId={selectedParcel}
+              loading={dataStatus === 'loading' && allFeatures.length === 0}
+            />
           </div>
         </section>
       </div>
