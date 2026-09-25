@@ -12,9 +12,16 @@
 /** Nothing selected. Also the shape "Clear filters" resets to. */
 export const EMPTY_FILTERS = {
   barangay: '',
+  // The parcel's own municipality, not the farmer's address. A Tumauini
+  // farmer may hold land in Cabagan, and that parcel belongs to Cabagan here.
+  municipality: '',
   commodity: '',
   farmType: '',
   farmer: '',
+  // '' every parcel · 'mapped' those with an outline · 'unmapped' those
+  // still waiting for one. The third state is the point of the filter: it is
+  // the office's worklist of boundaries still to be drawn.
+  boundary: '',
   minArea: '',
   maxArea: '',
 };
@@ -25,6 +32,8 @@ const SEARCH_FIELDS = [
   'parcel_number',
   'rsbsa_no',
   'barangay',
+  'city_municipality',
+  'province',
   'commodity',
   'farm_type',
 ];
@@ -40,12 +49,30 @@ const num = (value) => {
 };
 
 /**
+ * Does this parcel have a boundary on the map?
+ *
+ * Reads the server's `has_boundary` when it is there and falls back to the
+ * geometry itself, so a feature built locally — a freshly drawn outline, say —
+ * answers correctly without having to be round-tripped first.
+ */
+export const hasBoundary = (feature) => {
+  const flag = feature?.properties?.has_boundary;
+  if (flag !== undefined && flag !== null) return Boolean(flag);
+  return Boolean(feature?.geometry);
+};
+
+/**
  * Area of one feature in hectares.
  *
  * Prefers `drawn_ha`, stamped once when the collection is loaded, so filtering
  * never re-runs turf over every polygon. Falls back to the office's recorded
  * figure only when the drawn one is missing, and to 0 when neither exists —
  * a parcel with no measurable outline must not make a total look larger.
+ *
+ * For a parcel with no boundary the recorded figure is all there is, which is
+ * why the fallback matters more than it used to: those parcels are now in the
+ * list, and showing them as 0 ha would be wrong in a different way. Callers
+ * that specifically mean DRAWN area ask hasBoundary first — see computeStats.
  */
 export const featureHectares = (feature) => {
   const drawn = num(feature?.properties?.drawn_ha);
@@ -83,9 +110,13 @@ export function applyFilters(features, filters = EMPTY_FILTERS, query = '') {
     const p = feature?.properties ?? {};
 
     if (wanted.barangay && text(p.barangay) !== wanted.barangay) return false;
+    if (wanted.municipality && text(p.city_municipality) !== wanted.municipality) return false;
     if (wanted.commodity && text(p.commodity) !== wanted.commodity) return false;
     if (wanted.farmType && text(p.farm_type) !== wanted.farmType) return false;
     if (wanted.farmer && String(p.farmer_id ?? '') !== String(wanted.farmer)) return false;
+
+    if (wanted.boundary === 'mapped' && !hasBoundary(feature)) return false;
+    if (wanted.boundary === 'unmapped' && hasBoundary(feature)) return false;
 
     if (min !== null || max !== null) {
       const ha = featureHectares(feature);
@@ -107,38 +138,59 @@ export function hasActiveFilters(filters = EMPTY_FILTERS, query = '') {
  * The numbers on the summary cards.
  *
  * Counted from whatever slice is passed in, so the same function serves both
- * "all mapped parcels" and "what the filters left". Distinct counts ignore
- * blanks: a parcel with no barangay recorded is not a 47th barangay, and an
- * unassigned parcel is not an extra farmer.
+ * "all parcels" and "what the filters left". Distinct counts ignore blanks: a
+ * parcel with no barangay recorded is not a 47th barangay, and an unassigned
+ * parcel is not an extra farmer.
+ *
+ * `hectares` is the DRAWN total and counts only parcels that have a boundary.
+ * That distinction became load-bearing when undrawn parcels joined the
+ * collection: featureHectares falls back to the office's recorded figure, so
+ * summing every feature would quietly mix measured and recorded areas into one
+ * number labelled "measured from the drawn boundaries". `recordedHectares`
+ * carries the other total for anything that wants it.
  */
 export function computeStats(features) {
   const list = features ?? [];
 
   const farmers = new Set();
   const barangays = new Set();
+  const municipalities = new Set();
   const commodities = new Set();
   const farmTypes = new Set();
   let hectares = 0;
+  let recorded = 0;
+  let mapped = 0;
 
   for (const feature of list) {
     const p = feature?.properties ?? {};
 
-    hectares += featureHectares(feature);
+    if (hasBoundary(feature)) {
+      mapped += 1;
+      hectares += featureHectares(feature);
+    }
+
+    const own = num(p.area_ha);
+    if (own !== null) recorded += own;
 
     if (p.farmer_id !== null && p.farmer_id !== undefined && p.farmer_id !== '') {
       farmers.add(String(p.farmer_id));
     }
     if (text(p.barangay)) barangays.add(text(p.barangay));
+    if (text(p.city_municipality)) municipalities.add(text(p.city_municipality));
     if (text(p.commodity)) commodities.add(text(p.commodity));
     if (text(p.farm_type)) farmTypes.add(text(p.farm_type));
   }
 
   return {
     parcels: list.length,
-    // Rounded for display only; the running total above stays full precision.
+    mapped,
+    unmapped: list.length - mapped,
+    // Rounded for display only; the running totals above stay full precision.
     hectares: Math.round(hectares * 100) / 100,
+    recordedHectares: Math.round(recorded * 100) / 100,
     farmers: farmers.size,
     barangays: barangays.size,
+    municipalities: municipalities.size,
     commodities: commodities.size,
     farmTypes: farmTypes.size,
   };
@@ -150,9 +202,15 @@ export function computeStats(features) {
  * Always derived from the FULL collection, never the filtered one: a dropdown
  * that drops its other options the moment you pick one is a dead end, because
  * there is then no way to switch to a different barangay without clearing.
+ *
+ * Farmers are keyed by id, so somebody with three parcels appears once. Where
+ * two DIFFERENT farmers share a name — which happens, and is exactly when a
+ * picker is most dangerous — each is suffixed with their RSBSA number so the
+ * two entries can be told apart. Names that are unique are left alone.
  */
 export function buildOptions(features) {
   const barangays = new Set();
+  const municipalities = new Set();
   const commodities = new Set();
   const farmTypes = new Set();
   const farmers = new Map();
@@ -161,22 +219,35 @@ export function buildOptions(features) {
     const p = feature?.properties ?? {};
 
     if (text(p.barangay)) barangays.add(text(p.barangay));
+    if (text(p.city_municipality)) municipalities.add(text(p.city_municipality));
     if (text(p.commodity)) commodities.add(text(p.commodity));
     if (text(p.farm_type)) farmTypes.add(text(p.farm_type));
 
-    if (p.farmer_id && text(p.farmer_name)) {
-      farmers.set(String(p.farmer_id), text(p.farmer_name));
+    if (p.farmer_id && text(p.farmer_name) && !farmers.has(String(p.farmer_id))) {
+      farmers.set(String(p.farmer_id), {
+        name: text(p.farmer_name),
+        rsbsa: text(p.rsbsa_no),
+      });
     }
   }
 
   const sorted = (set) => [...set].sort((a, b) => a.localeCompare(b));
 
+  // How many distinct farmer ids answer to each name.
+  const nameCounts = new Map();
+  for (const { name } of farmers.values()) {
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
+
   return {
     barangays: sorted(barangays),
-    commodities: sorted(commodities),
+    municipalities: sorted(municipalities),
     farmTypes: sorted(farmTypes),
     farmers: [...farmers.entries()]
-      .map(([id, name]) => ({ id, name }))
+      .map(([id, { name, rsbsa }]) => ({
+        id,
+        name: nameCounts.get(name) > 1 && rsbsa ? `${name} — ${rsbsa}` : name,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
@@ -224,6 +295,7 @@ export function sortFeatures(features, key, direction = 'asc') {
       case 'area': return featureHectares(feature);
       case 'farmer': return lower(p.farmer_name);
       case 'barangay': return lower(p.barangay);
+      case 'municipality': return lower(p.city_municipality);
       case 'commodity': return lower(p.commodity);
       case 'parcel':
       default: return lower(p.parcel_number);

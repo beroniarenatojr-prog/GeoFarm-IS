@@ -204,6 +204,25 @@ class GISController extends Controller
         return back()->with('success', "Farm boundary saved — {$area} ha.");
     }
 
+    /**
+     * Every parcel in the registry, as GeoJSON.
+     *
+     * EVERY parcel — including the ones nobody has drawn yet. This used to end
+     * in whereNotNull('geojson_data'), which meant a parcel without a boundary
+     * never reached the map at all: not on it, not in the parcel list beside
+     * it, not in the search, and not in the totals. Staff had no way to find
+     * the records still needing a boundary from the one screen whose whole job
+     * is boundaries.
+     *
+     * A parcel with no outline comes back as a Feature with `geometry: null`,
+     * which is valid GeoJSON, and `has_boundary: false`. Only the features
+     * that do carry geometry are ever handed to the map layers — see
+     * sanitiseParcels on the client — so nothing is asked to draw a null. The
+     * rest of the page reads the whole collection.
+     *
+     * No coordinates are invented for the undrawn ones. A parcel whose
+     * boundary is unknown is shown as unknown.
+     */
     public function getParcelsGeoJSON()
     {
         // farmType is loaded for the popup's crop line. geojson_data is kept in
@@ -219,58 +238,88 @@ class GISController extends Controller
                 'farmType',
                 'farmer' => fn ($query) => $query->withCount('distributions'),
             ])
-            ->whereNotNull('geojson_data')
             ->get();
 
         $features = [];
         foreach ($parcels as $parcel) {
-            if ($parcel->geojson_data) {
-                $geometry = json_decode($parcel->geojson_data, true);
-                
-                $features[] = [
-                    'type' => 'Feature',
-                    // Top-level id as well as the one in properties: this is
-                    // what setFeatureState addresses a feature by, and giving
-                    // it here is the plain GeoJSON way. The alternative,
-                    // promoteId on the source, lifts the property instead but
-                    // is one more thing that has to be right for a parcel to
-                    // draw at all.
-                    'id' => $parcel->id,
-                    'geometry' => $geometry,
-                    'properties' => [
-                        'id' => $parcel->id,
-                        'parcel_number' => $parcel->parcel_number ?? 'N/A',
-                        // null, not 'Unknown' — the map needs to tell an
-                        // unassigned parcel from one whose farmer failed to
-                        // load, and only one of those is a job for staff.
-                        'farmer_id'   => $parcel->farmer_id,
-                        'farmer_name' => $parcel->farmer
-                            ? trim($parcel->farmer->first_name . ' ' . $parcel->farmer->last_name)
-                            : null,
-                        'rsbsa_no'    => $parcel->farmer?->rsbsa_no,
-                        'barangay' => $parcel->barangay,
-                        'area_ha' => $parcel->total_area_ha,
-                        'commodity' => $parcel->commodity,
-                        'farm_type' => $parcel->farmType?->type_name,
-                        // Lets the popup say whether this outline was surveyed
-                        // or sketched by hand — they should not read alike.
-                        'boundary_source' => $parcel->boundary_source,
+            /*
+             * json_decode gives null for null, for '' and for malformed JSON
+             * alike, and all three mean the same thing here: no usable outline.
+             * Treated as "not drawn yet" rather than skipped, because a row
+             * with a corrupt boundary is precisely the row somebody needs to
+             * see in order to fix it.
+             */
+            $geometry = $parcel->geojson_data
+                ? json_decode($parcel->geojson_data, true)
+                : null;
 
-                        /*
-                         * Two thematic fields, so the map can shade parcels by
-                         * risk or by whether their farmer has been helped.
-                         *
-                         * Both are values the office already holds; neither is
-                         * derived or guessed here. risk_status is nullable and
-                         * stays null when no assessment has been made — "not
-                         * assessed" and "low risk" are different answers and
-                         * the map must not conflate them.
-                         */
-                        'risk_status'    => $parcel->farmer?->risk_status,
-                        'has_assistance' => (bool) ($parcel->farmer?->distributions_count ?? 0),
-                    ],
-                ];
-            }
+            $features[] = [
+                'type' => 'Feature',
+                // Top-level id as well as the one in properties: this is
+                // what setFeatureState addresses a feature by, and giving
+                // it here is the plain GeoJSON way. The alternative,
+                // promoteId on the source, lifts the property instead but
+                // is one more thing that has to be right for a parcel to
+                // draw at all.
+                'id' => $parcel->id,
+                'geometry' => $geometry,
+                'properties' => [
+                    'id' => $parcel->id,
+                    'parcel_number' => $parcel->parcel_number ?? 'N/A',
+                    // null, not 'Unknown' — the map needs to tell an
+                    // unassigned parcel from one whose farmer failed to
+                    // load, and only one of those is a job for staff.
+                    'farmer_id'   => $parcel->farmer_id,
+                    'farmer_name' => $parcel->farmer
+                        ? trim($parcel->farmer->first_name . ' ' . $parcel->farmer->last_name)
+                        : null,
+                    'rsbsa_no'    => $parcel->farmer?->rsbsa_no,
+                    'barangay' => $parcel->barangay,
+
+                    /*
+                     * Where the LAND is, which is not where the farmer lives.
+                     *
+                     * A Tumauini farmer may hold a parcel in Cabagan or Ilagan.
+                     * These two columns are the parcel's own, already recorded
+                     * and already shown on the farmer's profile; sending them
+                     * here is what lets the map filter by municipality rather
+                     * than assume every parcel sits in Tumauini.
+                     */
+                    'city_municipality' => $parcel->city_municipality,
+                    'province'          => $parcel->province,
+
+                    'area_ha' => $parcel->total_area_ha,
+                    'commodity' => $parcel->commodity,
+                    'farm_type' => $parcel->farmType?->type_name,
+                    // Lets the popup say whether this outline was surveyed
+                    // or sketched by hand — they should not read alike.
+                    'boundary_source' => $parcel->boundary_source,
+
+                    /*
+                     * Whether this parcel has an outline at all.
+                     *
+                     * Stated as its own property rather than left for the
+                     * client to infer from a null geometry: the list, the
+                     * filters and the parcel card all ask the question, and
+                     * none of them should have to reach into the geometry to
+                     * answer it.
+                     */
+                    'has_boundary' => $geometry !== null,
+
+                    /*
+                     * Two thematic fields, so the map can shade parcels by
+                     * risk or by whether their farmer has been helped.
+                     *
+                     * Both are values the office already holds; neither is
+                     * derived or guessed here. risk_status is nullable and
+                     * stays null when no assessment has been made — "not
+                     * assessed" and "low risk" are different answers and
+                     * the map must not conflate them.
+                     */
+                    'risk_status'    => $parcel->farmer?->risk_status,
+                    'has_assistance' => (bool) ($parcel->farmer?->distributions_count ?? 0),
+                ],
+            ];
         }
 
         return response()->json([

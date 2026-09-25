@@ -31,7 +31,9 @@ function Select({ label, value, onChange, options, placeholder, getKey, getLabel
   );
 }
 
-export default function FarmFilters({ filters, options, onChange, onClear, active, resultCount }) {
+export default function FarmFilters({
+  filters, options, onChange, onClear, active, resultCount, unmappedCount = 0, mappedCount = resultCount,
+}) {
   const set = (key) => (value) => onChange({ ...filters, [key]: value });
 
   return (
@@ -73,6 +75,21 @@ export default function FarmFilters({ filters, options, onChange, onClear, activ
           options={options.barangays}
           placeholder="All barangays"
         />
+        {/*
+            Offered only when the records actually span more than one
+            municipality. For an office whose every parcel sits in Tumauini
+            this is a dropdown with one choice, which is just clutter — and the
+            moment a parcel in Cabagan is recorded it appears on its own.
+        */}
+        {options.municipalities.length > 1 && (
+          <Select
+            label="Municipality"
+            value={filters.municipality}
+            onChange={set('municipality')}
+            options={options.municipalities}
+            placeholder="All municipalities"
+          />
+        )}
         <Select
           label="Commodity"
           value={filters.commodity}
@@ -96,6 +113,29 @@ export default function FarmFilters({ filters, options, onChange, onClear, activ
           getKey={(f) => f.id}
           getLabel={(f) => f.name}
         />
+        {/*
+            The office's own worklist.
+
+            "Needs a boundary" is the reason this filter exists: it turns the
+            map into a list of the parcels still to be traced, which is the
+            question staff actually bring to this screen. It is offered only
+            when there is at least one of each, so it can never produce an
+            empty map on its own.
+        */}
+        {unmappedCount > 0 && (
+          <Select
+            label="Boundary"
+            value={filters.boundary}
+            onChange={set('boundary')}
+            options={[
+              { id: 'mapped', name: 'Drawn on the map' },
+              { id: 'unmapped', name: `Needs a boundary (${unmappedCount})` },
+            ]}
+            placeholder="Drawn and undrawn"
+            getKey={(o) => o.id}
+            getLabel={(o) => o.name}
+          />
+        )}
       </div>
 
       <fieldset className="mt-3">
@@ -127,6 +167,14 @@ export default function FarmFilters({ filters, options, onChange, onClear, activ
         </div>
       </fieldset>
 
+      {/*
+          Says both numbers when they differ.
+
+          This used to read "N parcels shown on the map", which stopped being
+          true the moment undrawn parcels joined the list: a filter matching 12
+          parcels of which 3 have no boundary puts 9 on the map, and one number
+          cannot honestly stand for both.
+      */}
       <p
         className={`mt-3 border-t border-slate-100 pt-2 text-xs ${
           resultCount === 0 ? 'font-medium text-amber-700' : 'text-slate-500'
@@ -135,7 +183,10 @@ export default function FarmFilters({ filters, options, onChange, onClear, activ
       >
         {resultCount === 0
           ? 'No parcels match the selected filters.'
-          : `${resultCount} parcel${resultCount === 1 ? '' : 's'} shown on the map.`}
+          : `${resultCount} parcel${resultCount === 1 ? '' : 's'} match${resultCount === 1 ? 'es' : ''}`
+            + (mappedCount === resultCount
+              ? ', all drawn on the map.'
+              : `, ${mappedCount} drawn on the map.`)}
       </p>
     </section>
   );

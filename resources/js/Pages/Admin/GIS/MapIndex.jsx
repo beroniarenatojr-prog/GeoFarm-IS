@@ -119,6 +119,11 @@ const PARCEL_COLOURS = [
  *  as "not classified" rather than as one more barangay. */
 const NO_BARANGAY_COLOUR = '#94a3b8';
 
+/** A parcel with no boundary drawn yet. Paler still than NO_BARANGAY_COLOUR,
+ *  because it never appears on the map — only as a swatch in the list, where
+ *  it should read as an absence rather than as a colour that means something. */
+const NO_BOUNDARY_COLOUR = '#cbd5e1';
+
 /** Trim and normalise a barangay name so "  Ugad" and "Ugad" are one place. */
 const barangayKey = (value) => String(value ?? '').trim();
 
@@ -247,22 +252,62 @@ function isRenderableFeature(feature) {
 }
 
 /**
- * Splits a collection into what can be drawn and what cannot.
+ * Marks a parcel that has no boundary yet, so the rest of the page can carry
+ * it without ever handing it to a map layer.
  *
- * The unmappable ones are counted rather than silently discarded, so the page
- * can say "2 unmappable" instead of quietly disagreeing with the parcel list.
+ * It keeps its barangay colour at reduced confidence — a neutral grey — rather
+ * than borrowing one from a place it may not sit in, and its drawn area is
+ * null rather than 0: nobody measured it, which is not the same as it being
+ * empty. featureHectares falls back to the office's recorded figure.
+ */
+function markUnmapped(feature) {
+  return {
+    ...feature,
+    geometry: null,
+    properties: {
+      ...feature.properties,
+      has_boundary: false,
+      colour: NO_BOUNDARY_COLOUR,
+      drawn_ha: null,
+    },
+  };
+}
+
+/**
+ * Splits a collection three ways: drawable, not drawn yet, and unusable.
+ *
+ * The middle case is the one that was missing. Everything without renderable
+ * geometry used to be lumped together as "unmappable", which was the right
+ * word for a corrupt import and quite the wrong one for a parcel nobody has
+ * traced yet — and since the server never sent those at all, the distinction
+ * had nowhere to show up. Now that undrawn parcels arrive with geometry: null,
+ * calling them unmappable would tell staff their data was broken when it is
+ * merely incomplete.
+ *
+ * So: no geometry at all is "not drawn yet" and belongs in the list. Geometry
+ * that exists but cannot be drawn — a ring of two points, a coordinate out in
+ * the Pacific — is a real fault and stays counted as unmappable, because that
+ * is a record somebody has to repair.
  */
 function sanitiseParcels(collection) {
   const features = collection?.features ?? [];
   const kept = [];
+  const unmapped = [];
   const dropped = [];
 
   for (const feature of features) {
-    (isRenderableFeature(feature) ? kept : dropped).push(feature);
+    if (!feature?.geometry) {
+      unmapped.push(markUnmapped(feature));
+    } else if (isRenderableFeature(feature)) {
+      kept.push(feature);
+    } else {
+      dropped.push(feature);
+    }
   }
 
   return {
     collection: { type: 'FeatureCollection', features: kept },
+    unmapped,
     dropped,
   };
 }
@@ -629,6 +674,17 @@ export default function MapIndex({ parcels }) {
    */
   const [unmappable, setUnmappable] = useState(0);
 
+  /**
+   * Parcels the office has recorded but nobody has drawn a boundary for.
+   *
+   * Held apart from geoJsonData, which is the map's collection and must never
+   * contain a feature without geometry. These join it again in `allFeatures`,
+   * which is what the list, the search, the filters and the totals read — so a
+   * parcel awaiting a boundary is findable from the screen whose job is to
+   * give it one, without any layer being asked to draw nothing.
+   */
+  const [unmappedFeatures, setUnmappedFeatures] = useState([]);
+
   /** Closest boundary to the middle of the screen, when none is on it. */
   const [nearest, setNearest] = useState(null);
 
@@ -779,30 +835,53 @@ export default function MapIndex({ parcels }) {
   /*
    * ── The one derivation the whole page reads from ──────────────────────────
    *
-   * geoJsonData always holds the FULL, already-coloured collection. Filtering
-   * selects a subset of those same feature objects and never re-colours them,
-   * which is what keeps a barangay's colour fixed: colours are assigned by
-   * position in the sorted list of barangays PRESENT in the collection handed
-   * to colouriseParcels, so colourising a filtered set would make whichever
-   * barangay you filtered to barangay #0 and change its colour.
+   * geoJsonData holds the FULL, already-coloured collection of parcels that
+   * HAVE a boundary — that and nothing else is what the map layers are ever
+   * given. Filtering selects a subset of those same feature objects and never
+   * re-colours them, which is what keeps a barangay's colour fixed: colours
+   * are assigned by position in the sorted list of barangays PRESENT in the
+   * collection handed to colouriseParcels, so colourising a filtered set would
+   * make whichever barangay you filtered to barangay #0 and change its colour.
+   *
+   * allFeatures adds back the parcels that have no boundary yet. Everything
+   * that is a LIST of parcels rather than a picture of them — the table, the
+   * search, the filter dropdowns, the totals — reads this, so a parcel waiting
+   * for a boundary can be found. visibleCollection then strips the geometryless
+   * ones out again before anything reaches MapLibre.
    */
-  const visibleFeatures = useMemo(
-    () => applyFilters(geoJsonData.features, filters, search),
-    [geoJsonData, filters, search],
+  const allFeatures = useMemo(
+    () => [...geoJsonData.features, ...unmappedFeatures],
+    [geoJsonData, unmappedFeatures],
   );
 
+  const visibleFeatures = useMemo(
+    () => applyFilters(allFeatures, filters, search),
+    [allFeatures, filters, search],
+  );
+
+  /*
+   * What the map draws: the visible parcels that actually have geometry.
+   *
+   * The filter is not defensive tidying — it is the contract that lets the
+   * undrawn parcels exist in visibleFeatures at all. setData on a collection
+   * containing `geometry: null` leaves MapLibre to skip them, but bbox() and
+   * center() do not, and those decide the opening view and the pin positions.
+   */
   const visibleCollection = useMemo(
-    () => ({ type: 'FeatureCollection', features: visibleFeatures }),
+    () => ({
+      type: 'FeatureCollection',
+      features: visibleFeatures.filter((feature) => feature.geometry),
+    }),
     [visibleFeatures],
   );
 
   /** Options come from everything loaded, so a dropdown never strands itself. */
-  const filterOptions = useMemo(() => buildOptions(geoJsonData.features), [geoJsonData]);
+  const filterOptions = useMemo(() => buildOptions(allFeatures), [allFeatures]);
 
   const filtersActive = useMemo(() => hasActiveFilters(filters, search), [filters, search]);
 
   const visibleStats = useMemo(() => computeStats(visibleFeatures), [visibleFeatures]);
-  const totalStats = useMemo(() => computeStats(geoJsonData.features), [geoJsonData]);
+  const totalStats = useMemo(() => computeStats(allFeatures), [allFeatures]);
 
   const sortedVisible = useMemo(
     () => sortFeatures(visibleFeatures, listSort.key, listSort.dir),
@@ -918,15 +997,14 @@ export default function MapIndex({ parcels }) {
         return res.json();
       })
       .then((data) => {
-        // Unmappable rows are removed BEFORE anything measures the collection:
-
-        // bbox() decides the opening view, and one bad coordinate there hides
-
-        // every good parcel.
-
-        const { collection: drawable, dropped } = sanitiseParcels(normalizeFeatureCollection(data));
+        // Rows that cannot be drawn are separated out BEFORE anything
+        // measures the collection: bbox() decides the opening view, and one
+        // bad coordinate there hides every good parcel.
+        const { collection: drawable, unmapped, dropped } =
+          sanitiseParcels(normalizeFeatureCollection(data));
 
         setUnmappable(dropped.length);
+        setUnmappedFeatures(unmapped);
 
         const colourised = colouriseParcels(drawable);
         setGeoJsonData(colourised);
@@ -1593,15 +1671,14 @@ export default function MapIndex({ parcels }) {
         fetch('/admin/gis/parcels-geojson')
           .then((res) => res.json())
           .then((data) => {
-            // Unmappable rows are removed BEFORE anything measures the collection:
-
-            // bbox() decides the opening view, and one bad coordinate there hides
-
-            // every good parcel.
-
-            const { collection: drawable, dropped } = sanitiseParcels(normalizeFeatureCollection(data));
+            // Rows that cannot be drawn are separated out BEFORE anything
+            // measures the collection: bbox() decides the opening view, and
+            // one bad coordinate there hides every good parcel.
+            const { collection: drawable, unmapped, dropped } =
+              sanitiseParcels(normalizeFeatureCollection(data));
 
             setUnmappable(dropped.length);
+            setUnmappedFeatures(unmapped);
 
             const colourised = colouriseParcels(drawable);
             map.getSource('parcels')?.setData(colourised);
@@ -1916,18 +1993,32 @@ export default function MapIndex({ parcels }) {
     });
   };
 
+  /**
+   * Select a parcel and, if it has a boundary, fly to it.
+   *
+   * Looks through allFeatures, not just the drawn ones. Selecting a parcel
+   * that has no boundary used to toast "no saved boundary yet" and stop there,
+   * leaving nothing selected — so clicking such a row in the list did nothing
+   * visible at all. It now fills the detail card exactly as any other parcel
+   * does; only the camera move is skipped, because there is nowhere to move
+   * to. The card says so, and offers the tools to draw one.
+   */
   const focusSelectedParcel = (parcelId = selectedParcel) => {
-    const feature = geoJsonData.features.find((item) => String(item.properties?.id) === String(parcelId));
-    if (!feature) {
-      toast.error('This parcel has no saved boundary yet');
-      return;
-    }
+    const feature = allFeatures.find((item) => String(item.properties?.id) === String(parcelId));
+    if (!feature) return;
 
-    const bounds = bbox(feature);
-    mapRef.current?.fitBounds(bounds, { padding: 72, maxZoom: 17, duration: 900 });
     setSelectedFeature(feature.properties);
     highlightParcel(feature.properties.id);
     loadParcelDetail(feature.properties.id);
+
+    if (!feature.geometry) {
+      // No camera move and no error: this is an ordinary record in an
+      // ordinary state, and the panel now shows what to do about it.
+      setViewNote(`parcel ${feature.properties.id}: no boundary drawn yet`);
+      return;
+    }
+
+    mapRef.current?.fitBounds(bbox(feature), { padding: 72, maxZoom: 17, duration: 900 });
   };
 
   /**
@@ -1942,6 +2033,19 @@ export default function MapIndex({ parcels }) {
 
     setSelectedParcel(String(id));
     focusSelectedParcel(id);
+  };
+
+  /**
+   * Show only the parcels still waiting for a boundary.
+   *
+   * What the "Needs a boundary" card does when clicked. It replaces the whole
+   * filter set rather than adding to it, so the count on the card and the
+   * number of rows that come back always agree — narrowing an existing filter
+   * further would land on a smaller list than the card promised.
+   */
+  const showUnmappedOnly = () => {
+    setSearchInput('');
+    setFilters({ ...EMPTY_FILTERS, boundary: 'unmapped' });
   };
 
   /**
@@ -1981,9 +2085,26 @@ export default function MapIndex({ parcels }) {
       );
 
       if (theirs.length === 0) {
-        // Say so rather than applying a filter that empties the map — an
-        // unmapped farmer is a real answer, not a failed scan.
-        toast.error(`${body.label ?? 'That farmer'} has no mapped parcel yet.`);
+        /*
+         * Two different answers, and they need different actions at the
+         * counter. "Has parcels, none drawn" is work for this office — so the
+         * filter is applied anyway and the list beside the map fills with
+         * exactly the parcels that need a boundary. "No parcels at all" is a
+         * registration matter, and filtering to it would just empty the map.
+         */
+        const recorded = unmappedFeatures.filter(
+          (feature) => String(feature.properties?.farmer_id) === farmerId,
+        );
+
+        if (recorded.length) {
+          setSearchInput('');
+          setFilters({ ...EMPTY_FILTERS, farmer: farmerId });
+          toast(`${body.label ?? 'That farmer'} has ${recorded.length} parcel${
+            recorded.length === 1 ? '' : 's'} recorded, none drawn yet.`);
+          return;
+        }
+
+        toast.error(`${body.label ?? 'That farmer'} has no parcel on record yet.`);
         return;
       }
 
@@ -2236,7 +2357,12 @@ export default function MapIndex({ parcels }) {
           </p>
         )}
 
-        <StatCards stats={visibleStats} totals={totalStats} filtered={filtersActive} />
+        <StatCards
+          stats={visibleStats}
+          totals={totalStats}
+          filtered={filtersActive}
+          onShowUnmapped={showUnmappedOnly}
+        />
 
         <section className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -2332,8 +2458,14 @@ export default function MapIndex({ parcels }) {
                    which on a laptop is below the browser fold — so the one
                    thing built to explain a blank map was itself invisible. */
                 <div className="absolute left-4 top-4 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-sm">
-                  <span className={mappedCount === 0 ? 'text-rose-300' : ''}>
-                    {mappedCount} loaded
+                  {/* "drawn", not "loaded": the parcel list beside the map now
+                      holds more records than this, and the difference is the
+                      ones with no boundary. */}
+                  <span
+                    className={mappedCount === 0 ? "text-rose-300" : ""}
+                    title="Parcels with a boundary on this map"
+                  >
+                    {mappedCount} drawn
                   </span>
                   <span className="text-white/40">·</span>
                   <span className={inView === 0 ? 'text-amber-300' : 'text-emerald-300'}>
@@ -2366,11 +2498,21 @@ export default function MapIndex({ parcels }) {
                       <span className="text-rose-300 font-semibold">layers NOT built</span>
                     </>
                   )}
+                  {/*
+                      A fault, not a backlog.
+
+                      This counts parcels whose stored geometry cannot be
+                      drawn — a corrupt import, a ring of two points, a
+                      coordinate outside the Philippines. Parcels that simply
+                      have no boundary yet are NOT counted here: they have
+                      their own card above the map, because one is a record to
+                      repair and the other is work to schedule.
+                  */}
                   {unmappable > 0 && (
                     <>
                       <span className="text-white/40">·</span>
-                      <span className="text-rose-300" title="Mapped in the parcel list, but their geometry cannot be drawn">
-                        {unmappable} unmappable
+                      <span className="text-rose-300" title="On record with stored geometry that cannot be drawn — these need repairing">
+                        {unmappable} broken
                       </span>
                     </>
                   )}
@@ -2470,7 +2612,7 @@ export default function MapIndex({ parcels }) {
                 }))}
                 onPick={pickFeature}
                 selectedId={selectedParcel}
-                loading={dataStatus === 'loading' && geoJsonData.features.length === 0}
+                loading={dataStatus === 'loading' && allFeatures.length === 0}
               />
             </div>
 
@@ -2530,6 +2672,8 @@ export default function MapIndex({ parcels }) {
                 onClear={() => { setFilters(EMPTY_FILTERS); setSearchInput(''); }}
                 active={filtersActive}
                 resultCount={visibleFeatures.length}
+                mappedCount={visibleCollection.features.length}
+                unmappedCount={totalStats.unmapped}
               />
 
               <SelectedParcelCard
@@ -2557,7 +2701,7 @@ export default function MapIndex({ parcels }) {
                     // Locate was two steps for one intention — and with
                     // holdings this small, a selection you cannot see reads as
                     // though nothing happened.
-                    if (id && geoJsonData.features.some((f) => String(f.properties?.id) === String(id))) {
+                    if (id && allFeatures.some((f) => String(f.properties?.id) === String(id))) {
                       focusSelectedParcel(id);
                     }
                   }}
@@ -2997,8 +3141,22 @@ export default function MapIndex({ parcels }) {
                 )}
               </div>
 
+              {/*
+                  "Geographic context", not "Boundary context".
+
+                  These four names are what lies around Tumauini — they are
+                  orientation, not the municipality's boundary. Sitting under a
+                  heading with "Boundary" in it, next to a map whose whole
+                  vocabulary is parcel boundaries, they read as though the
+                  office's own limits had been surveyed and listed here. They
+                  have not: the dashed box on the map is an approximation, and
+                  this is a compass rose in words.
+              */}
               <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-                <div className="font-medium text-slate-800">Boundary context</div>
+                <div className="font-medium text-slate-800">Geographic context</div>
+                <p className="mt-1 text-xs text-slate-500">
+                  What lies around Tumauini, for orientation.
+                </p>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <span>North: Cabagan</span>
                   <span>East: Divilacan</span>
@@ -3070,6 +3228,8 @@ export default function MapIndex({ parcels }) {
                 onClear={() => { setFilters(EMPTY_FILTERS); setSearchInput(''); }}
                 active={filtersActive}
                 resultCount={visibleFeatures.length}
+                mappedCount={visibleCollection.features.length}
+                unmappedCount={totalStats.unmapped}
               />
 
               <SelectedParcelCard

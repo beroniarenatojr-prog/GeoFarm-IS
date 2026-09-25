@@ -1,5 +1,5 @@
 import { Crosshair, ExternalLink, Phone, User, X } from 'lucide-react';
-import { featureHectares } from '@/utils/gisFilters';
+import { featureHectares, hasBoundary } from '@/utils/gisFilters';
 
 /**
  * Everything known about the parcel the user just clicked.
@@ -47,11 +47,21 @@ export default function SelectedParcelCard({
   const assistance = detail?.assistance ?? [];
   const interventions = detail?.interventions ?? [];
 
-  const boundaryLabel = properties.boundary_source === 'drawn'
-    ? 'Sketched on the map'
-    : properties.boundary_source
-      ? `Surveyed (${properties.boundary_source})`
-      : '—';
+  /*
+   * This card is now shown for parcels that have no boundary at all, so every
+   * boundary-derived line below has to say which it is. The card is built from
+   * `properties` alone and has no geometry to consult, which is exactly why
+   * the server sends has_boundary as a field of its own.
+   */
+  const drawn = hasBoundary({ properties });
+
+  const boundaryLabel = !drawn
+    ? 'Not drawn yet'
+    : properties.boundary_source === 'drawn'
+      ? 'Sketched on the map'
+      : properties.boundary_source
+        ? `Surveyed (${properties.boundary_source})`
+        : '—';
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white" aria-labelledby="selected-parcel-heading">
@@ -61,10 +71,14 @@ export default function SelectedParcelCard({
             Selected farm parcel
           </h3>
           <p className="mt-0.5 flex items-center gap-2 text-base font-semibold text-slate-900">
+            {/* Hollow while undrawn: this parcel has no colour on the map
+                because it is not on the map. */}
             <span
               aria-hidden="true"
-              className="h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/20"
-              style={{ backgroundColor: properties.colour ?? '#94a3b8' }}
+              className={`h-3 w-3 flex-shrink-0 rounded-full ${
+                drawn ? 'ring-1 ring-black/20' : 'border border-dashed border-slate-400'
+              }`}
+              style={drawn ? { backgroundColor: properties.colour ?? '#94a3b8' } : undefined}
             />
             <span className="truncate">{properties.parcel_number || `Parcel #${properties.id}`}</span>
           </p>
@@ -87,7 +101,28 @@ export default function SelectedParcelCard({
         <Field label="Farmer" value={properties.farmer_name} />
         <Field label="RSBSA no." value={properties.rsbsa_no} mono />
         <Field label="Barangay" value={properties.barangay} />
-        <Field label="Area (drawn)" value={`${featureHectares({ properties }).toFixed(2)} ha`} />
+        {/* Where the land is, which may not be where the farmer lives. Shown
+            only when it is recorded, so the card does not sprout a "—" row for
+            the ordinary case of a parcel in the office's own municipality. */}
+        {properties.city_municipality && (
+          <Field
+            label="Municipality"
+            value={properties.province
+              ? `${properties.city_municipality}, ${properties.province}`
+              : properties.city_municipality}
+          />
+        )}
+        {/*
+            Two different questions, and the label has to say which is being
+            answered. A drawn parcel's area is measured off the polygon; an
+            undrawn one's is whatever the office wrote down, and calling that
+            "drawn" would be a straightforward untruth on a record that may
+            later be used to justify assistance.
+        */}
+        <Field
+          label={drawn ? 'Area (drawn)' : 'Area (recorded)'}
+          value={`${featureHectares({ properties }).toFixed(2)} ha`}
+        />
         <Field label="Commodity" value={properties.commodity} />
         <Field label="Farm type" value={properties.farm_type} />
         <Field label="Boundary" value={boundaryLabel} />
@@ -98,6 +133,23 @@ export default function SelectedParcelCard({
             : 'Not assessed'}
         />
       </dl>
+
+      {/*
+          The one thing this parcel needs, said plainly.
+
+          Without this the card for an undrawn parcel is a list of fields with
+          a greyed-out Zoom button and no explanation — which reads like the
+          map failing, not like a record waiting for work. It names the state
+          and points at the two tools that resolve it, both already on this
+          page.
+      */}
+      {!drawn && (
+        <p className="mx-3 mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          No boundary has been drawn for this parcel yet, so it does not appear
+          on the map. Select it as the drawing target and trace its outline, or
+          import a boundary file for it.
+        </p>
+      )}
 
       {/* Only from the detail fetch, and only when it actually returned something. */}
       {loading && (
@@ -189,16 +241,21 @@ export default function SelectedParcelCard({
       )}
 
       <footer className="flex flex-wrap gap-2 border-t border-slate-100 p-3">
+        {/* Disabled rather than hidden for an undrawn parcel: a control that
+            vanishes leaves the user wondering what they did wrong, while one
+            that is visibly unavailable and says why does not. */}
         <button
           type="button"
           onClick={onZoom}
-          title="Zoom the map to this parcel"
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          disabled={!drawn}
+          title={drawn
+            ? 'Zoom the map to this parcel'
+            : 'This parcel has no boundary to zoom to'}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           <Crosshair className="h-3.5 w-3.5" aria-hidden="true" />
           Zoom to parcel
         </button>
-
         {/*
             Points at the EDIT page, not /admin/parcels/{id}.
 
