@@ -178,10 +178,25 @@ function buildBarangayColours(features) {
 }
 
 /**
- * A generous window around Tumauini. Anything outside it is a data error, not
- * a farm — the municipality sits near 121.8 E, 17.3 N.
+ * What counts as a coordinate at all — not what counts as Tumauini.
+ *
+ * This was a window around the municipality (121-123 E, 16.5-18 N), which
+ * meant a farmer holding land in the next town had their parcel silently
+ * dropped from the map and counted as "unmappable". That is a real record, and
+ * the office needs to see it.
+ *
+ * Widened to the Philippines, because the two faults this guard exists to
+ * catch are both still caught by it:
+ *
+ *   a [0, 0] feature        — the null island an empty draw or bad import
+ *                             leaves behind, which stretched the fitted box
+ *                             13,000 km and put the map on empty ground;
+ *   swapped lat/lng         — [17.27, 121.72] has a longitude of 17.27, which
+ *                             is in the Atlantic, so it fails here.
+ *
+ * What it no longer does is refuse a parcel for being outside one municipality.
  */
-const PLAUSIBLE_EXTENT = { west: 121.0, south: 16.5, east: 123.0, north: 18.0 };
+const PLAUSIBLE_EXTENT = { west: 116.9, south: 4.6, east: 126.6, north: 21.1 };
 
 /** Every [lng, lat] pair in a geometry, however deeply its rings are nested. */
 function eachPosition(coordinates, visit) {
@@ -249,6 +264,66 @@ function sanitiseParcels(collection) {
     collection: { type: 'FeatureCollection', features: kept },
     dropped,
   };
+}
+
+/**
+ * How far the map lets you pan: Tumauini, plus wherever the parcels actually are.
+ *
+ * maxBounds used to be TUMAUINI_BOUNDS alone. MapLibre enforces it absolutely,
+ * so a parcel in Cabagan or Ilagan was drawn but could not be reached — the
+ * camera stopped at the municipal box and fitBounds clamped to its edge. The
+ * polygon was on the map and unreachable, which is worse than missing, because
+ * nothing says so.
+ *
+ * Widening to a fixed regional box would only move the problem outward. This
+ * takes the union of the focus area and the parcels on hand, so the reachable
+ * area is exactly as large as the office's own records require — no larger,
+ * which keeps the guard that stops staff drifting onto empty ocean and
+ * wondering where their data went.
+ *
+ * Returns the Tumauini box unchanged when nothing is loaded or nothing is
+ * outside it, so the ordinary case behaves exactly as before.
+ */
+function allowedBounds(collection) {
+  const features = collection?.features ?? [];
+
+  if (!features.length) return TUMAUINI_BOUNDS;
+
+  const [[bw, bs], [be, bn]] = TUMAUINI_BOUNDS;
+  let [w, s, e, n] = [bw, bs, be, bn];
+
+  for (const feature of features) {
+    const [fw, fs, fe, fn] = bbox(feature);
+
+    // A feature bbox can come back infinite for unusable geometry; sanitise
+    // drops those first, but a guard here costs nothing and an Infinity in
+    // maxBounds would lock the camera completely.
+    if (![fw, fs, fe, fn].every(Number.isFinite)) continue;
+
+    w = Math.min(w, fw);
+    s = Math.min(s, fs);
+    e = Math.max(e, fe);
+    n = Math.max(n, fn);
+  }
+
+  /*
+   * Nothing reached past the focus area, so hand back the focus area itself.
+   *
+   * The padding below would otherwise widen the box by about five kilometres
+   * on every side even when every parcel is local — changing how the map
+   * behaves for the ordinary case, which is precisely what this is not meant
+   * to do. w and s can only ever decrease from the box edges and e and n only
+   * increase, so equality means nothing extended it.
+   */
+  if (w === bw && s === bs && e === be && n === bn) {
+    return TUMAUINI_BOUNDS;
+  }
+
+  // Breathing room, so a parcel on the very edge is not pinned against it and
+  // can be centred like any other.
+  const pad = 0.05;
+
+  return [[w - pad, s - pad], [e + pad, n + pad]];
 }
 
 /** Great-circle distance in kilometres. */
@@ -1104,15 +1179,35 @@ export default function MapIndex({ parcels }) {
 
     map.fitBounds(bounds, { padding: 60, maxZoom: 18, duration: 800 });
 
-    // maxBounds keeps navigation inside Tumauini, so a parcel surveyed outside
-    // the focus extent would be fitted to the edge and look wrong rather than
-    // missing. Say so plainly instead of leaving the user to wonder.
+    /*
+     * Two different things used to share one error message.
+     *
+     * Any boundary outside the Tumauini box was told to "check the file is the
+     * right parcel" — including a perfectly correct survey of land a farmer
+     * holds in the next municipality. Staff learn to dismiss a warning that
+     * cries wolf, which is how a genuine one gets missed.
+     *
+     * Outside the Philippines is still an error: at that distance it really
+     * does mean the wrong file, or eastings and northings the wrong way round.
+     * Outside Tumauini is now just information — the map has already widened
+     * to reach it.
+     */
     const [w, s, e, n] = bounds;
     const [[bw, bs], [be, bn]] = TUMAUINI_BOUNDS;
 
-    if (w < bw || e > be || s < bs || n > bn) {
-      toast.error('That boundary falls outside the Tumauini focus area — check the file is the right parcel.', {
-        duration: 7000,
+    const outsideCountry = w < PLAUSIBLE_EXTENT.west || e > PLAUSIBLE_EXTENT.east
+      || s < PLAUSIBLE_EXTENT.south || n > PLAUSIBLE_EXTENT.north;
+
+    if (outsideCountry) {
+      toast.error(
+        'That boundary is not in the Philippines — check the file is the right parcel, '
+        + 'and that its coordinates are longitude then latitude.',
+        { duration: 9000 },
+      );
+    } else if (w < bw || e > be || s < bs || n > bn) {
+      toast('Saved. This parcel is outside Tumauini, so the map has widened to include it.', {
+        icon: '📍',
+        duration: 6000,
       });
     }
   }, [paintDraft]);
@@ -1745,6 +1840,20 @@ export default function MapIndex({ parcels }) {
     paintPins(map, showParcels && showPins ? visibleCollection : EMPTY_FEATURE_COLLECTION);
     measureInView();
 
+    /*
+     * Widen the reachable area BEFORE fitting, not after.
+     *
+     * fitBounds is clamped by whatever maxBounds is in force at the moment it
+     * runs, so fitting first and widening second would leave the camera pinned
+     * to the old municipal edge with the parcel off-screen — the exact failure
+     * this is meant to remove.
+     *
+     * Computed from the FULL collection rather than the filtered one: filtering
+     * to a single barangay must not shrink where you are allowed to pan, or
+     * clearing the filter would strand you outside the new limit.
+     */
+    map.setMaxBounds(allowedBounds(geoJsonData));
+
     // Fitted from the FULL collection, so the opening view frames everything
     // the office has mapped rather than whatever filter happens to be set.
     applyInitialView(map, geoJsonData);
@@ -2369,11 +2478,15 @@ export default function MapIndex({ parcels }) {
                   {/* Read from the config rather than typed out, so the two can
                       never disagree again — this previously still quoted the old
                       extent long after the bounds were widened. */}
-                  Navigation is limited to an approximate extent of Tumauini, Isabela:{' '}
+                  {/* Was "Navigation is limited to … Tumauini", which stopped
+                      being true once the reachable area started following the
+                      parcels themselves. */}
+                  Centred on an approximate extent of Tumauini, Isabela:{' '}
                   {TUMAUINI_BOUNDS[0][1].toFixed(2)}–{TUMAUINI_BOUNDS[1][1].toFixed(2)} N and{' '}
                   {TUMAUINI_BOUNDS[0][0].toFixed(2)}–{TUMAUINI_BOUNDS[1][0].toFixed(2)} E.
                   That box is a placeholder, not the surveyed municipal boundary.
-                  Imagery is Esri World Imagery.
+                  Where a farmer holds land in another municipality, the map
+                  widens to reach it. Imagery is Esri World Imagery.
                 </p>
               </div>
 
