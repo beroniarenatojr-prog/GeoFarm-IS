@@ -37,6 +37,7 @@ import StatCards from '@/Components/GIS/StatCards';
 import GisSearch from '@/Components/GIS/GisSearch';
 import FarmFilters from '@/Components/GIS/FarmFilters';
 import ParcelTable from '@/Components/GIS/ParcelTable';
+import TargetParcelPicker from '@/Components/GIS/TargetParcelPicker';
 import SelectedParcelCard from '@/Components/GIS/SelectedParcelCard';
 
 const EMPTY_FEATURE_COLLECTION = { type: 'FeatureCollection', features: [] };
@@ -810,6 +811,21 @@ export default function MapIndex({ parcels }) {
   /** Reading a farmer's ID card to jump to their land. */
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
+
+  /**
+   * What the next scan is for.
+   *
+   * One camera, two jobs. 'map' is the button above the map: find this
+   * farmer's land and show it. 'target' is the button in the drawing panel:
+   * make this farmer's parcel the one Draw and Import will act on. The same
+   * card answers both questions, but doing the wrong one wastes a walk to the
+   * counter, so the intent is recorded when the button is pressed rather than
+   * guessed from what happens to be on screen.
+   */
+  const [scanPurpose, setScanPurpose] = useState('map');
+
+  /** What is typed into the target-parcel picker. Held here so a scan can fill it. */
+  const [targetQuery, setTargetQuery] = useState('');
 
   /*
    * Debounce the search box.
@@ -2118,6 +2134,37 @@ export default function MapIndex({ parcels }) {
       }
 
       const farmerId = String(body.id);
+
+      /*
+       * Scanned from the drawing panel: choose what to draw on, not where to
+       * look.
+       *
+       * Read from `parcels`, the full registry, rather than from the map
+       * layer — a farmer whose parcel has no boundary yet is exactly who this
+       * is for, and that parcel is not on the map by definition. One parcel is
+       * selected outright; several put the farmer's name in the picker so the
+       * choice between them is made deliberately, because the office cannot
+       * know which field the visitor means.
+       */
+      if (scanPurpose === 'target') {
+        const owned = parcels.filter((parcel) => String(parcel.farmer_id) === farmerId);
+
+        if (owned.length === 0) {
+          toast.error(`${body.label ?? 'That farmer'} has no parcel on record yet.`);
+          return;
+        }
+
+        if (owned.length === 1) {
+          pickTargetParcel(String(owned[0].id));
+          toast.success(`Target set: ${owned[0].parcel_number || `Parcel #${owned[0].id}`}`);
+          return;
+        }
+
+        setTargetQuery(body.label ?? '');
+        toast(`${body.label ?? 'That farmer'} has ${owned.length} parcels — choose which one.`);
+        return;
+      }
+
       const theirs = geoJsonData.features.filter(
         (feature) => String(feature.properties?.farmer_id) === farmerId,
       );
@@ -2177,13 +2224,36 @@ export default function MapIndex({ parcels }) {
   const scanHandlerRef = useRef(handleScan);
   scanHandlerRef.current = handleScan;
   const onScanStable = useCallback((code) => scanHandlerRef.current(code), []);
-
   /** Clear the selection everywhere it is held. */
   const clearSelection = () => {
     setSelectedParcel('');
     setSelectedFeature(null);
     setParcelDetail(null);
     highlightParcel(null);
+  };
+
+  /**
+   * Make one parcel the target of Draw, Import, Delete and Locate.
+   *
+   * Lifted out of the old dropdown's onChange so the picker, the QR scanner
+   * and anything added later all leave the page in the same state. Passing ''
+   * clears the target, which is what the picker's X does.
+   */
+  const pickTargetParcel = (id) => {
+    setSelectedParcel(id);
+    setSelectedFeature(null);
+    highlightParcel(null);
+    setParcelDetail(null);
+
+    /*
+     * Go there. Choosing a parcel and then having to press Locate was two
+     * steps for one intention — and with holdings this small, a selection you
+     * cannot see reads as though nothing happened. focusSelectedParcel knows
+     * to skip the camera move for a parcel with no boundary.
+     */
+    if (id && allFeatures.some((f) => String(f.properties?.id) === String(id))) {
+      focusSelectedParcel(id);
+    }
   };
 
   /**
@@ -2369,7 +2439,7 @@ export default function MapIndex({ parcels }) {
             {can('view farmers') && (
               <button
                 type="button"
-                onClick={() => setScannerOpen(true)}
+                onClick={() => { setScanPurpose('map'); setScannerOpen(true); }}
                 disabled={scanBusy}
                 title="Scan a farmer's ID card to jump to their parcels"
                 aria-label="Scan a farmer ID card"
@@ -2717,44 +2787,28 @@ export default function MapIndex({ parcels }) {
               />
 
               <div className="rounded-lg border border-slate-200 p-4">
-                <label className="text-sm font-medium text-slate-700">Target parcel</label>
-                <select
-                  value={selectedParcel}
-                  onChange={(event) => {
-                    const id = event.target.value;
-                    setSelectedParcel(id);
-                    setSelectedFeature(null);
-                    highlightParcel(null);
-                    setParcelDetail(null);
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-700">Target parcel</span>
+                  {/* The one number that matters here: how much is left to
+                      draw. It used to read "75 of 76 have a boundary", which
+                      is the same fact stated as an achievement rather than as
+                      a queue. */}
+                  {totalStats.unmapped > 0 && (
+                    <span className="text-[11px] font-medium text-amber-700">
+                      {totalStats.unmapped} still to draw
+                    </span>
+                  )}
+                </div>
 
-                    // Go there. Choosing a parcel and then having to press
-                    // Locate was two steps for one intention — and with
-                    // holdings this small, a selection you cannot see reads as
-                    // though nothing happened.
-                    if (id && allFeatures.some((f) => String(f.properties?.id) === String(id))) {
-                      focusSelectedParcel(id);
-                    }
-                  }}
-                  className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-200"
-                >
-                  <option value="">Select a parcel</option>
-                  {targetOptions.map((parcel) => (
-                    <option key={parcel.id} value={parcel.id}>
-                      {parcel.parcel_number || `Parcel #${parcel.id}`}
-                      {' — '}
-                      {[parcel.farmer?.first_name, parcel.farmer?.last_name].filter(Boolean).join(' ') || 'Unassigned'}
-                      {' — '}
-                      {parcel.barangay || 'No barangay'}
-                      {/* Says which parcels still need tracing, so Draw is
-                          aimed at one of them rather than found by trial. */}
-                      {parcel.mapped ? '' : '  · no boundary yet'}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-slate-500">
-                  {mappedCount} of {parcels.length} parcels have a boundary. Use
-                  the search box above the map to find one by farmer or RSBSA.
-                </p>
+                <TargetParcelPicker
+                  options={targetOptions}
+                  value={selectedParcel}
+                  onSelect={pickTargetParcel}
+                  query={targetQuery}
+                  onQueryChange={setTargetQuery}
+                  scanBusy={scanBusy}
+                  onScan={() => { setScanPurpose('target'); setScannerOpen(true); }}
+                />
 
                 {selectedParcelDetails && (
                   <div className="mt-3 text-sm text-slate-600">
