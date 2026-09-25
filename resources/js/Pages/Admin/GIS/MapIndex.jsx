@@ -921,6 +921,23 @@ export default function MapIndex({ parcels }) {
   // load handler paint the already-fetched collection on its own.
   const mapLoadedRef = useRef(false);
 
+  /**
+   * True while a parcels request is in the air.
+   *
+   * There are two callers: this component on mount, and the map's own load
+   * handler, which fetches only if nothing has arrived by the time the layers
+   * exist. On a fast connection the first has returned and the second never
+   * runs. On a SLOW one — which is when the server is least able to take it —
+   * neither has returned, so both fired, and the office's shared host was
+   * asked for the whole parcel collection twice at once. One of the two came
+   * back 500.
+   *
+   * The second caller now stands down instead, because it has nothing to add:
+   * mapLoadedRef is already true by the time it would run, so the request
+   * still in flight will paint the map itself when it lands.
+   */
+  const loadingRef = useRef(false);
+
   useEffect(() => {
     parcelsRef.current = parcels;
   }, [parcels]);
@@ -986,6 +1003,7 @@ export default function MapIndex({ parcels }) {
   }, [highlightParcel, loadParcelDetail]);
 
   const loadParcels = useCallback(() => {
+    loadingRef.current = true;
     setDataStatus('loading');
 
     fetch('/admin/gis/parcels-geojson')
@@ -1021,6 +1039,7 @@ export default function MapIndex({ parcels }) {
         }
 
         // Real timestamp of a real successful response, not a render clock.
+        loadingRef.current = false;
         setDataStatus('ok');
         setLastUpdated(new Date());
       })
@@ -1034,6 +1053,7 @@ export default function MapIndex({ parcels }) {
          * working map — the previous data is stale, not wrong, and staff can
          * still read it while the connection is sorted out.
          */
+        loadingRef.current = false;
         setDataStatus('error');
       });
   }, []);
@@ -1665,11 +1685,29 @@ export default function MapIndex({ parcels }) {
         map.getSource('parcels')?.setData(geoJsonRef.current);
         paintPins(map, geoJsonRef.current);
         applyInitialView(map, geoJsonRef.current);
+      } else if (loadingRef.current) {
+        /*
+         * A request is already in the air — leave it alone.
+         *
+         * This branch used to fire a SECOND identical request, and it fired
+         * precisely when the first was slow, so the server got asked for the
+         * entire parcel collection twice at once over a connection that was
+         * already struggling. Nothing is lost by waiting: mapLoadedRef is true
+         * by now, so loadParcels paints the map itself when its response
+         * lands.
+         */
+        setViewNote('waiting for the parcels already requested');
       } else {
         // Fetch hasn't returned yet — kick it off now that sources exist.
         // loadParcels will call setData directly because mapLoadedRef is true.
         fetch('/admin/gis/parcels-geojson')
-          .then((res) => res.json())
+          .then((res) => {
+            // The same guard loadParcels has. Without it a 500 or a login
+            // redirect is parsed as JSON, and the failure surfaces as a
+            // syntax error rather than as the HTTP status it really is.
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
           .then((data) => {
             // Rows that cannot be drawn are separated out BEFORE anything
             // measures the collection: bbox() decides the opening view, and

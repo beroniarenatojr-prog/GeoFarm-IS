@@ -235,9 +235,41 @@ class GISController extends Controller
          * grow this payload with the programme history for a single boolean.
          */
         $parcels = FarmParcel::with([
-                'farmType',
-                'farmer' => fn ($query) => $query->withCount('distributions'),
+                // Only the columns each row is actually read for.
+                'farmType:id,type_name',
+                'farmer' => fn ($query) => $query
+                    ->select('id', 'first_name', 'last_name', 'rsbsa_no', 'risk_status')
+                    ->withCount('distributions'),
             ])
+            /*
+             * Named columns, NOT select *. The point is to leave out `geom`.
+             *
+             * geom holds each boundary a SECOND time, as raw WKB — the model
+             * hides it from serialisation for that reason, but hiding only
+             * stops it being printed, not fetched. Every request was pulling
+             * every polygon twice, once as WKB and once as the geojson_data
+             * text this endpoint actually returns, and holding both in memory
+             * for the whole collection.
+             *
+             * That doubled the query for a column no caller has ever used:
+             * the map reads geojson_data, and anything needing the exact
+             * stored shape asks for ST_AsGeoJSON(geom) separately.
+             */
+            ->select(
+                'id',
+                'parcel_number',
+                'farmer_id',
+                'barangay',
+                'city_municipality',
+                'province',
+                'total_area_ha',
+                'commodity',
+                // The foreign key the farmType relation is resolved through;
+                // leaving it out would silently make every farm_type null.
+                'farm_type_id',
+                'boundary_source',
+                'geojson_data',
+            )
             ->get();
 
         $features = [];
