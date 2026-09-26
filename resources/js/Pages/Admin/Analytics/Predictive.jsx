@@ -1,5 +1,5 @@
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Deferred, Link, router } from '@inertiajs/react';
+import { Deferred, Link, router, usePage } from '@inertiajs/react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
@@ -589,6 +589,24 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
     const { can } = usePermissions();
 
     /*
+     * Deferred props, read from the page rather than from this function's own
+     * arguments.
+     *
+     * <Deferred> does NOT pass anything to its children — it renders them
+     * untouched once the named prop has arrived, and nothing more. Every
+     * section here was written as <CommodityOutlook /> with no props, so each
+     * one received undefined, fell through to its default of [] and rendered
+     * its own empty state. The page looked like a system with no data while
+     * the server was returning plenty; it is why this page was pulled from the
+     * sidebar as useless.
+     *
+     * usePage() is the correct source: deferred props land there when their
+     * follow-up request completes, which is exactly what <Deferred> is
+     * watching for before it renders these children at all.
+     */
+    const deferred = usePage().props;
+
+    /*
      * Filters live in the query string, not in React state.
      *
      * That is what makes a filtered view bookmarkable, shareable and
@@ -646,11 +664,11 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
 
             {/* --------------------------------- who needs attention, and how many */}
             <Deferred data="riskBoard" fallback={<Loading label="risk summary" />}>
-                <RiskSummary />
+                <RiskSummary riskBoard={deferred.riskBoard} />
             </Deferred>
 
             <Deferred data="priorityFarmers" fallback={<Loading label="priority farmers" />}>
-                <PriorityFarmers />
+                <PriorityFarmers priorityFarmers={deferred.priorityFarmers} />
             </Deferred>
 
             {/*
@@ -681,7 +699,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                     Recorded production by year, with an estimate for the next cropping.
                 </p>
                 <Deferred data="yearlySeries" fallback={<Loading label="production history" />}>
-                    <YieldForecastChart />
+                    <YieldForecastChart series={deferred.yearlySeries} />
                 </Deferred>
             </Card>
 
@@ -691,7 +709,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
             */}
             <div className="mb-5">
                 <Deferred data="yieldOutlook" fallback={<Loading label="crop yield outlook" />}>
-                    <YieldOutlook canIntervene={can('edit assistance')} />
+                    <YieldOutlook yieldOutlook={deferred.yieldOutlook} canIntervene={can("edit assistance")} />
                 </Deferred>
             </div>
 
@@ -766,7 +784,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                 </p>
 
                 <Deferred data="harvestCalendar" fallback={<Loading label="harvest calendar" />}>
-                    <HarvestCalendar />
+                    <HarvestCalendar harvestCalendar={deferred.harvestCalendar} />
                 </Deferred>
             </Card>
 
@@ -783,7 +801,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                     </p>
 
                     <Deferred data="atRisk" fallback={<Loading label="risk exposure" />}>
-                        <AtRiskList />
+                        <AtRiskList atRisk={deferred.atRisk} />
                     </Deferred>
                 </Card>
             </div>
@@ -802,7 +820,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                     </p>
 
                     <Deferred data="barangayComparison" fallback={<Loading label="barangay comparison" />}>
-                        <BarangayComparison onSelect={changeScope} />
+                        <BarangayComparison barangayComparison={deferred.barangayComparison} onSelect={changeScope} />
                     </Deferred>
                 </Card>
             </div>
@@ -819,7 +837,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                     </p>
 
                     <Deferred data="commodityOutlook" fallback={<Loading label="commodity outlook" />}>
-                        <CommodityOutlook />
+                        <CommodityOutlook commodityOutlook={deferred.commodityOutlook} />
                     </Deferred>
                 </Card>
             </div>
@@ -837,7 +855,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                     </p>
 
                     <Deferred data="inactiveFarmers" fallback={<Loading label="activity check" />}>
-                        <InactiveFarmers />
+                        <InactiveFarmers inactiveFarmers={deferred.inactiveFarmers} />
                     </Deferred>
                 </Card>
             </div>
