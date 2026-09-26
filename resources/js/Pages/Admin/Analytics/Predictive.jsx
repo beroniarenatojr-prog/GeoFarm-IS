@@ -697,6 +697,127 @@ function YieldOutlook({ yieldOutlook, canIntervene }) {
     );
 }
 
+/**
+ * Jump links to the sections further down the page.
+ *
+ * This page is long, and a reader who came for one figure had to scroll past
+ * five others to find it. These take them straight there.
+ *
+ * Real anchors, not buttons calling scrollIntoView. An <a href="#id"> is
+ * focusable, works with the keyboard, can be opened in a new tab and leaves
+ * the section in the address bar so a link to it can be shared. A button that
+ * scrolls does none of that. `scroll-mt-24` on each target keeps the heading
+ * clear of the sticky header once it arrives.
+ *
+ * Each card carries a count where one is known, so it is obvious before
+ * clicking whether a section has anything in it. The count is undefined until
+ * its deferred prop lands, and an empty section says "nothing recorded"
+ * rather than a bare 0 that reads as a measurement.
+ */
+function SectionJumpCards({ deferred }) {
+    const sections = [
+        {
+            id: 'section-forecast',
+            label: 'Crop yield forecast',
+            hint: 'Production by year, with an estimate for the next cropping',
+            icon: LineChart,
+            count: deferred.yieldOutlook?.available
+                ? deferred.yieldOutlook.coverage?.predictable
+                : undefined,
+            unit: 'parcels',
+        },
+        {
+            id: 'section-harvest',
+            label: 'Expected harvest supply',
+            hint: 'Volume reaching harvest over the next 12 months',
+            icon: CalendarDays,
+            count: deferred.harvestCalendar?.length,
+            unit: 'months',
+        },
+        {
+            id: 'section-advisory',
+            label: 'Farmers needing advisory',
+            hint: 'Harvests exposed to typhoon or wet season timing',
+            icon: ShieldAlert,
+            count: deferred.atRisk?.length,
+            unit: 'farms',
+        },
+        {
+            id: 'section-barangay',
+            label: 'Barangay performance',
+            hint: 'Productivity per barangay against the municipal average',
+            icon: Trophy,
+            count: deferred.barangayComparison?.length,
+            unit: 'barangays',
+        },
+        {
+            id: 'section-commodity',
+            label: 'Commodity outlook',
+            hint: 'Productivity per crop, and whether it is improving',
+            icon: Sprout,
+            count: deferred.commodityOutlook?.length,
+            unit: 'crops',
+        },
+        {
+            id: 'section-inactive',
+            label: 'No recent cropping activity',
+            hint: 'Farmers with parcels but no planting in 18 months',
+            icon: UserX,
+            count: deferred.inactiveFarmers?.length,
+            unit: 'farmers',
+        },
+    ];
+
+    return (
+        <nav aria-label="Jump to a section" className="mb-6">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Jump to
+            </h2>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {sections.map(({ id, label, hint, icon: Icon, count, unit }) => {
+                    const known = count !== undefined && count !== null;
+                    const empty = known && count === 0;
+
+                    return (
+                        <a
+                            key={id}
+                            href={`#${id}`}
+                            className="group flex items-start gap-3 rounded-2xl border border-green-100 bg-white p-4 transition hover:border-green-300 hover:bg-green-50/40 focus:outline-none focus:ring-2 focus:ring-green-600"
+                        >
+                            <span className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-green-50 text-green-700 group-hover:bg-green-100">
+                                <Icon className="h-4 w-4" aria-hidden="true" />
+                            </span>
+
+                            <span className="min-w-0 flex-1">
+                                <span className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold text-gray-900">{label}</span>
+                                    <ChevronRight
+                                        className="h-4 w-4 flex-shrink-0 text-gray-300 group-hover:text-green-700"
+                                        aria-hidden="true"
+                                    />
+                                </span>
+
+                                <span className="mt-0.5 block text-xs leading-5 text-gray-500">{hint}</span>
+
+                                {known && (
+                                    <span
+                                        className={`mt-1.5 inline-block text-xs font-medium ${
+                                            empty ? 'text-gray-400' : 'text-green-700'
+                                        }`}
+                                    >
+                                        {empty ? 'Nothing recorded yet' : `${count} ${unit}`}
+                                    </span>
+                                )}
+                            </span>
+                        </a>
+                    );
+                })}
+            </div>
+        </nav>
+    );
+}
+
 export default function PredictiveAnalytics({ readiness, filters, filterOptions, barangays, upcoming }) {
     const { can } = usePermissions();
 
@@ -783,6 +904,9 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                 <PriorityFarmers priorityFarmers={deferred.priorityFarmers} />
             </Deferred>
 
+            {/* Straight to whichever section the reader came for. */}
+            <SectionJumpCards deferred={deferred} />
+
             {/*
                 Filters first, then everything that obeys them.
 
@@ -802,7 +926,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
                 Recorded production per year, with the next cropping forecast.
                 Deferred like every other aggregate so the page paints first.
             */}
-            <Card className="mb-5">
+            <Card id="section-forecast" className="mb-5 scroll-mt-24">
                 <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-gray-900">
                     <LineChart className="h-4 w-4 text-green-700" aria-hidden="true" />
                     Crop yield forecast
@@ -885,7 +1009,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
             </p>
 
             {/* Expected harvest supply by month */}
-            <Card title="">
+            <Card title="" id="section-harvest" className="scroll-mt-24">
                 <div className="flex items-center gap-2 mb-1">
                     <CalendarDays className="h-5 w-5 text-green-600" />
                     <h2 className="text-xl font-bold text-gray-900">Expected harvest supply</h2>
@@ -901,7 +1025,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
             </Card>
 
             {/* At-risk parcels */}
-            <div className="mt-6">
+            <div id="section-advisory" className="mt-6 scroll-mt-24">
                 <Card title="">
                     <div className="flex items-center gap-2 mb-1">
                         <AlertTriangle className="h-5 w-5 text-amber-600" />
@@ -919,7 +1043,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
             </div>
 
             {/* Barangay comparison - always municipality-wide */}
-            <div className="mt-6">
+            <div id="section-barangay" className="mt-6 scroll-mt-24">
                 <Card title="">
                     <div className="flex items-center gap-2 mb-1">
                         <Trophy className="h-5 w-5 text-green-600" />
@@ -938,7 +1062,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
             </div>
 
             {/* Commodity outlook */}
-            <div className="mt-6">
+            <div id="section-commodity" className="mt-6 scroll-mt-24">
                 <Card title="">
                     <div className="flex items-center gap-2 mb-1">
                         <Sprout className="h-5 w-5 text-green-600" />
@@ -955,7 +1079,7 @@ export default function PredictiveAnalytics({ readiness, filters, filterOptions,
             </div>
 
             {/* Inactive farmers */}
-            <div className="mt-6 mb-6">
+            <div id="section-inactive" className="mt-6 mb-6 scroll-mt-24">
                 <Card title="">
                     <div className="flex items-center gap-2 mb-1">
                         <UserX className="h-5 w-5 text-gray-600" />
