@@ -31,7 +31,7 @@ return [
 
     'admin_otp' => [
 
-        'enabled' => env('ADMIN_OTP_ENABLED', false),
+        'enabled' => env('ADMIN_OTP_ENABLED', trues),
 
         /*
          * Which roles must pass the check.
