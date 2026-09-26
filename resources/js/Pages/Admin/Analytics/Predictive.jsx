@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Deferred, Link, router, usePage } from '@inertiajs/react';
 import {
@@ -5,7 +6,7 @@ import {
 } from 'recharts';
 import {
     AlertTriangle, TrendingUp, TrendingDown, Minus, Info, CalendarDays,
-    Sprout, UserX, Database, MapPin, Trophy, LineChart, ChevronRight, ShieldAlert,
+    Sprout, UserX, Database, MapPin, Trophy, LineChart, ChevronRight, ChevronLeft, ShieldAlert,
 } from 'lucide-react';
 import Card from '@/Components/ui/Card';
 import ConfidenceBadge from '@/Components/ui/ConfidenceBadge';
@@ -237,6 +238,129 @@ function DataDiagnostics({ diagnostics }) {
     );
 }
 
+/**
+ * The per-farmer prediction table, paged.
+ *
+ * Paged rather than virtualised, and in the browser rather than on the server:
+ * the rows are already here. The whole set arrives as one deferred prop
+ * because every tab beside this one is an aggregate OF these same rows, so
+ * fetching a page at a time would mean either a second source of truth or a
+ * round trip per page for data already in memory.
+ *
+ * Its own component so the page number is its own state. Left inside
+ * YieldOutlook it would reset every time a filter changed anything else on
+ * the screen.
+ */
+const FARMERS_PER_PAGE = 10;
+
+function FarmerPredictionTable({ rows }) {
+    const [page, setPage] = useState(0);
+
+    const pages = Math.max(1, Math.ceil(rows.length / FARMERS_PER_PAGE));
+
+    /*
+     * Clamped, not stored. A filter that shrinks the list must not strand the
+     * view on a page that no longer exists — which would show an empty table
+     * over a non-zero count and read as data loss.
+     */
+    const current = Math.min(page, pages - 1);
+    const start = current * FARMERS_PER_PAGE;
+    const visible = rows.slice(start, start + FARMERS_PER_PAGE);
+
+    if (rows.length === 0) {
+        return <Empty icon={UserX} title="No farmers match these filters" hint="Try widening the filters above." />;
+    }
+
+    return (
+        <>
+            <ScrollTable
+                minWidth="min-w-[880px]"
+                head={(
+                    <>
+                        <th className="px-3 py-2 text-left">Farmer</th>
+                        <th className="px-3 py-2 text-left">Barangay</th>
+                        <th className="px-3 py-2 text-left">Crop</th>
+                        <th className="px-3 py-2 text-left">Assessment</th>
+                        <th className="px-3 py-2 text-right">Historical</th>
+                        <th className="px-3 py-2 text-right">Predicted</th>
+                        <th className="px-3 py-2 text-right">Change</th>
+                        <th className="px-3 py-2 text-left">Status</th>
+                        <th className="px-3 py-2" />
+                    </>
+                )}
+            >
+                {visible.map((row) => (
+                    <tr key={`${row.parcel_id}-${row.crop_id}`} className="hover:bg-gray-50">
+                        <td className="px-3 py-2">
+                            <div className="font-medium text-gray-800">{row.farmer_name || 'Unassigned'}</div>
+                            {row.rsbsa_no && <div className="font-mono text-[11px] text-gray-400">{row.rsbsa_no}</div>}
+                        </td>
+                        <td className="px-3 py-2 text-gray-700">{row.barangay || '—'}</td>
+                        <td className="px-3 py-2 text-gray-700">{row.crop_name}</td>
+                        <td className="px-3 py-2">
+                            <AssessmentCell riskStatus={row.risk_status} assessedAt={row.assessed_at} />
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                            {kg(row.historical_average_kg)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">
+                            {/* Never 0 for an unpredictable parcel. */}
+                            {row.predicted_yield_kg === null
+                                ? <span className="text-xs font-normal italic text-gray-400">Insufficient data</span>
+                                : kg(row.predicted_yield_kg)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                            <Change value={row.expected_change_pct} />
+                        </td>
+                        <td className="px-3 py-2">
+                            <PredictionStatusBadge status={row.prediction_status} />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                            <Link
+                                href={`/admin/farmers/${row.farmer_id}/analysis`}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:text-green-900"
+                            >
+                                View
+                                <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                            </Link>
+                        </td>
+                    </tr>
+                ))}
+            </ScrollTable>
+
+            {pages > 1 && (
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                    <button
+                        type="button"
+                        onClick={() => setPage(Math.max(0, current - 1))}
+                        disabled={current === 0}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                        Previous
+                    </button>
+
+                    {/* The range, not just the page number: "11-20 of 68" says
+                        how much is left, which a bare "page 2 of 7" does not. */}
+                    <span className="text-xs tabular-nums text-gray-500" role="status">
+                        {start + 1}&ndash;{Math.min(start + FARMERS_PER_PAGE, rows.length)} of {rows.length}
+                    </span>
+
+                    <button
+                        type="button"
+                        onClick={() => setPage(Math.min(pages - 1, current + 1))}
+                        disabled={current >= pages - 1}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        Next
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                </div>
+            )}
+        </>
+    );
+}
+
 function YieldOutlook({ yieldOutlook, canIntervene }) {
     if (!yieldOutlook?.available) {
         return (
@@ -340,64 +464,7 @@ function YieldOutlook({ yieldOutlook, canIntervene }) {
 
     const farmerTab = (
         <div className="p-4">
-            {byFarmer.length === 0 ? (
-                <Empty icon={UserX} title="No farmers match these filters" hint="Try widening the filters above." />
-            ) : (
-                <ScrollTable
-                    minWidth="min-w-[880px]"
-                    head={(
-                        <>
-                            <th className="px-3 py-2 text-left">Farmer</th>
-                            <th className="px-3 py-2 text-left">Barangay</th>
-                            <th className="px-3 py-2 text-left">Crop</th>
-                            <th className="px-3 py-2 text-left">Assessment</th>
-                            <th className="px-3 py-2 text-right">Historical</th>
-                            <th className="px-3 py-2 text-right">Predicted</th>
-                            <th className="px-3 py-2 text-right">Change</th>
-                            <th className="px-3 py-2 text-left">Status</th>
-                            <th className="px-3 py-2" />
-                        </>
-                    )}
-                >
-                    {byFarmer.map((row) => (
-                        <tr key={`${row.parcel_id}-${row.crop_id}`} className="hover:bg-gray-50">
-                            <td className="px-3 py-2">
-                                <div className="font-medium text-gray-800">{row.farmer_name || 'Unassigned'}</div>
-                                {row.rsbsa_no && <div className="font-mono text-[11px] text-gray-400">{row.rsbsa_no}</div>}
-                            </td>
-                            <td className="px-3 py-2 text-gray-700">{row.barangay || '—'}</td>
-                            <td className="px-3 py-2 text-gray-700">{row.crop_name}</td>
-                            <td className="px-3 py-2">
-                                <AssessmentCell riskStatus={row.risk_status} assessedAt={row.assessed_at} />
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-gray-500">
-                                {kg(row.historical_average_kg)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-gray-900">
-                                {/* Never 0 for an unpredictable parcel. */}
-                                {row.predicted_yield_kg === null
-                                    ? <span className="text-xs font-normal italic text-gray-400">Insufficient data</span>
-                                    : kg(row.predicted_yield_kg)}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                                <Change value={row.expected_change_pct} />
-                            </td>
-                            <td className="px-3 py-2">
-                                <PredictionStatusBadge status={row.prediction_status} />
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                                <Link
-                                    href={`/admin/farmers/${row.farmer_id}/analysis`}
-                                    className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:text-green-900"
-                                >
-                                    View
-                                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
-                                </Link>
-                            </td>
-                        </tr>
-                    ))}
-                </ScrollTable>
-            )}
+            <FarmerPredictionTable rows={byFarmer} />
         </div>
     );
 
