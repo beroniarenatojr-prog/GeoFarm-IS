@@ -251,21 +251,87 @@ function DataDiagnostics({ diagnostics }) {
  * YieldOutlook it would reset every time a filter changed anything else on
  * the screen.
  */
+/**
+ * Previous / range / Next, shared by every long table on this page.
+ *
+ * The range rather than a page number: "11-20 of 68" says how much is left,
+ * which "page 2 of 7" does not.
+ */
+function Pager({ start, perPage, total, current, pages, onPage }) {
+    return (
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+            <button
+                type="button"
+                onClick={() => onPage(Math.max(0, current - 1))}
+                disabled={current === 0}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+                <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                Previous
+            </button>
+
+            <span className="text-xs tabular-nums text-gray-500" role="status">
+                {start + 1}&ndash;{Math.min(start + perPage, total)} of {total}
+            </span>
+
+            <button
+                type="button"
+                onClick={() => onPage(Math.min(pages - 1, current + 1))}
+                disabled={current >= pages - 1}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+        </div>
+    );
+}
+
+/**
+ * One page of rows, plus the control to move between pages.
+ *
+ * Paged in the browser rather than on the server because the rows are already
+ * here: every aggregate on this page is built from the same deferred props, so
+ * fetching a page at a time would mean either a second source of truth or a
+ * round trip for data already in memory.
+ *
+ * MUST be called before any early return in the component using it — it holds
+ * state, and a hook behind a conditional breaks on the render where the
+ * condition flips.
+ */
+function usePaged(rows, perPage = 10) {
+    const [page, setPage] = useState(0);
+    const list = rows ?? [];
+
+    const pages = Math.max(1, Math.ceil(list.length / perPage));
+
+    /*
+     * Clamped, never stored. A filter that shrinks the list must not strand
+     * the view on a page that no longer exists, which would show an empty
+     * table beneath a non-zero count and read as data loss.
+     */
+    const current = Math.min(page, pages - 1);
+    const start = current * perPage;
+
+    return {
+        visible: list.slice(start, start + perPage),
+        pager: pages > 1 ? (
+            <Pager
+                start={start}
+                perPage={perPage}
+                total={list.length}
+                current={current}
+                pages={pages}
+                onPage={setPage}
+            />
+        ) : null,
+    };
+}
+
 const FARMERS_PER_PAGE = 10;
 
 function FarmerPredictionTable({ rows }) {
-    const [page, setPage] = useState(0);
-
-    const pages = Math.max(1, Math.ceil(rows.length / FARMERS_PER_PAGE));
-
-    /*
-     * Clamped, not stored. A filter that shrinks the list must not strand the
-     * view on a page that no longer exists — which would show an empty table
-     * over a non-zero count and read as data loss.
-     */
-    const current = Math.min(page, pages - 1);
-    const start = current * FARMERS_PER_PAGE;
-    const visible = rows.slice(start, start + FARMERS_PER_PAGE);
+    const { visible, pager } = usePaged(rows, FARMERS_PER_PAGE);
 
     if (rows.length === 0) {
         return <Empty icon={UserX} title="No farmers match these filters" hint="Try widening the filters above." />;
@@ -328,40 +394,18 @@ function FarmerPredictionTable({ rows }) {
                 ))}
             </ScrollTable>
 
-            {pages > 1 && (
-                <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
-                    <button
-                        type="button"
-                        onClick={() => setPage(Math.max(0, current - 1))}
-                        disabled={current === 0}
-                        className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                        Previous
-                    </button>
-
-                    {/* The range, not just the page number: "11-20 of 68" says
-                        how much is left, which a bare "page 2 of 7" does not. */}
-                    <span className="text-xs tabular-nums text-gray-500" role="status">
-                        {start + 1}&ndash;{Math.min(start + FARMERS_PER_PAGE, rows.length)} of {rows.length}
-                    </span>
-
-                    <button
-                        type="button"
-                        onClick={() => setPage(Math.min(pages - 1, current + 1))}
-                        disabled={current >= pages - 1}
-                        className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                        Next
-                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                </div>
-            )}
+            {pager}
         </>
     );
 }
 
 function YieldOutlook({ yieldOutlook, canIntervene }) {
+    /* Above the early return: a hook behind a conditional breaks on the render
+       where the condition flips. Reads through optional chaining so it is safe
+       before the guard below has run. */
+    const { visible: visibleBarangays, pager: barangayPager } =
+        usePaged(yieldOutlook?.byBarangay ?? [], 10);
+
     if (!yieldOutlook?.available) {
         return (
             <Card>
@@ -488,7 +532,7 @@ function YieldOutlook({ yieldOutlook, canIntervene }) {
                         </>
                     )}
                 >
-                    {byBarangay.map((row) => (
+                    {visibleBarangays.map((row) => (
                         <tr key={row.group} className="hover:bg-gray-50">
                             <td className="px-3 py-2 font-medium text-gray-800">{row.group}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-gray-700">{row.farmers}</td>
@@ -512,6 +556,7 @@ function YieldOutlook({ yieldOutlook, canIntervene }) {
                     ))}
                 </ScrollTable>
             )}
+            {barangayPager}
         </div>
     );
 
@@ -1066,6 +1111,10 @@ function AtRiskList({ atRisk = [] }) {
 }
 
 function BarangayComparison({ barangayComparison = [], onSelect }) {
+    /* Before the early return below: a hook behind a conditional breaks on the
+       render where the condition flips. */
+    const { visible, pager } = usePaged(barangayComparison, 10);
+
     if (barangayComparison.length === 0) {
         return (
             <Empty
@@ -1116,7 +1165,7 @@ function BarangayComparison({ barangayComparison = [], onSelect }) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {barangayComparison.map(row => (
+                        {visible.map(row => (
                             <tr key={row.barangay}>
                                 <td className="px-4 py-3 font-medium text-gray-900">{row.barangay}</td>
                                 <td className="px-4 py-3 text-right font-semibold text-gray-900">
@@ -1157,6 +1206,7 @@ function BarangayComparison({ barangayComparison = [], onSelect }) {
                     </tbody>
                 </table>
             </div>
+            {pager}
         </>
     );
 }
