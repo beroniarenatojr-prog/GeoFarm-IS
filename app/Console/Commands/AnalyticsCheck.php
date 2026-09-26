@@ -108,8 +108,73 @@ class AnalyticsCheck extends Command
                 ->count();
         });
 
+        /*
+         * Expected harvest supply looks only FORWARD.
+         *
+         * harvestCalendar() drops anything whose harvest falls outside the next
+         * twelve months, so a registry full of completed harvests produces an
+         * empty calendar — correctly, but indistinguishably from a broken one.
+         * These counts tell the two apart.
+         */
         $this->newLine();
-        $this->info('3. What this means');
+        $this->info('3. Expected harvest supply (why it may be empty)');
+
+        $from = now()->startOfMonth();
+        $to = now()->addMonths(12)->endOfMonth();
+
+        $verified = CropSeason::forVerifiedFarmers();
+        $withPlanting = CropSeason::forVerifiedFarmers()->whereNotNull('planting_date')->count();
+        $withHarvest = CropSeason::forVerifiedFarmers()->whereNotNull('harvest_date')->count();
+
+        // Already-recorded harvest dates falling inside the window.
+        $inWindow = CropSeason::forVerifiedFarmers()
+            ->whereNotNull('harvest_date')
+            ->whereBetween('harvest_date', [$from->toDateString(), $to->toDateString()])
+            ->count();
+
+        $past = CropSeason::forVerifiedFarmers()
+            ->whereNotNull('harvest_date')
+            ->where('harvest_date', '<', $from->toDateString())
+            ->count();
+
+        $latest = CropSeason::forVerifiedFarmers()->max('harvest_date');
+        $earliest = CropSeason::forVerifiedFarmers()->min('harvest_date');
+
+        // Plantings with no harvest date yet: these are projected forward using
+        // the crop's average duration, so they CAN land in the window.
+        $openPlantings = CropSeason::forVerifiedFarmers()
+            ->whereNotNull('planting_date')
+            ->whereNull('harvest_date')
+            ->count();
+
+        $this->table(['check', 'value'], [
+            ['today', now()->toDateString()],
+            ['window start', $from->toDateString()],
+            ['window end', $to->toDateString()],
+            ['croppings (verified)', $verified->count()],
+            ['...with a planting_date', $withPlanting],
+            ['...with a harvest_date', $withHarvest],
+            ['...harvest_date INSIDE the window', $inWindow],
+            ['...harvest_date already past', $past],
+            ['...planted, not yet harvested', $openPlantings],
+            ['earliest harvest_date', $earliest ?: '(none)'],
+            ['latest harvest_date', $latest ?: '(none)'],
+        ]);
+
+        if ($withPlanting === 0) {
+            $this->warn('No cropping has a planting_date, so nothing can be projected forward.');
+            $this->line('Record planting dates under Seasonal Tracking and the calendar fills.');
+        } elseif ($inWindow === 0 && $openPlantings === 0) {
+            $this->warn('Every recorded harvest is already in the past, and nothing is currently planted.');
+            $this->line('The calendar shows what is STILL TO COME, so it is empty because the');
+            $this->line('season is over — not because anything is broken. It fills as soon as');
+            $this->line('new croppings are opened for the next season.');
+        } else {
+            $this->info('There is data inside the window; the calendar should not be empty.');
+        }
+
+        $this->newLine();
+        $this->info('4. What this means');
         $this->line('Any row above showing a count > 0 is data the page SHOULD be showing.');
         $this->line('If those same sections are blank in the browser, the figures are fine and the');
         $this->line('problem is delivery. Clear the cached aggregates and reload:');
