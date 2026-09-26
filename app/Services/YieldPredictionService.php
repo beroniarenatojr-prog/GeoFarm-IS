@@ -317,6 +317,81 @@ class YieldPredictionService
     }
 
     /**
+     * What to predict for: each parcel's most recent cropping, carried forward.
+     *
+     * "If this parcel plants what it planted last time, on the same area, this
+     * is what to expect." It does NOT assume anyone will plant again — that
+     * premise belongs to the caller and is stated here rather than hidden
+     * inside an aggregate.
+     *
+     * Defined once, and used by both the analytics screen and
+     * geofarm:predict-check, so the console output and the page can never
+     * describe different sets of parcels.
+     */
+    public function nextCroppingTargets(array $filters = []): Collection
+    {
+        $rows = CropSeason::query()
+            ->join('farm_parcels', 'farm_parcels.id', '=', 'crop_seasons.parcel_id')
+            ->select([
+                'crop_seasons.parcel_id', 'crop_seasons.crop_id',
+                'crop_seasons.area_planted_ha', 'crop_seasons.cropping_year',
+                'farm_parcels.farmer_id', 'farm_parcels.barangay',
+            ])
+            /*
+             * Filters narrow the TARGETS, never the history.
+             *
+             * Narrowing the history too would change what each prediction is
+             * based on, so filtering to one barangay would quietly make its
+             * predictions worse rather than merely fewer. A farmer's forecast
+             * must not change because of which page you are looking at.
+             */
+            ->when($filters['barangay'] ?? null, fn ($q, $v) => $q->where('farm_parcels.barangay', $v))
+            ->when($filters['crop_id'] ?? null, fn ($q, $v) => $q->where('crop_seasons.crop_id', $v))
+            ->when($filters['farmer_id'] ?? null, fn ($q, $v) => $q->where('farm_parcels.farmer_id', $v))
+            ->whereNotNull('crop_seasons.area_planted_ha')
+            ->where('crop_seasons.area_planted_ha', '>', 0)
+            ->orderBy('crop_seasons.parcel_id')
+            ->orderByDesc('crop_seasons.cropping_year')
+            ->get();
+
+        // unique() keeps the FIRST of each parcel, and the ordering above puts
+        // the newest cropping first — so this is "the latest per parcel".
+        return $rows->unique('parcel_id')->map(fn ($r) => [
+            'parcel_id'       => (int) $r->parcel_id,
+            'farmer_id'       => (int) $r->farmer_id,
+            'crop_id'         => (int) $r->crop_id,
+            'barangay'        => $r->barangay,
+            'area_planted_ha' => (float) $r->area_planted_ha,
+        ])->values();
+    }
+
+    /**
+     * How much of the registry can be predicted at all, and on what.
+     *
+     * The first thing the analytics page should say. A forecast covering a
+     * third of the parcels is a different claim from one covering all of them,
+     * and a page that shows only the total hides which it is.
+     */
+    public function coverage(Collection $predictions): array
+    {
+        $with = $predictions->filter(fn ($p) => $p['predicted_yield_kg'] !== null);
+
+        return [
+            'parcels'           => $predictions->count(),
+            'predictable'       => $with->count(),
+            'insufficient'      => $predictions->count() - $with->count(),
+            'by_basis'          => collect(['farmer', 'barangay', 'municipal', 'none'])
+                ->mapWithKeys(fn ($b) => [$b => $predictions->where('basis', $b)->count()])->all(),
+            'by_confidence'     => collect([
+                ForecastService::CONFIDENCE_HIGH,
+                ForecastService::CONFIDENCE_MODERATE,
+                ForecastService::CONFIDENCE_LOW,
+                ForecastService::CONFIDENCE_NONE,
+            ])->mapWithKeys(fn ($c) => [$c => $predictions->where('confidence', $c)->count()])->all(),
+        ];
+    }
+
+    /**
      * Roll predictions up to any level, by summing the SAME rows.
      *
      * Every aggregate the analytics screen shows goes through here, which is

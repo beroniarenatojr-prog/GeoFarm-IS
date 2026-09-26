@@ -3,13 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Crop;
 use App\Models\ClimateRiskAssessment;
 use App\Models\CropSeason;
 use App\Models\Farmer;
 use App\Services\ClimateRiskScorer;
 use App\Services\ForecastService;
 use App\Services\ParcelRiskAnalyser;
+use App\Services\YieldPredictionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 
@@ -24,19 +27,51 @@ class PredictiveAnalyticsController extends Controller
 {
     private const CACHE_TTL_SECONDS = 600;
 
-    public function index(Request $request, ForecastService $forecast, ParcelRiskAnalyser $analyser)
-    {
+    public function index(
+        Request $request,
+        ForecastService $forecast,
+        ParcelRiskAnalyser $analyser,
+        YieldPredictionService $predictor,
+    ) {
+        /*
+         * Every filter is optional and validated. `barangay` keeps its old
+         * name and behaviour so the existing scope selector, and any bookmarked
+         * link using it, still work exactly as before.
+         */
         $validated = $request->validate([
-            'barangay' => 'nullable|string|max:50',
+            'barangay'  => 'nullable|string|max:50',
+            'season'    => 'nullable|in:dry,wet',
+            'crop_id'   => 'nullable|integer|exists:crops,id',
+            'farmer_id' => 'nullable|integer|exists:farmers,id',
+            'status'    => 'nullable|in:above_average,in_line,below_average,insufficient_data',
         ]);
 
         $barangay = $validated['barangay'] ?? null;
-        $suffix = $barangay ? 'brgy.' . md5($barangay) : 'all';
+
+        /*
+         * One filter array, passed to every section.
+         *
+         * This is what stops one part of the page showing filtered figures
+         * while another shows everything — the single most confusing thing an
+         * analytics screen can do.
+         */
+        $filters = [
+            'barangay'  => $barangay,
+            'season'    => $validated['season'] ?? null,
+            'crop_id'   => $validated['crop_id'] ?? null,
+            'farmer_id' => $validated['farmer_id'] ?? null,
+            'status'    => $validated['status'] ?? null,
+        ];
+
+        // The cache key carries every filter, or one scope's figures would be
+        // served for another.
+        $suffix = md5(json_encode($filters));
 
         return Inertia::render('Admin/Analytics/Predictive', [
-            'filters'   => ['barangay' => $barangay],
-            'barangays' => $forecast->barangaysWithData(),
-            'readiness' => $this->readiness($barangay),
+            'filters'       => $filters,
+            'filterOptions' => $this->filterOptions(),
+            'barangays'     => $forecast->barangaysWithData(),
+            'readiness'     => $this->readiness($barangay),
 
             // Deferred so the page paints before the heavy aggregates land.
             'harvestCalendar' => Inertia::defer(fn () => Cache::remember(
@@ -99,6 +134,35 @@ class PredictiveAnalyticsController extends Controller
             // Named on the page so the reader knows what the counts describe.
             'upcoming' => $analyser->upcomingPeriod(),
 
+            /*
+             * Crop yield outlook, built from per-parcel predictions.
+             *
+             * Every figure in here — municipal, barangay, crop — is the same
+             * parcel predictions summed by YieldPredictionService, so no two
+             * levels on this page can disagree.
+             *
+             * Deferred and cached like the rest: it reads the whole cropping
+             * history once, which is cheap but not free on every keystroke.
+             */
+            'yieldOutlook' => Inertia::defer(fn () => Cache::remember(
+                "analytics.yield_outlook.{$suffix}",
+                self::CACHE_TTL_SECONDS,
+                fn () => $this->yieldOutlook($predictor, $filters)
+            )),
+
+            /*
+             * Recorded production per year, plus next year's prediction.
+             *
+             * Actual and predicted stay in separate keys on each point so the
+             * chart can draw them differently. Merging them into one series is
+             * what makes a forecast look like a record.
+             */
+            'yearlySeries' => Inertia::defer(fn () => Cache::remember(
+                "analytics.yearly_series.{$suffix}",
+                self::CACHE_TTL_SECONDS,
+                fn () => $this->yearlySeries($predictor, $filters)
+            )),
+
             'method' => [
                 'type'    => 'rule_based',
                 'version' => (string) config('climate_risk.version'),
@@ -106,6 +170,209 @@ class PredictiveAnalyticsController extends Controller
         ]);
     }
 
+
+    /**
+     * Crop yield outlook for the next cropping, at every level at once.
+     *
+     * One pass of per-parcel predictions, then the SAME rows grouped several
+     * ways. The municipal figure is not computed separately — it is the total
+     * of what is listed beneath it, which is the only way the page can be
+     * internally consistent and the only way to avoid double counting.
+     *
+     * `coverage` comes first deliberately. A forecast covering a third of the
+     * parcels is a different claim from one covering all of them, and a page
+     * that leads with the total hides which it is.
+     */
+    private function yieldOutlook(YieldPredictionService $predictor, array $filters): array
+    {
+        $targets = $predictor->nextCroppingTargets($filters);
+
+        if ($targets->isEmpty()) {
+            return [
+                'available' => false,
+                'reason'    => 'No cropping matches these filters, so there is nothing to predict from.',
+            ];
+        }
+
+        $predictions = $predictor->predictMany($targets);
+
+        /*
+         * Prediction status is filtered AFTER the predictions are made.
+         *
+         * It is a property of the result, not of the query — there is no way
+         * to ask the database for "parcels that will come in below average".
+         */
+        if (! empty($filters['status'])) {
+            $predictions = $predictions
+                ->filter(fn ($p) => $p['prediction_status'] === $filters['status'])
+                ->values();
+        }
+
+        if ($predictions->isEmpty()) {
+            return [
+                'available' => false,
+                'reason'    => 'No parcel matches these filters.',
+            ];
+        }
+
+        $crops = Crop::query()->pluck('crop_name', 'id');
+        $municipal = $predictor->aggregateBy($predictions, fn () => 'all')->first();
+
+        return [
+            'available'   => true,
+            'coverage'    => $predictor->coverage($predictions),
+            'municipal'   => $municipal,
+            'byBarangay'  => $predictor
+                ->aggregateBy($predictions, fn ($p) => $p['barangay'] ?: 'No barangay recorded')
+                ->sortByDesc('predicted_total_kg')->values()->all(),
+            'byCrop'      => $predictor
+                ->aggregateBy($predictions, fn ($p) => $p['crop_id'])
+                ->map(fn ($row) => $row + ['crop_name' => $crops[$row['group']] ?? 'Unknown crop'])
+                ->sortByDesc('predicted_total_kg')->values()->all(),
+            'byFarmer'    => $this->farmerRows($predictions, $crops),
+            'watchlist'   => $predictions
+                ->filter(fn ($p) => $p['prediction_status'] === 'below_average')
+                ->sortBy('expected_change_pct')->take(15)
+                ->map(fn ($p) => $p + ['crop_name' => $crops[$p['crop_id']] ?? 'Unknown crop'])
+                ->values()->all(),
+            'methodology' => YieldPredictionService::METHODOLOGY,
+        ];
+    }
+
+    /**
+     * Per-parcel predictions with the farmer named, and their assessment beside it.
+     *
+     * The assessment is READ, never recomputed: risk_status and the date of the
+     * latest climate risk assessment are what the existing Farmer Assessment
+     * already produced and stored. This page shows a summary and links to the
+     * real thing; it does not form a second opinion.
+     *
+     * Two queries for the whole table — one for farmers, one for assessment
+     * dates — rather than one per row.
+     */
+    private function farmerRows(Collection $predictions, $crops): array
+    {
+        $farmerIds = $predictions->pluck('farmer_id')->filter()->unique()->values();
+
+        $farmers = Farmer::query()
+            ->whereIn('id', $farmerIds)
+            ->get(['id', 'first_name', 'last_name', 'barangay', 'rsbsa_no', 'risk_status'])
+            ->keyBy('id');
+
+        // The date of each farmer's most recent assessment, in one query.
+        $assessedAt = ClimateRiskAssessment::query()
+            ->whereIn('farmer_id', $farmerIds)
+            ->selectRaw('farmer_id, MAX(assessed_at) as last_assessed')
+            ->groupBy('farmer_id')
+            ->pluck('last_assessed', 'farmer_id');
+
+        return $predictions->map(function ($p) use ($farmers, $assessedAt, $crops) {
+            $farmer = $farmers[$p['farmer_id']] ?? null;
+
+            return $p + [
+                'farmer_name'   => $farmer?->full_name,
+                'rsbsa_no'      => $farmer?->rsbsa_no,
+                'crop_name'     => $crops[$p['crop_id']] ?? 'Unknown crop',
+                // Null means never assessed, which is different from "assessed
+                // and found to be low risk". The UI must not conflate them.
+                'risk_status'   => $farmer?->risk_status,
+                'assessed_at'   => $assessedAt[$p['farmer_id']] ?? null,
+            ];
+        })->sortBy('farmer_name')->values()->all();
+    }
+
+    /**
+     * Recorded production per year, with the next year's prediction appended.
+     *
+     * Actual and predicted are returned as SEPARATE keys on each point, never
+     * merged into one series. A chart that plots them as one line makes a
+     * forecast look like a record of something that happened.
+     */
+    private function yearlySeries(YieldPredictionService $predictor, array $filters): array
+    {
+        $actuals = CropSeason::query()
+            ->join('farm_parcels', 'farm_parcels.id', '=', 'crop_seasons.parcel_id')
+            ->whereNotNull('crop_seasons.yield_kg')
+            ->where('crop_seasons.yield_kg', '>', 0)
+            ->when($filters['barangay'] ?? null, fn ($q, $v) => $q->where('farm_parcels.barangay', $v))
+            ->when($filters['crop_id'] ?? null, fn ($q, $v) => $q->where('crop_seasons.crop_id', $v))
+            ->when($filters['farmer_id'] ?? null, fn ($q, $v) => $q->where('farm_parcels.farmer_id', $v))
+            ->when($filters['season'] ?? null, fn ($q, $v) => $q->where('crop_seasons.season', $v))
+            ->groupBy('crop_seasons.cropping_year')
+            ->orderBy('crop_seasons.cropping_year')
+            ->selectRaw('crop_seasons.cropping_year as year, SUM(crop_seasons.yield_kg) as total')
+            ->pluck('total', 'year');
+
+        $points = [];
+        foreach ($actuals as $year => $total) {
+            $points[] = [
+                'year'      => (int) $year,
+                'actual'    => round((float) $total, 2),
+                'predicted' => null,
+            ];
+        }
+
+        /*
+         * The forecast point, one year past the last recorded one.
+         *
+         * Only when there is something to forecast from. An empty history
+         * gets no point rather than a zero, which would draw a line to the
+         * floor and read as a predicted total crop failure.
+         */
+        if (! empty($points)) {
+            $targets = $predictor->nextCroppingTargets($filters);
+
+            if ($targets->isNotEmpty()) {
+                $predictions = $predictor->predictMany($targets);
+                $total = $predictions
+                    ->filter(fn ($p) => $p['predicted_yield_kg'] !== null)
+                    ->sum(fn ($p) => (float) $p['predicted_yield_kg']);
+
+                if ($total > 0) {
+                    $points[] = [
+                        'year'      => (int) end($points)['year'] + 1,
+                        'actual'    => null,
+                        'predicted' => round($total, 2),
+                    ];
+                }
+            }
+        }
+
+        return $points;
+    }
+
+    /**
+     * The values each filter dropdown may offer.
+     *
+     * Derived from the records themselves, so a filter can only ever offer
+     * something that exists. A hard-coded crop list would offer crops nobody
+     * grows and hide ones they do.
+     */
+    private function filterOptions(): array
+    {
+        return [
+            'years' => CropSeason::query()
+                ->distinct()->orderByDesc('cropping_year')
+                ->pluck('cropping_year')->map(fn ($y) => (int) $y)->values()->all(),
+
+            'seasons' => CropSeason::query()
+                ->distinct()->orderBy('season')->pluck('season')->values()->all(),
+
+            'crops' => Crop::query()
+                ->whereIn('id', CropSeason::query()->distinct()->pluck('crop_id'))
+                ->orderBy('crop_name')
+                ->get(['id', 'crop_name'])
+                ->map(fn ($c) => ['id' => $c->id, 'name' => $c->crop_name])
+                ->all(),
+
+            'statuses' => [
+                ['id' => 'above_average', 'name' => 'Above historical average'],
+                ['id' => 'in_line', 'name' => 'Near historical average'],
+                ['id' => 'below_average', 'name' => 'Below historical average'],
+                ['id' => 'insufficient_data', 'name' => 'Insufficient data'],
+            ],
+        ];
+    }
     /**
      * The four counts across the top of the page.
      *

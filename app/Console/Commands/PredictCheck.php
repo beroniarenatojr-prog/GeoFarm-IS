@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\CropSeason;
 use App\Models\YieldPredictionSnapshot;
 use App\Services\YieldPredictionService;
 use Illuminate\Console\Command;
@@ -43,39 +42,20 @@ class PredictCheck extends Command
         $year = (int) ($this->option('year') ?: (int) date('Y') + 1);
 
         /*
-         * What to predict for.
+         * What to predict for, defined ONCE in the service.
          *
-         * The most recent cropping of each parcel, carried forward: "if this
-         * parcel plants what it planted last time, on the same area, this is
-         * what to expect." It does NOT assume a farmer will plant again — that
-         * is the caller's premise, stated plainly here rather than hidden.
+         * This used to build its own query, which meant the console and the
+         * analytics page could describe different sets of parcels while both
+         * claiming to be the forecast.
          */
-        $latest = CropSeason::query()
-            ->join('farm_parcels', 'farm_parcels.id', '=', 'crop_seasons.parcel_id')
-            ->select([
-                'crop_seasons.parcel_id', 'crop_seasons.crop_id',
-                'crop_seasons.area_planted_ha', 'crop_seasons.cropping_year',
-                'farm_parcels.farmer_id', 'farm_parcels.barangay',
-            ])
-            ->orderBy('crop_seasons.parcel_id')
-            ->orderByDesc('crop_seasons.cropping_year')
-            ->get()
-            ->unique('parcel_id')
-            ->values();
+        $targets = $predictor->nextCroppingTargets();
 
-        if ($latest->isEmpty()) {
-            $this->warn('No cropping records exist, so there is nothing to predict from.');
+        if ($targets->isEmpty()) {
+            $this->warn("No cropping records exist, so there is nothing to predict from.");
 
             return self::SUCCESS;
         }
 
-        $targets = $latest->map(fn ($r) => [
-            'parcel_id'       => (int) $r->parcel_id,
-            'farmer_id'       => (int) $r->farmer_id,
-            'crop_id'         => (int) $r->crop_id,
-            'barangay'        => $r->barangay,
-            'area_planted_ha' => (float) $r->area_planted_ha,
-        ]);
 
         $this->info("Predicting {$season} season {$year} for {$targets->count()} parcels…");
         $predictions = $predictor->predictMany($targets);

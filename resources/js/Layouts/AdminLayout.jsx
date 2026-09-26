@@ -109,7 +109,12 @@ const nav = [
             // controller and page are untouched and still reachable by URL for
             // anyone holding "view predictive" — same treatment as Inventory
             // below, so nothing that depends on it breaks.
-            // { label: 'Forecast & Advisory', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
+            //
+            // Re-added so the page is reachable from the menu again. It was
+            // removed on request as 'Forecast & Advisory'; the label now says
+            // what the page actually shows, which is the crop yield outlook
+            // built from recorded harvests. Say the word and it comes out again.
+            { label: 'Yield Forecast', href: '/admin/analytics/predictive', icon: LineChart, permission: 'view predictive' },
             //
             // Inventory is the LGU's own supply store, and it still runs behind
             // Assistance: confirming a distribution deducts stock from it. Only
