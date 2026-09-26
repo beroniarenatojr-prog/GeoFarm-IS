@@ -41,7 +41,10 @@ class ForecastService
      * Minimum records before a narrower scope (farmer, then barangay) is
      * trusted over the wider one it would otherwise fall back to.
      */
-    private const MIN_RECORDS_FOR_SCOPE = 3;
+    // Public so YieldPredictionService applies the SAME scope rule. Two copies
+    // of this number would let the per-parcel predictions and the forecasts on
+    // the same screen disagree about which history they trust.
+    public const MIN_RECORDS_FOR_SCOPE = 3;
 
     /**
      * Forecast yield for a crop on a given area.
@@ -522,7 +525,8 @@ class ForecastService
      * Median-centred summary. Median is used as the headline figure because a
      * single exceptional harvest skews the mean badly on small samples.
      */
-    private function summarise(Collection $values): ?array
+    /** Public so YieldPredictionService reuses these exact statistics. */
+    public function summarise(Collection $values): ?array
     {
         if ($values->isEmpty()) {
             return null;
@@ -553,7 +557,8 @@ class ForecastService
         ];
     }
 
-    private function confidenceFor(int $dataPoints): string
+    /** Public for the same reason as summarise(). */
+    public function confidenceFor(int $dataPoints): string
     {
         return match (true) {
             $dataPoints === 0 => self::CONFIDENCE_NONE,
