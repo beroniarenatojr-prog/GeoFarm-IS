@@ -34,6 +34,7 @@ use App\Http\Controllers\Auth\FarmerRegistrationController;
 use App\Http\Controllers\Farmer\ClimateRiskAssessmentController;
 use App\Http\Controllers\Farmer\FarmAnalysisController as FarmerFarmAnalysisController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\VerifyOtpController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
@@ -42,6 +43,39 @@ use Illuminate\Support\Facades\Route;
 Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'store']);
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+/*
+ * Administrative login verification.
+ *
+ * Registered OUTSIDE the admin route group on purpose. Everyone who needs
+ * these three routes has given a correct password and is deliberately NOT
+ * logged in — that is the security model — so the group's `auth` middleware
+ * would shut them out of the one page that can let them in, and its
+ * `otp.verified` middleware would bounce them back here forever.
+ *
+ * The guard instead is the pending session state, which the controller checks
+ * on every action and which sends anyone without it back to /login.
+ *
+ * The name prefix is written out in full so these answer to
+ * route('admin.verify-otp') exactly as the rest of the admin section does.
+ */
+Route::prefix('admin')->name('admin.')->group(function () {
+    Route::get('verify-otp', [VerifyOtpController::class, 'show'])->name('verify-otp');
+
+    // Throttled per IP on top of the five-guess limit carried by the code
+    // itself: the per-code limit stops one attempt being brute-forced, and
+    // this stops someone cycling through fresh codes to get more guesses.
+    Route::post('verify-otp', [VerifyOtpController::class, 'verify'])
+        ->middleware('throttle:10,1')->name('verify-otp.verify');
+
+    // The 60-second cooldown lives on the record so it survives a new browser;
+    // this is a second, coarser ceiling on mail sent per IP per minute.
+    Route::post('verify-otp/resend', [VerifyOtpController::class, 'resend'])
+        ->middleware('throttle:5,1')->name('verify-otp.resend');
+
+    Route::post('verify-otp/cancel', [VerifyOtpController::class, 'cancel'])
+        ->name('verify-otp.cancel');
+});
 
 // Account claiming for farmers already encoded at the office
 Route::get('/register', [RegisterController::class, 'show'])->name('register');
@@ -54,9 +88,14 @@ Route::post('/farmer-registration', [FarmerRegistrationController::class, 'store
     ->middleware('throttle:6,60');
 Route::get('/farmer-registration/submitted', [FarmerRegistrationController::class, 'submitted'])
     ->name('farmer-registration.submitted');
-
-// Admin routes (excluding farmers)
-Route::middleware(['auth', 'role:Admin|Super Admin|Staff'])->prefix('admin')->name('admin.')->group(function () {
+/*
+ * Admin routes (excluding farmers).
+ *
+ * otp.verified sits after auth and role, so it only ever runs for a signed-in
+ * administrator — a farmer never reaches it, and an anonymous visitor is
+ * turned away by `auth` first. It is a no-op while ADMIN_OTP_ENABLED is false.
+ */
+Route::middleware(['auth', 'role:Admin|Super Admin|Staff', 'otp.verified'])->prefix('admin')->name('admin.')->group(function () {
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 

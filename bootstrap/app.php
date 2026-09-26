@@ -28,6 +28,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            /*
+             * No administrative page without a verified session.
+             *
+             * Not merely defensive. LoginController already refuses to sign an
+             * administrator in before verification, but Laravel's remember-me
+             * cookie re-authenticates on a later visit WITHOUT reaching that
+             * controller at all — this is what closes that door.
+             */
+            'otp.verified' => \App\Http\Middleware\EnsureAdminOtpVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
