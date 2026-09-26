@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Crop;
 use App\Models\ClimateRiskAssessment;
 use App\Models\CropSeason;
+use App\Models\FarmParcel;
 use App\Models\Farmer;
 use App\Services\ClimateRiskScorer;
 use App\Services\ForecastService;
@@ -183,14 +184,58 @@ class PredictiveAnalyticsController extends Controller
      * parcels is a different claim from one covering all of them, and a page
      * that leads with the total hides which it is.
      */
+    /**
+     * Why there is nothing to forecast, stated in the office's own numbers.
+     *
+     * "No data available" is useless when the office knows perfectly well it
+     * has data. It has farmers, parcels and crop records — what it may not
+     * have is the ONE combination a yield prediction needs: a cropping row
+     * carrying both a planted area and a harvested yield.
+     *
+     * So this counts each step and hands them to the screen, which can then
+     * say exactly which one is missing and what to record to fix it.
+     */
+    private function dataDiagnostics(): array
+    {
+        $seasons = CropSeason::query()->count();
+
+        $withArea = CropSeason::query()
+            ->whereNotNull('area_planted_ha')->where('area_planted_ha', '>', 0)
+            ->count();
+
+        $withYield = CropSeason::query()
+            ->whereNotNull('yield_kg')->where('yield_kg', '>', 0)
+            ->count();
+
+        // The only rows a prediction can be built from.
+        $usable = CropSeason::query()
+            ->whereNotNull('area_planted_ha')->where('area_planted_ha', '>', 0)
+            ->whereNotNull('yield_kg')->where('yield_kg', '>', 0)
+            ->count();
+
+        return [
+            'crop_seasons'      => $seasons,
+            'with_area'         => $withArea,
+            'with_yield'        => $withYield,
+            'usable'            => $usable,
+            'parcels'           => FarmParcel::query()->count(),
+            'parcels_cropped'   => CropSeason::query()->distinct()->count('parcel_id'),
+            // Three comparable harvests is where a farmer's own history starts
+            // being trusted over the wider fallback. Stated so the office can
+            // see how far off that is.
+            'min_for_own_history' => ForecastService::MIN_RECORDS_FOR_SCOPE,
+        ];
+    }
+
     private function yieldOutlook(YieldPredictionService $predictor, array $filters): array
     {
         $targets = $predictor->nextCroppingTargets($filters);
 
         if ($targets->isEmpty()) {
             return [
-                'available' => false,
-                'reason'    => 'No cropping matches these filters, so there is nothing to predict from.',
+                'available'   => false,
+                'reason'      => 'No cropping matches these filters, so there is nothing to predict from.',
+                'diagnostics' => $this->dataDiagnostics(),
             ];
         }
 
@@ -210,8 +255,9 @@ class PredictiveAnalyticsController extends Controller
 
         if ($predictions->isEmpty()) {
             return [
-                'available' => false,
-                'reason'    => 'No parcel matches these filters.',
+                'available'   => false,
+                'reason'      => 'No parcel matches these filters.',
+                'diagnostics' => $this->dataDiagnostics(),
             ];
         }
 
@@ -221,6 +267,16 @@ class PredictiveAnalyticsController extends Controller
         return [
             'available'   => true,
             'coverage'    => $predictor->coverage($predictions),
+            /*
+             * Always sent, not only when empty.
+             *
+             * "No data" is useless to an office that knows it has data. These
+             * counts let the screen say which specific thing is missing: a
+             * cropping row needs BOTH a planted area and a harvested yield
+             * before it can predict anything, and a registry can be full of
+             * crop records while having very few of those.
+             */
+            'diagnostics' => $this->dataDiagnostics(),
             'municipal'   => $municipal,
             'byBarangay'  => $predictor
                 ->aggregateBy($predictions, fn ($p) => $p['barangay'] ?: 'No barangay recorded')

@@ -134,6 +134,109 @@ const Change = ({ value }) => (
  * Every tab below groups the SAME parcel predictions a different way, so no
  * two tabs can disagree and nothing is double counted.
  */
+/**
+ * Why there is no forecast, in the office's own numbers.
+ *
+ * "No data available" is useless to people who know perfectly well they have
+ * data. GeoFarm-IS can hold hundreds of farmers, parcels and crop records and
+ * still produce nothing here, because a yield prediction needs one specific
+ * combination: a cropping row carrying BOTH a planted area and a harvested
+ * yield. A crop recorded without its harvest cannot predict a harvest.
+ *
+ * So this counts each step and names the one that is missing, rather than
+ * leaving staff to guess whether the page is broken.
+ */
+function DataDiagnostics({ diagnostics }) {
+    if (!diagnostics) return null;
+
+    const {
+        crop_seasons: seasons,
+        with_area: withArea,
+        with_yield: withYield,
+        usable,
+        parcels,
+        parcels_cropped: cropped,
+        min_for_own_history: minRecords,
+    } = diagnostics;
+
+    /*
+     * The first unmet condition, in the order they must be met. Only one is
+     * shown: a list of four problems is a wall, a single next step is a task.
+     */
+    const blocker = (() => {
+        if (parcels === 0) return {
+            what: 'No farm parcels are recorded yet.',
+            next: 'Add parcels to farmers, then record their croppings.',
+        };
+        if (seasons === 0) return {
+            what: 'No crop seasons are recorded against any parcel.',
+            next: 'Record croppings under Seasonal Tracking, including the area planted.',
+        };
+        if (withYield === 0) return {
+            what: `${seasons} cropping${seasons === 1 ? ' is' : 's are'} recorded, but none has a harvested yield.`,
+            next: 'Open a completed cropping and fill in the harvested yield in kilograms. That figure is what every forecast is built from.',
+        };
+        if (withArea === 0) return {
+            what: `${withYield} harvest${withYield === 1 ? ' is' : 's are'} recorded, but none has a planted area.`,
+            next: 'Add the area planted (ha) to those croppings. Yield alone cannot give a yield per hectare.',
+        };
+        if (usable === 0) return {
+            what: 'No cropping has both a planted area and a harvested yield.',
+            next: 'Croppings need both figures together on the same record before they can be used.',
+        };
+        return null;
+    })();
+
+    const rows = [
+        ['Farm parcels', parcels],
+        ['Parcels with a cropping', cropped],
+        ['Croppings recorded', seasons],
+        ['…with a planted area', withArea],
+        ['…with a harvested yield', withYield],
+        ['…usable for prediction (both)', usable],
+    ];
+
+    return (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-left">
+            <h4 className="text-sm font-semibold text-gray-900">What the records currently hold</h4>
+
+            <dl className="mt-3 divide-y divide-gray-100">
+                {rows.map(([label, value]) => (
+                    <div key={label} className="flex items-center justify-between py-1.5 text-sm">
+                        <dt className={label.startsWith('…') ? 'pl-3 text-gray-500' : 'text-gray-700'}>
+                            {label}
+                        </dt>
+                        <dd className={`tabular-nums font-semibold ${value > 0 ? 'text-gray-900' : 'text-amber-700'}`}>
+                            {value ?? 0}
+                        </dd>
+                    </div>
+                ))}
+            </dl>
+
+            {blocker ? (
+                <div className="mt-3 rounded-lg bg-amber-50 p-3">
+                    <p className="text-sm font-medium text-amber-900">{blocker.what}</p>
+                    <p className="mt-1 text-sm leading-6 text-amber-800">{blocker.next}</p>
+                </div>
+            ) : (
+                <p className="mt-3 rounded-lg bg-gray-50 p-3 text-sm leading-6 text-gray-600">
+                    There are {usable} usable cropping{usable === 1 ? '' : 's'}. A parcel needs {minRecords} comparable
+                    harvests before its own history is trusted; below that the forecast falls back to the barangay,
+                    then to the municipality.
+                </p>
+            )}
+
+            <Link
+                href="/admin/seasonal"
+                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-green-700 hover:text-green-900"
+            >
+                Open Seasonal Tracking
+                <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+        </div>
+    );
+}
+
 function YieldOutlook({ yieldOutlook, canIntervene }) {
     if (!yieldOutlook?.available) {
         return (
@@ -142,8 +245,13 @@ function YieldOutlook({ yieldOutlook, canIntervene }) {
                     icon={Database}
                     title="No yield forecast for these filters"
                     hint={yieldOutlook?.reason
-                        || 'Record cropping seasons with a planted area and a harvested yield, and a forecast will appear here.'}
+                        || "Record cropping seasons with a planted area and a harvested yield, and a forecast will appear here."}
                 />
+                {/* Says WHICH record is missing, counted from the database,
+                    rather than leaving staff to wonder if the page is broken. */}
+                <div className="mx-auto max-w-lg">
+                    <DataDiagnostics diagnostics={yieldOutlook?.diagnostics} />
+                </div>
             </Card>
         );
     }
@@ -214,10 +322,17 @@ function YieldOutlook({ yieldOutlook, canIntervene }) {
 
                 {coverage.insufficient > 0 && (
                     <p className="mt-3 text-xs leading-5 text-amber-700">
-                        {coverage.insufficient} parcel{coverage.insufficient === 1 ? ' has' : 's have'} insufficient
-                        historical data and {coverage.insufficient === 1 ? 'is' : 'are'} excluded from every total
+                        {coverage.insufficient} parcel{coverage.insufficient === 1 ? " has" : "s have"} insufficient
+                        historical data and {coverage.insufficient === 1 ? "is" : "are"} excluded from every total
                         above. They are not counted as zero.
                     </p>
+                )}
+
+                {/* Nothing at all could be predicted. The totals above are
+                    therefore all zero, and the office deserves to know which
+                    missing record caused that rather than doubting the page. */}
+                {coverage.predictable === 0 && (
+                    <DataDiagnostics diagnostics={yieldOutlook.diagnostics} />
                 )}
             </div>
         </div>
