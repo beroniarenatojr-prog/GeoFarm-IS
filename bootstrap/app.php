@@ -37,6 +37,14 @@ return Application::configure(basePath: dirname(__DIR__))
              * controller at all — this is what closes that door.
              */
             'otp.verified' => \App\Http\Middleware\EnsureAdminOtpVerified::class,
+            /*
+             * Ten idle minutes ends an administrative session.
+             *
+             * Applied to the admin group only, NOT through SESSION_LIFETIME,
+             * which is global and would also expire farmers and anyone partway
+             * through the public registration wizard.
+             */
+            'admin.idle' => \App\Http\Middleware\EnforceAdminIdleTimeout::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

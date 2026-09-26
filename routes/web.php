@@ -95,7 +95,23 @@ Route::get('/farmer-registration/submitted', [FarmerRegistrationController::clas
  * administrator — a farmer never reaches it, and an anonymous visitor is
  * turned away by `auth` first. It is a no-op while ADMIN_OTP_ENABLED is false.
  */
-Route::middleware(['auth', 'role:Admin|Super Admin|Staff', 'otp.verified'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'role:Admin|Super Admin|Staff', 'otp.verified', 'admin.idle'])->prefix('admin')->name('admin.')->group(function () {
+
+    /*
+     * Keeps the session alive for someone who is working but not navigating.
+     *
+     * Reading a long report sends no requests, so without this the server
+     * would expire a user who is plainly still at the desk. The browser calls
+     * it at most once every four minutes, and only when there has been real
+     * activity — a machine left alone still times out.
+     *
+     * It does nothing itself: passing through admin.idle above is the whole
+     * point, because that middleware stamps the activity. Returning `back()`
+     * keeps Inertia happy without re-rendering anything.
+     */
+    Route::post('session/keep-alive', function () {
+        return back(303);
+    })->name('session.keep-alive');
 
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 

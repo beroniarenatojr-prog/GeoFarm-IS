@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
+import useInactivityTimeout from '@/hooks/useInactivityTimeout';
+import SessionTimeoutModal from '@/Components/ui/SessionTimeoutModal';
 
 import GlobalSearch from '@/Components/ui/GlobalSearch';
 import FarmerScanButton from '@/Components/ui/FarmerScanButton';
@@ -152,6 +154,23 @@ export default function AdminLayout({
     const page = usePage();
     const { auth } = page.props;
     const { can } = usePermissions();
+
+    /*
+     * Ten idle minutes signs an administrative user out.
+     *
+     * Mounted here and only here. AdminLayout wraps the 30 admin pages; the
+     * farmer portal pages use no layout at all and public pages use
+     * PublicFormShell, so farmers and visitors can never pick this up — the
+     * scoping is structural rather than a role check that could drift.
+     *
+     * `enabled` is tied to there actually being a signed-in user, so the
+     * timers never run on a page rendered without one.
+     *
+     * The server enforces the same ten minutes independently — see
+     * EnforceAdminIdleTimeout. Everything here is the warning and the tidy
+     * exit, not the security.
+     */
+    const idle = useInactivityTimeout({ enabled: Boolean(auth?.user) });
     const [hovering, setHovering] = useState(false);
 
     // The account panel is portalled outside the sidebar, so moving the mouse
@@ -262,6 +281,22 @@ export default function AdminLayout({
 
     return (
         <div className="min-h-screen flex">
+            {/*
+                The inactivity warning.
+
+                Rendered first and portalled to <body> by ModalShell, so it is
+                never trapped inside the sidebar's backdrop-blur or clipped by
+                a page that scrolls. It sits above every screen in the admin
+                section because it is mounted by the layout they all share.
+            */}
+            <SessionTimeoutModal
+                open={idle.warning}
+                secondsLeft={idle.secondsLeft}
+                locked={idle.lockedOpen}
+                onContinue={idle.extend}
+                onLogout={idle.signOut}
+            />
+
             {/* LAYER 1: Sidebar - Deep Forest Green
 
                 Hidden entirely while the page is locked. The lock exists to
