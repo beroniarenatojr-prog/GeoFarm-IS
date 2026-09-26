@@ -186,7 +186,19 @@ class VerifyOtpController extends Controller
             ]);
         }
 
-        return back()->with('success', 'A new verification code has been sent.');
+        /*
+         * Says plainly that the old code is dead.
+         *
+         * "A new code has been sent" was true and still misleading: someone
+         * with two emails open reads it as "another copy of the same code" and
+         * types the one already on screen, which now fails. The previous code
+         * being invalidated is the whole point of a resend, so the message has
+         * to say it.
+         */
+        return back()->with(
+            'success',
+            'A new code has been sent. Use the newest email — the previous code no longer works.',
+        );
     }
 
     /** Abandon the pending attempt and go back to the sign-in screen. */
