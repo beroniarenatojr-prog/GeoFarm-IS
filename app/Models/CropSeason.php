@@ -26,7 +26,8 @@ class CropSeason extends Model
 
     protected $fillable = [
         'parcel_id','season','cropping_year','crop_id',
-        'area_planted_ha','planting_date','harvest_date','yield_kg','inputs_used',
+        'area_planted_ha','harvested_area_ha','expected_harvested_area_ha',
+        'planting_date','harvest_date','yield_kg','inputs_used',
         'production_unit','selling_price',
         'production_cost','labor_cost','other_cost','total_income',
         'fertilizer_type','fertilizer_qty_kg','fertilizer_class','is_organic',

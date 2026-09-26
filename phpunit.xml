@@ -32,6 +32,16 @@
             local development data. Create it once with:
                 CREATE DATABASE geofarm_is_test;
         -->
+        <!--
+            Administrative login OTP is off in tests.
+
+            Tests sign in with actingAs(), which never passes through
+            LoginController and so never marks the session as verified.
+            EnsureAdminOtpVerified would therefore sign every test user out on
+            their first admin request. A test that wants to exercise the OTP
+            flow turns it on for itself.
+        -->
+        <env name="ADMIN_OTP_ENABLED" value="false"/>
         <env name="DB_CONNECTION" value="mysql"/>
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="3306"/>
