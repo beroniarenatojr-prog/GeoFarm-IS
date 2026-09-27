@@ -18,7 +18,24 @@ import { createPortal } from 'react-dom';
  * It flips above the field when there is more room up there, which is what
  * makes it usable in a dialog only a couple of rows tall.
  */
-export default function AnchoredList({ anchorRef, open, children, className = '', maxHeight = 240 }) {
+/*
+ * `align` and `matchWidth` exist for the action menus.
+ *
+ * A type-ahead hangs under a wide input and should be exactly as wide as it,
+ * left-aligned. A dropdown menu hangs off a 32 px icon button and should be
+ * neither — matching that width would give a 32 px menu, and left-aligning it
+ * would push it off the right edge of the table. The defaults keep every
+ * existing caller behaving exactly as before.
+ */
+export default function AnchoredList({
+    anchorRef,
+    open,
+    children,
+    className = '',
+    maxHeight = 240,
+    align = 'left',
+    matchWidth = true,
+}) {
     const listRef = useRef(null);
     const [style, setStyle] = useState(null);
 
@@ -44,9 +61,19 @@ export default function AnchoredList({ anchorRef, open, children, className = ''
 
             setStyle({
                 position: 'fixed',
-                left: rect.left,
-                width: rect.width,
                 maxHeight: room,
+
+                /*
+                 * Right-aligned menus are pinned by their RIGHT edge, so a
+                 * wide menu grows leftward into the page instead of off the
+                 * side of the table it was opened from.
+                 */
+                ...(align === 'right'
+                    ? { right: Math.max(4, window.innerWidth - rect.right) }
+                    : { left: rect.left }),
+
+                ...(matchWidth ? { width: rect.width } : {}),
+
                 ...(flip
                     ? { bottom: window.innerHeight - rect.top + 4 }
                     : { top: rect.bottom + 4 }),
@@ -64,7 +91,7 @@ export default function AnchoredList({ anchorRef, open, children, className = ''
             window.removeEventListener('scroll', place, true);
             window.removeEventListener('resize', place);
         };
-    }, [open, anchorRef, maxHeight]);
+    }, [open, anchorRef, maxHeight, align, matchWidth]);
 
     if (!open || !style) return null;
 

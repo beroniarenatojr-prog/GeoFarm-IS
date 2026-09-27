@@ -215,7 +215,15 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
             </td>
 
             <td className="px-4 py-3.5 text-right">
-                <div className="flex items-center gap-2">
+                {/*
+                    justify-end, not just the cell's text-right.
+
+                    text-align does nothing to flex children, so the buttons sat
+                    at the left of a cell whose header was right-aligned — the
+                    column header and its contents pointing in opposite
+                    directions.
+                */}
+                <div className="flex items-center justify-end gap-2">
                     {/* Lock/Unlock button - visible outside dropdown */}
                     {canLock && (
                         <button

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from '@inertiajs/react';
 import { Eye, Pencil, Trash2, MoreVertical, Lock, Unlock } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import AnchoredList from './AnchoredList';
 
 /**
  * Dropdown menu with 3-dot button for actions
@@ -51,10 +52,29 @@ export function ActionMenu({ actions = [], children }) {
                 <MoreVertical className="h-4 w-4" />
             </button>
 
-            {isOpen && (
+            {/*
+                Portalled out of the table, not absolutely positioned inside it.
+
+                An absolute child of a scrolling container is clipped at its
+                edge, and every table this menu appears in sits in an
+                overflow-x-auto wrapper — so the menu was cut off, with Delete
+                unreachable on the last rows. AnchoredList moves it to <body>
+                and positions it fixed against the button, which nothing can
+                clip, and keeps it tracking the button as the page scrolls.
+
+                Right-aligned and not width-matched: the anchor is a 32 px icon
+                button, so matching its width would give a 32 px menu.
+            */}
+            <AnchoredList
+                anchorRef={buttonRef}
+                open={isOpen}
+                align="right"
+                matchWidth={false}
+                maxHeight={360}
+            >
                 <div
                     ref={menuRef}
-                    className="absolute right-0 mt-1 min-w-[200px] w-max bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50"
+                    className="min-w-[200px] w-max rounded-xl border border-gray-200 bg-white py-2 shadow-xl"
                 >
                     {children || validActions.map((action, index) => (
                         <ActionMenuItem
@@ -64,7 +84,7 @@ export function ActionMenu({ actions = [], children }) {
                         />
                     ))}
                 </div>
-            )}
+            </AnchoredList>
         </div>
     );
 }
@@ -93,9 +113,19 @@ function ActionMenuItem({
         warning: 'text-amber-600 hover:bg-amber-100',
     };
 
-    const baseClasses = `flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all whitespace-nowrap ${
-        disabled 
-            ? 'text-gray-300 cursor-not-allowed bg-gray-50' 
+    /*
+         * `w-full text-left` belongs here, not only on the button.
+         *
+         * It used to be added to the <button> branch alone, so an item with an
+         * href — View, Edit — rendered as a <Link> without it and INHERITED
+         * text-align from the cell it was in. The Actions column is
+         * right-aligned, so "View" sat hard against the right edge of the menu
+         * while "Edit" sat beside its icon: two items in one list, aligned
+         * differently, for no reason a reader could see.
+         */
+    const baseClasses = `flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium transition-all whitespace-nowrap ${
+        disabled
+            ? 'text-gray-300 cursor-not-allowed bg-gray-50'
             : variantClasses[variant]
     }`;
 
@@ -145,7 +175,7 @@ function ActionMenuItem({
         <button
             type="button"
             onClick={handleClick}
-            className={`${baseClasses} w-full text-left`}
+            className={baseClasses}
             disabled={disabled}
             title={disabled ? disabledTitle : undefined}
         >
