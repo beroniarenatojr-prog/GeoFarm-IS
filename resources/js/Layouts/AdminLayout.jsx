@@ -103,7 +103,30 @@ const nav = [
             // The queue the analysis feeds: work the office opened and has yet
             // to close. Guarded on assistance rather than predictive because
             // it commits staff time rather than only reporting.
-            { label: 'Interventions', href: '/admin/interventions', icon: ClipboardList, permission: 'view assistance' },
+            /*
+             * Assistance lives under Interventions, because that is the order
+             * the work happens in: the office opens an intervention, and what
+             * it hands out to close it is assistance. Two sibling menu items
+             * presented them as unrelated errands.
+             *
+             * Nesting ONLY. Every route, controller and page is untouched, so
+             * programmes, distributions, locking and the inventory deduction
+             * behind them all behave exactly as before — this changes where
+             * staff find them, not what they do.
+             *
+             * The group itself carries no permission: it appears when any
+             * child does, which the filter below handles. Both children need
+             * `view assistance`, so it shows precisely when the two separate
+             * entries used to.
+             */
+            {
+                label: 'Interventions',
+                icon: ClipboardList,
+                children: [
+                    { label: 'Interventions', href: '/admin/interventions', icon: ClipboardList, permission: 'view assistance' },
+                    { label: 'Assistance', href: '/admin/assistance', icon: Layers, permission: 'view assistance' },
+                ],
+            },
             //
             // Forecast & Advisory removed from the menu on request. Its route,
             // controller and page are untouched and still reachable by URL for
@@ -122,7 +145,6 @@ const nav = [
             // are untouched.
             // { label: 'Inventory', href: '/admin/inventory', icon: Boxes, permission: 'view supplies' },
             { label: 'Farm Assets', href: '/admin/farm-inventory', icon: Package, permission: 'view inventory' },
-            { label: 'Assistance', href: '/admin/assistance', icon: Layers, permission: 'view assistance' },
         ]
     },
     {
@@ -258,11 +280,20 @@ export default function AdminLayout({
     // after entryActive, which it calls.
     const crumb = visibleNav.find(s => s.items.some(entryActive))?.section;
 
-    const toggleSection = (name) => setOpenSections(prev => {
+    /**
+     * Open or close one group.
+     *
+     * `want` is passed by callers that already know what the group is showing.
+     * A nested group can be open because the current page is inside it while
+     * having no saved state of its own, and `!prev[name]` would then read an
+     * absent value as closed and "open" a group that is already open — one
+     * click doing nothing at all.
+     */
+    const toggleSection = (name, want) => setOpenSections(prev => {
         // !prev[name], not prev[name] === false: a group absent from the saved
         // state is closed, and comparing against false would leave it closed
         // no matter how often its heading was clicked.
-        const next = { ...prev, [name]: !prev[name] };
+        const next = { ...prev, [name]: want === undefined ? !prev[name] : want };
         try {
             localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
         } catch {
@@ -406,8 +437,23 @@ export default function AdminLayout({
                                             // A group of its own, one level in.
                                             if (item.children) {
                                                 const key = `${section.section}/${item.label}`;
-                                                const subOpen = openSections[key] === true;
                                                 const subActive = item.children.some(c => isActive(c.href));
+
+                                                /*
+                                                 * Open by default when you are already on one of its
+                                                 * pages. Previously this read `=== true`, so a group
+                                                 * stayed shut on the very page it contained — the
+                                                 * heading highlighted, the page you were looking at
+                                                 * hidden inside it, and no way to tell where you were
+                                                 * without clicking.
+                                                 *
+                                                 * An explicit choice still wins, which is why this
+                                                 * tests for the key rather than its value: collapsing
+                                                 * a group you are inside has to stay possible.
+                                                 */
+                                                const subOpen = key in openSections
+                                                    ? openSections[key] === true
+                                                    : subActive;
                                                 const subCount = item.children
                                                     .reduce((n, c) => n + badgeCount(c.badge), 0);
 
@@ -415,7 +461,7 @@ export default function AdminLayout({
                                                     <div key={key}>
                                                         <button
                                                             type="button"
-                                                            onClick={() => toggleSection(key)}
+                                                            onClick={() => toggleSection(key, !subOpen)}
                                                             aria-expanded={subOpen}
                                                             className={`mr-2 flex w-full items-center gap-2.5 rounded px-2.5 py-1.5 text-[13px] transition-colors ${
                                                                 subActive
