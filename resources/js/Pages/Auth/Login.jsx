@@ -17,9 +17,32 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 p-8">
-            {/* Centered Login Card */}
-            <div className="w-full max-w-5xl flex rounded-3xl shadow-2xl overflow-hidden bg-white">
+        /*
+            Tumauini's own farmland behind the sign-in card.
+
+            bg-green-900 sits UNDER the photo on purpose. It is a 960 KB image,
+            so on the office's connection there is a moment before it paints —
+            and the card's left panel is white text on a transparent-to-dark
+            gradient. Without a colour underneath, that text would be white on
+            white until the photo arrived, and unreadable again if it ever
+            failed to load.
+        */
+        <div
+            className="relative min-h-screen flex items-center justify-center bg-green-900 bg-cover bg-center bg-no-repeat p-4 sm:p-8"
+            style={{ backgroundImage: "url('/images/backgroundpage.jpeg')" }}
+        >
+            {/*
+                A wash over the photo.
+
+                Aerial farmland is busy and bright in patches, and a white card
+                edge disappears against a pale field. This darkens it just
+                enough for the card to read as sitting on top rather than
+                dissolving into it, while leaving the fields clearly visible.
+            */}
+            <div className="absolute inset-0 bg-black/30" aria-hidden="true" />
+
+            {/* Centered Login Card. Above the wash. */}
+            <div className="relative z-10 w-full max-w-5xl flex rounded-3xl shadow-2xl overflow-hidden bg-white">
                 {/* Left Panel - Dark Green */}
                 <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#004d00] via-[#006400] to-[#228B22] p-12 flex-col justify-center items-center relative overflow-hidden">
                     {/* Decorative Background Pattern */}
