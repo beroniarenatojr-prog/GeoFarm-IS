@@ -201,12 +201,24 @@ class CropSeasonController extends Controller
     private function annualTotals($seasons): array
     {
         $costed  = $seasons->whereNotNull('production_cost');
-        $earned  = $seasons->whereNotNull('total_income');
         $units   = $seasons->whereNotNull('yield_kg')
             ->map(fn (CropSeason $s) => $s->production_unit ?? 'kg')->unique();
 
+        /*
+         * Revenue via gross_revenue, NOT total_income.
+         *
+         * The model falls back to harvest x price where no total was typed,
+         * and the per-season figures on screen already use that. Summing
+         * total_income alone made the annual line read "No data" directly
+         * beneath two seasons that were each showing a net income — the total
+         * contradicting the rows it is the total OF.
+         */
+        $earned  = $seasons->filter(fn (CropSeason $s) => $s->gross_revenue !== null);
+
         $cost    = $costed->isEmpty() ? null : round((float) $costed->sum('production_cost'), 2);
-        $revenue = $earned->isEmpty() ? null : round((float) $earned->sum('total_income'), 2);
+        $revenue = $earned->isEmpty()
+            ? null
+            : round($earned->sum(fn (CropSeason $s) => (float) $s->gross_revenue), 2);
 
         return [
             // The planted area of the largest cropping. Summing would double a
