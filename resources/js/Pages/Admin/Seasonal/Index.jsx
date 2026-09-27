@@ -201,6 +201,19 @@ function netIncomeOf(season) {
     return null;
 }
 
+
+/** The "Total" line under a stacked cell. Only meaningful with 2+ seasons. */
+function TotalLine({ children, note }) {
+    return (
+        <div className="mt-1 border-t border-green-200 pt-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                Total{note ? ` · ${note}` : ''}
+            </div>
+            <div className="text-sm font-semibold text-gray-900">{children}</div>
+        </div>
+    );
+}
+
 function NetIncome({ season }) {
     const net = netIncomeOf(season);
 
@@ -1332,6 +1345,22 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                         const wetSeason = row.seasons.find(s => s.season === 'wet');
                                         const drySeason = row.seasons.find(s => s.season === 'dry');
                                         const firstSeason = wetSeason || drySeason;
+
+                                        /*
+                                         * The year, added up, for a farmer who
+                                         * works this land in both seasons.
+                                         *
+                                         * Server-computed, from the same
+                                         * annualTotals() the card view below
+                                         * already uses — so the table and the
+                                         * cards can never disagree about what
+                                         * a year came to.
+                                         *
+                                         * Shown only with two seasons: with one
+                                         * the total is the same number twice.
+                                         */
+                                        const totals = row.annual ?? {};
+                                        const showTotals = row.seasons.length > 1;
                                         
                                         return (
                                             <tr
@@ -1374,24 +1403,64 @@ const toDateInput = (d) => d ? d.toString().slice(0, 10) : '';
                                                     <div className="flex flex-col gap-1 tabular-nums text-gray-700">
                                                         {wetSeason && <div className="text-sm">{wetSeason.production_cost != null ? peso(wetSeason.production_cost, 0) : <NoData />}</div>}
                                                         {drySeason && <div className="text-sm">{drySeason.production_cost != null ? peso(drySeason.production_cost, 0) : <NoData />}</div>}
+                                                        {showTotals && (
+                                                            <TotalLine note={totals.costed_count < totals.seasons ? "one season only" : null}>
+                                                                {totals.cost != null ? peso(totals.cost, 0) : <NoData />}
+                                                            </TotalLine>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex flex-col gap-1 tabular-nums text-gray-700">
                                                         {wetSeason && <div className="text-sm">{wetSeason.selling_price != null ? peso(wetSeason.selling_price, 2) : <NoData />}</div>}
                                                         {drySeason && <div className="text-sm">{drySeason.selling_price != null ? peso(drySeason.selling_price, 2) : <NoData />}</div>}
+                                                        {/* Weighted by volume, never added — see annualTotals().
+                                                            ₱16.50 and ₱16.91 do not make ₱33.41. */}
+                                                        {showTotals && (
+                                                            <TotalLine note={totals.earned_count < totals.seasons ? "one season only" : "per kilo"}>
+                                                                {totals.price_per_unit != null ? peso(totals.price_per_unit, 2) : <NoData />}
+                                                            </TotalLine>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex flex-col gap-1 tabular-nums text-gray-700">
                                                         {wetSeason && <div className="text-sm">{wetSeason.yield_kg != null ? <>{Number(wetSeason.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {wetSeason.production_unit ?? 'kg'}</span></> : <NoData />}</div>}
                                                         {drySeason && <div className="text-sm">{drySeason.yield_kg != null ? <>{Number(drySeason.yield_kg).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {drySeason.production_unit ?? 'kg'}</span></> : <NoData />}</div>}
+                                                        {showTotals && (
+                                                            <TotalLine note={totals.mixed_units ? 'mixed units' : null}>
+                                                                {/* Mixed units give null rather than a meaningless sum:
+                                                                    7,939 kg plus 8,605 sacks is not a quantity. */}
+                                                                {totals.yield != null
+                                                                    ? <>{Number(totals.yield).toLocaleString('en-PH', { maximumFractionDigits: 0 })}<span className="text-gray-400"> {totals.unit}</span></>
+                                                                    : <span className="text-xs font-normal text-gray-400">Cannot total</span>}
+                                                            </TotalLine>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <div className="flex flex-col gap-1">
                                                         {wetSeason && <div className="text-sm"><NetIncome season={wetSeason} /></div>}
                                                         {drySeason && <div className="text-sm"><NetIncome season={drySeason} /></div>}
+                                                        {showTotals && (
+                                                            <TotalLine
+                                                                note={(totals.costed_count < totals.seasons || totals.earned_count < totals.seasons)
+                                                                    ? 'one season only' : null}
+                                                            >
+                                                                {totals.net_income != null ? (
+                                                                    <span className={totals.net_income < 0 ? 'text-red-600' : 'text-gray-900'}>
+                                                                        {peso(totals.net_income, 0)}
+                                                                        <span className={`ml-1.5 text-xs font-medium ${
+                                                                            totals.net_income < 0 ? 'text-red-600'
+                                                                                : totals.net_income === 0 ? 'text-gray-500' : 'text-[#006400]'
+                                                                        }`}
+                                                                        >
+                                                                            {totals.net_income < 0 ? 'Palugi' : totals.net_income === 0 ? 'Break-even' : 'Profitable'}
+                                                                        </span>
+                                                                    </span>
+                                                                ) : <NoData />}
+                                                            </TotalLine>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3">

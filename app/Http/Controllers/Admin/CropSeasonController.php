@@ -220,6 +220,30 @@ class CropSeasonController extends Controller
             'cost'       => $cost,
             'revenue'    => $revenue,
             'net_income' => ($cost === null || $revenue === null) ? null : round($revenue - $cost, 2),
+
+            /*
+             * What the year's harvest actually fetched, per unit.
+             *
+             * Money over volume — NEVER the sum of the seasons' prices, which
+             * would give ₱33.41 for a crop that sold at ₱16.50 and ₱16.91, and
+             * not their plain mean either: 2,000 kg at 16.50 beside 8,000 kg
+             * at 16.91 comes to 16.83, not 16.71. Weighting by volume is what
+             * "per kilo" means.
+             *
+             * Null unless the units agree and there is a volume to divide by.
+             */
+            'price_per_unit' => ($revenue !== null && $units->count() === 1 && (float) $seasons->sum('yield_kg') > 0)
+                ? round($revenue / (float) $seasons->sum('yield_kg'), 2)
+                : null,
+
+            /*
+             * How many croppings each total actually drew on, so the screen can
+             * say "one season only" rather than presenting half a year as the
+             * whole of it.
+             */
+            'seasons'       => $seasons->count(),
+            'costed_count'  => $costed->count(),
+            'earned_count'  => $earned->count(),
         ];
     }
 
