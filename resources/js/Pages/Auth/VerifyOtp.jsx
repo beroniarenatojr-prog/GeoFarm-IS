@@ -139,9 +139,24 @@ export default function VerifyOtp({ email, expiresIn, resendIn }) {
 
   const expired = expires <= 0;
 
+  /*
+   * The same farmland photo as the sign-in page.
+   *
+   * Verification is the second half of one sign-in, and a different backdrop
+   * between the two steps reads as having been sent somewhere else — exactly
+   * the doubt a page asking for a security code should not create.
+   *
+   * bg-green-900 underneath for the moment before a 960 KB photo paints, and
+   * for the case where it never does.
+   */
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 p-4 sm:p-8">
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
+    <div
+      className="relative min-h-screen flex items-center justify-center bg-green-900 bg-cover bg-center bg-no-repeat p-4 sm:p-8"
+      style={{ backgroundImage: "url('/images/backgroundpage.jpeg')" }}
+    >
+      <div className="absolute inset-0 bg-black/30" aria-hidden="true" />
+
+      <div className="relative z-10 w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
 
         <div className="flex flex-col items-center text-center">
           <img
