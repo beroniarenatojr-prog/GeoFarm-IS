@@ -194,8 +194,12 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff', 'otp.verified', 'admi
     Route::post('assistance/{assistance}/distribute', [AssistanceController::class, 'distribute'])
         ->middleware('permission:edit assistance')
         ->name('assistance.distribute');
+    // Only Admin and Super Admin hold "set assistance status". Staff keep
+    // "edit assistance" and can still record everything else about a
+    // programme — opening or closing one is the office's decision, not a
+    // data-entry step.
     Route::patch('assistance/{assistance}/status', [AssistanceController::class, 'toggleStatus'])
-        ->middleware('permission:edit assistance')
+        ->middleware('permission:set assistance status')
         ->name('assistance.status');
     // Only Admin and Super Admin hold "lock assistance".
     Route::patch('assistance/{assistance}/lock', [AssistanceController::class, 'toggleLock'])

@@ -1,4 +1,5 @@
 import { useForm } from '@inertiajs/react';
+import { usePermissions } from '@/hooks/usePermissions';
 import SuggestSelect from '@/Components/ui/SuggestSelect';
 import MultiSuggestSelect from '@/Components/ui/MultiSuggestSelect';
 
@@ -74,6 +75,17 @@ export function ProgramFormFields({
     form, assistanceTypes = [], barangays = [], stockItems = [],
 }) {
     const { data, setData, errors } = form;
+    const { can } = usePermissions();
+
+    /*
+     * Opening or closing a programme belongs to Admin and Super Admin.
+     *
+     * The server drops the status field for anyone else on both create and
+     * update, so showing the control to Staff would offer a choice that is
+     * silently discarded — worse than not offering it, because the programme
+     * would appear to have been set and then not be.
+     */
+    const canSetStatus = can('set assistance status');
 
     const isCustomType = data.assistance_type_id === CUSTOM_TYPE;
     const selectedType = assistanceTypes.find(t => String(t.id) === String(data.assistance_type_id));
@@ -193,13 +205,25 @@ export function ProgramFormFields({
             </Field>
 
             <Field label="Status" error={errors.status}>
-                <select value={data.status} onChange={e => setData('status', e.target.value)} className={field}>
-                    <option value="draft">Draft</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive (paused)</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
+                {canSetStatus ? (
+                    <select value={data.status} onChange={e => setData('status', e.target.value)} className={field}>
+                        <option value="draft">Draft</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive (paused)</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                ) : (
+                    /*
+                        Shown, not hidden. Staff need to know what state the
+                        programme is in — they just cannot change it, and saying
+                        who can is more useful than an unexplained blank.
+                    */
+                    <div className={`${field} flex items-center justify-between bg-gray-50 text-gray-600`}>
+                        <span className="capitalize">{data.status || 'draft'}</span>
+                        <span className="text-xs text-gray-400">Set by an administrator</span>
+                    </div>
+                )}
             </Field>
 
             <Field label="Description" span>

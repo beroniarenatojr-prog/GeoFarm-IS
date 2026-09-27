@@ -31,10 +31,18 @@ class RolePermissionSeeder extends Seeder
             'view seasonal', 'create seasonal', 'edit seasonal', 'delete seasonal',
             
             // Financial Assistance
-            // 'lock assistance' is deliberately absent from the Staff list below:
-            // a lock Staff can lift protects nothing.
+            //
+            // Two of these are deliberately absent from the Staff list below.
+            //
+            // 'lock assistance', because a lock Staff can lift protects nothing.
+            //
+            // 'set assistance status', because activating or closing a
+            // programme is the office committing to it — it decides whether
+            // farmers can still be enrolled and whether the programme counts
+            // as delivered. Staff record the work; Admin and Super Admin
+            // decide that it is open or finished.
             'view assistance', 'create assistance', 'edit assistance', 'delete assistance',
-            'lock assistance',
+            'lock assistance', 'set assistance status',
             
             // Reports
             'view reports', 'export reports',

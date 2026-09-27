@@ -46,6 +46,15 @@ class AssistanceController extends Controller
                 ->paginate(15),
             // Drives whether the padlock is a button or just an indicator.
             'canLock' => auth()->user()?->can('lock assistance') ?? false,
+            /*
+             * Same treatment for the status switch: Staff see the programme's
+             * state but cannot change it.
+             *
+             * The route refuses them anyway — this only stops the page
+             * offering a control that would be rejected, which reads as the
+             * system being broken rather than as a permission they lack.
+             */
+            'canSetStatus' => auth()->user()?->can('set assistance status') ?? false,
             // Decides whether the confirm dialog asks for the lock password or
             // walks the user through creating one.
             'hasLockPassword' => auth()->user()?->hasLockPassword() ?? false,
@@ -267,9 +276,23 @@ class AssistanceController extends Controller
         $barangayIds = $data['barangay_ids'] ?? [];
         unset($data['barangay_ids']);
 
+        /*
+         * A new programme starts as a draft unless the person creating it may
+         * set the status. Staff can still raise one and fill in everything
+         * about it; an Admin decides when it opens.
+         *
+         * Unset BEFORE the union below. `$data + [...]` keeps keys that are
+         * already in $data and only fills in missing ones, so a default given
+         * on the right-hand side is ignored whenever the field was submitted —
+         * which is exactly when it needs to apply.
+         */
+        if (! auth()->user()?->can('set assistance status')) {
+            unset($data['status']);
+        }
+
         $assistance = FinancialAssistance::create($data + [
             'created_by' => auth()->id(),
-            'status' => $data['status'] ?? 'draft',
+            'status'     => 'draft',
         ]);
 
         if (!empty($barangayIds)) {
@@ -746,6 +769,22 @@ class AssistanceController extends Controller
         // Separate barangay_ids from the main data
         $barangayIds = $data['barangay_ids'] ?? null;
         unset($data['barangay_ids']);
+
+        /*
+         * Status is dropped for anyone without "set assistance status".
+         *
+         * Guarding only the toggle route would have been theatre: this form is
+         * gated on "edit assistance", which Staff hold, and it posts a status
+         * field — so the restriction could be walked straight around by
+         * opening the edit dialog instead of clicking the switch.
+         *
+         * Dropped silently rather than refused, because the field simply is
+         * not theirs to send: the form does not show it to them, so a rejection
+         * here would only ever be reached by a crafted request.
+         */
+        if (! auth()->user()?->can('set assistance status')) {
+            unset($data['status']);
+        }
 
         // Update the assistance program
         $assistance->update($data);

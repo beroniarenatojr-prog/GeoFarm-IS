@@ -23,7 +23,7 @@ const STATUS_STYLE = {
 };
 
 export default function AssistanceIndex({
-    programs, canLock, hasLockPassword, assistanceTypes = [], barangays = [], stockItems = [],
+    programs, canLock, canSetStatus, hasLockPassword, assistanceTypes = [], barangays = [], stockItems = [],
 }) {
     const { can } = usePermissions();
 
@@ -61,6 +61,7 @@ export default function AssistanceIndex({
                                 key={p.id}
                                 program={p}
                                 canLock={canLock}
+                                canSetStatus={canSetStatus}
                                 can={can}
                                 onEdit={() => setEditing(p)}
                                 onToggleLock={() => setConfirmingLock(p)}
@@ -145,7 +146,7 @@ function ProgramFormModal({ program, assistanceTypes, barangays, stockItems, onC
     );
 }
 
-function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
+function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLock }) {
     // Local pending flag, so toggling one row does not grey out the whole table.
     const [busy, setBusy] = useState(null);
 
@@ -184,11 +185,20 @@ function ProgramRow({ program: p, canLock, can, onEdit, onToggleLock }) {
             </td>
 
             <td className="px-4 py-3">
+                {/*
+                    canEdit reads `set assistance status`, NOT `edit assistance`.
+
+                    Staff hold `edit assistance` and may record everything else
+                    about a programme. Opening or closing one decides whether
+                    farmers can still be enrolled and whether it counts as
+                    delivered, so it belongs to Admin and Super Admin — the same
+                    reasoning that keeps the padlock out of Staff hands.
+                */}
                 <StatusToggle
                     status={p.status}
                     locked={locked}
                     busy={busy === 'status'}
-                    canEdit={can('edit assistance')}
+                    canEdit={canSetStatus}
                     onToggle={() => patch('status', `/admin/assistance/${p.id}/status`)}
                 />
             </td>
