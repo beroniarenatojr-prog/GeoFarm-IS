@@ -1,4 +1,4 @@
-import { ChevronDown, FilterX, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, FilterX, SlidersHorizontal } from 'lucide-react';
 
 /**
  * One filter per column of the registry table.
@@ -57,61 +57,11 @@ const YES_NO = [
     { value: '0', label: 'No' },
 ];
 
-/**
- * The three the office asks for most, on the surface.
- *
- * 4Ps, IP and PWD decide who qualifies for which programme, so they are asked
- * far more often than birthdate or RSBSA number — and they were buried behind
- * a collapsed panel, which meant people went looking in the search box and
- * were told there were no farmers.
- *
- * One click filters to Yes, a second clears it. "No" is a real question too,
- * but a rarer one; it stays in the panel as a dropdown rather than making
- * every chip a three-state control nobody can predict.
- */
-const QUICK = [
-    { key: 'is_4ps', label: '4Ps' },
-    { key: 'is_indigenous', label: 'IP' },
-    { key: 'pwd', label: 'PWD' },
-];
-
-function QuickChip({ label, active, onClick }) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={active}
-            title={active ? `Showing ${label} only — click to clear` : `Show ${label} farmers only`}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                active
-                    ? 'border-green-600 bg-green-700 text-white'
-                    : 'border-gray-300 text-gray-700 hover:border-green-400 hover:bg-green-50 hover:text-green-800'
-            }`}
-        >
-            {label}
-            {active && <X className="h-3 w-3" aria-hidden="true" />}
-        </button>
-    );
-}
 
 export default function ColumnFilters({
     open, onToggle, values, onChange, onApply, onClear, categories = [], activeCount = 0,
 }) {
     const set = (key) => (value) => onChange({ ...values, [key]: value });
-
-    /*
-     * Applied immediately, unlike the panel's Apply button.
-     *
-     * A chip is a single deliberate click with nothing else to fill in, so
-     * waiting for a second click on Apply would just be a step that does
-     * nothing. The text fields in the panel still batch, because filtering
-     * those live would send a request per keystroke.
-     */
-    const toggleQuick = (key) => {
-        const next = { ...values, [key]: values[key] === '1' ? '' : '1' };
-        onChange(next);
-        onApply(next);
-    };
 
     return (
         <div className="mt-3 border-t border-green-100 pt-3">
@@ -145,21 +95,6 @@ export default function ColumnFilters({
                         aria-hidden="true"
                     />
                 </button>
-
-                {/* Always visible, open or shut. These are the three the
-                    office reaches for most. */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {QUICK.map(({ key, label }) => (
-                        <QuickChip
-                            key={key}
-                            label={label}
-                            active={values[key] === '1'}
-                            onClick={() => toggleQuick(key)}
-                        />
-                    ))}
-                </div>
-
-                <div className="flex-1" />
 
                 {activeCount > 0 && (
                     <button
