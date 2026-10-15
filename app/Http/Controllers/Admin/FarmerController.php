@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClimateRiskAssessment;
 use App\Models\Farmer;
 use App\Models\FarmParcel;
+use App\Models\FarmerChild;
 use App\Services\AuditService;
 use App\Services\CommodityCatalogue;
 use App\Services\RsbsaFieldMapper;
@@ -115,6 +116,23 @@ class FarmerController extends Controller
             ->when($request->filled('is_4ps'), fn ($q) => $q->where('is_4ps', $request->is_4ps === '1'))
             ->when($request->filled('is_indigenous'), fn ($q) => $q->where('is_indigenous', $request->is_indigenous === '1'))
             ->when($request->filled('pwd'), fn ($q) => $q->where('pwd', $request->pwd === '1'))
+
+            /*
+             * Farmers who have a child doing a particular thing.
+             *
+             * whereHas, not a join: a household with four children would
+             * otherwise appear four times in the list, and the page count
+             * would stop matching the number of farmers.
+             *
+             * This answers questions the office actually brings — which
+             * households have a child still studying, and which have one
+             * working abroad. One child matching is enough; it is a filter on
+             * the household, not on the child.
+             */
+            ->when($request->child_occupation, fn ($q, $v) => $q->whereHas(
+                'children',
+                fn ($child) => $child->where('occupation', $v),
+            ))
             ->orderBy($sort, $direction)
             // Ties on a common surname would otherwise shuffle between pages.
             ->orderBy('id')
@@ -127,7 +145,11 @@ class FarmerController extends Controller
                 'search', 'barangay', 'sort', 'direction', 'per_page',
                 'rsbsa_no', 'name', 'contact', 'category', 'sex',
                 'born_from', 'born_to', 'is_4ps', 'is_indigenous', 'pwd',
+                'child_occupation',
             ]),
+            // From the model, so the filter and the registration form can only
+            // ever offer the same list.
+            'childOccupations' => FarmerChild::OCCUPATIONS,
             // Offered from the column's own enum rather than from the rows, so
             // a category nobody is registered under yet is still selectable.
             'categories'   => ['Farmer', 'Farm Worker', 'Fisher', 'Agri-Youth'],

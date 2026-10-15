@@ -132,6 +132,53 @@ class FarmerColumnFilterTest extends TestCase
         $this->assertSame(['Grower'], $this->surnames(['search' => 'Grower']));
     }
 
+    public function test_farmers_can_be_found_by_what_their_children_do(): void
+    {
+        $withStudent = $this->farmer(['last_name' => 'Hasstudent']);
+        $withStudent->children()->create(['name' => 'Ana', 'occupation' => 'Student']);
+
+        $withOfw = $this->farmer(['last_name' => 'Hasofw']);
+        $withOfw->children()->create([
+            'name' => 'Mario', 'occupation' => 'Overseas Filipino Worker (OFW)',
+        ]);
+
+        $this->farmer(['last_name' => 'Nochildren']);
+
+        $this->assertSame(['Hasstudent'], $this->surnames(['child_occupation' => 'Student']));
+        $this->assertSame(
+            ['Hasofw'],
+            $this->surnames(['child_occupation' => 'Overseas Filipino Worker (OFW)']),
+        );
+    }
+
+    public function test_a_household_with_several_children_appears_once(): void
+    {
+        $farmer = $this->farmer(['last_name' => 'Bigfamily']);
+
+        foreach (['Ana', 'Ben', 'Cris', 'Dina'] as $name) {
+            $farmer->children()->create(['name' => $name, 'occupation' => 'Student']);
+        }
+
+        /*
+         * The reason this uses whereHas and not a join. A join would return the
+         * household once per matching child — four rows for one farmer — and
+         * the "Showing 1–25 of N" count would stop meaning farmers.
+         */
+        $this->assertSame(['Bigfamily'], $this->surnames(['child_occupation' => 'Student']));
+    }
+
+    public function test_one_matching_child_is_enough(): void
+    {
+        $farmer = $this->farmer(['last_name' => 'Mixed']);
+        $farmer->children()->create(['name' => 'Ana', 'occupation' => 'Student']);
+        $farmer->children()->create(['name' => 'Ben', 'occupation' => 'Unemployed']);
+
+        // It filters the household, not the child.
+        $this->assertSame(['Mixed'], $this->surnames(['child_occupation' => 'Student']));
+        $this->assertSame(['Mixed'], $this->surnames(['child_occupation' => 'Unemployed']));
+        $this->assertSame([], $this->surnames(['child_occupation' => 'Government Employee']));
+    }
+
     public function test_filters_combine_rather_than_replace_each_other(): void
     {
         $this->farmer(['last_name' => 'Both', 'sex' => 'Female', 'is_4ps' => true]);

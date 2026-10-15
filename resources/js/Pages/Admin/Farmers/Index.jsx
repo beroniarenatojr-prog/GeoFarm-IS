@@ -80,10 +80,12 @@ function Livelihood({ value }) {
 const EMPTY_COLUMNS = {
     rsbsa_no: '', name: '', contact: '', category: '', sex: '',
     born_from: '', born_to: '', is_4ps: '', is_indigenous: '', pwd: '',
+    child_occupation: '',
 };
 
 export default function FarmersIndex({
-    farmers, filters, barangays, sort, perPage, pendingCount, categories = [],
+    farmers, filters, barangays, sort, perPage, pendingCount,
+    categories = [], childOccupations = [],
 }) {
     const { can } = usePermissions();
     const [search, setSearch] = useState(filters.search ?? '');
@@ -256,6 +258,7 @@ export default function FarmersIndex({
                     onApply={() => go({ page: 1 })}
                     onClear={clearColumns}
                     categories={categories}
+                    childOccupations={childOccupations}
                     activeCount={activeColumns}
                 />
             </div>

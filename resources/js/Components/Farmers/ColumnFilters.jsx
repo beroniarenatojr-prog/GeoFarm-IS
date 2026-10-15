@@ -59,7 +59,8 @@ const YES_NO = [
 
 
 export default function ColumnFilters({
-    open, onToggle, values, onChange, onApply, onClear, categories = [], activeCount = 0,
+    open, onToggle, values, onChange, onApply, onClear,
+    categories = [], childOccupations = [], activeCount = 0,
 }) {
     const set = (key) => (value) => onChange({ ...values, [key]: value });
 
@@ -163,6 +164,25 @@ export default function ColumnFilters({
                             value={values.born_to}
                             onChange={set('born_to')}
                             onEnter={onApply}
+                        />
+
+                        {/*
+                            Not a column in the table — a question about the
+                            household behind the row.
+
+                            "Which farmers have a child still studying" and
+                            "which have one working abroad" are things the
+                            office asks when targeting assistance, and until now
+                            the only way to answer was to open profiles one at a
+                            time. One matching child is enough: it filters the
+                            household, not the child.
+                        */}
+                        <Choice
+                            label="Child's occupation"
+                            value={values.child_occupation}
+                            onChange={set('child_occupation')}
+                            placeholder="Any or none"
+                            options={childOccupations.map((o) => ({ value: o, label: o }))}
                         />
 
                         <Choice label="4Ps" value={values.is_4ps} onChange={set('is_4ps')} placeholder="All" options={YES_NO} />
