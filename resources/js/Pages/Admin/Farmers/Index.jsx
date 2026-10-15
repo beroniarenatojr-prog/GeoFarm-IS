@@ -6,6 +6,7 @@ import {
     ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ColumnFilters from '@/Components/Farmers/ColumnFilters';
 import { usePermissions } from '@/hooks/usePermissions';
 import SuggestInput from '@/Components/ui/SuggestInput';
 import { formatDate } from '@/utils/dateFormatter';
@@ -75,18 +76,50 @@ function Livelihood({ value }) {
     );
 }
 
-export default function FarmersIndex({ farmers, filters, barangays, sort, perPage, pendingCount }) {
+/** The per-column filters, empty. Also what "Clear filters" resets to. */
+const EMPTY_COLUMNS = {
+    rsbsa_no: '', name: '', contact: '', category: '', sex: '',
+    born_from: '', born_to: '', is_4ps: '', is_indigenous: '', pwd: '',
+};
+
+export default function FarmersIndex({
+    farmers, filters, barangays, sort, perPage, pendingCount, categories = [],
+}) {
     const { can } = usePermissions();
     const [search, setSearch] = useState(filters.search ?? '');
     const [barangay, setBarangay] = useState(filters.barangay ?? '');
     const fileInputRef = useRef(null);
 
+    // Seeded from the server so a bookmarked or refreshed URL comes back with
+    // its filters still in the boxes, not just applied to the results.
+    const [columns, setColumns] = useState(() =>
+        Object.fromEntries(
+            Object.keys(EMPTY_COLUMNS).map(k => [k, filters[k] ?? '']),
+        ));
+
+    const activeColumns = Object.values(columns).filter(v => v !== '' && v !== null).length;
+    const [filtersOpen, setFiltersOpen] = useState(activeColumns > 0);
+
     // Every list control goes back to the server; nothing is filtered in the
     // browser, so results always reflect the whole registry.
-    const go = (params = {}) => router.get('/admin/farmers',
-        { search, barangay, sort: sort.column, direction: sort.direction, per_page: perPage, ...params },
-        { preserveState: true, preserveScroll: true, replace: true },
-    );
+    const go = (params = {}) => {
+        const query = {
+            search, barangay, ...columns,
+            sort: sort.column, direction: sort.direction, per_page: perPage,
+            ...params,
+        };
+
+        /*
+         * Empty values are stripped rather than sent as blanks.
+         *
+         * It keeps a filtered URL readable enough to share, and stops ten
+         * empty parameters riding along on every sort and page change.
+         */
+        router.get('/admin/farmers',
+            Object.fromEntries(Object.entries(query).filter(([, v]) => v !== '' && v != null)),
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
 
     const onSort = (column) => go({
         sort: column,
@@ -97,7 +130,14 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
     const clearFilters = () => {
         setSearch('');
         setBarangay('');
+        setColumns(EMPTY_COLUMNS);
         router.get('/admin/farmers', {}, { preserveState: true, replace: true });
+    };
+
+    /** Clear only the per-column filters, leaving the search box alone. */
+    const clearColumns = () => {
+        setColumns(EMPTY_COLUMNS);
+        go({ ...EMPTY_COLUMNS, page: 1 });
     };
 
     const handleImport = (event) => {
@@ -114,7 +154,7 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
     };
 
     const rows = farmers.data ?? [];
-    const hasFilters = Boolean(filters.search || filters.barangay);
+    const hasFilters = Boolean(filters.search || filters.barangay) || activeColumns > 0;
     const fullName = f => [f.first_name, f.middle_name, f.last_name, f.suffix].filter(Boolean).join(' ');
 
     return (
@@ -207,6 +247,17 @@ export default function FarmersIndex({ farmers, filters, barangays, sort, perPag
                         </select>
                     </label>
                 </div>
+
+                <ColumnFilters
+                    open={filtersOpen}
+                    onToggle={() => setFiltersOpen(o => !o)}
+                    values={columns}
+                    onChange={setColumns}
+                    onApply={() => go({ page: 1 })}
+                    onClear={clearColumns}
+                    categories={categories}
+                    activeCount={activeColumns}
+                />
             </div>
 
             {rows.length === 0 ? (

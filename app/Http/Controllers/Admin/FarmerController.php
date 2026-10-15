@@ -55,6 +55,54 @@ class FarmerController extends Controller
             // "Cali" has to find Caligayan. Picking a suggestion still sends
             // the full name, which matches only itself.
             ->when($request->barangay, fn ($q, $b) => $q->where('barangay', 'like', "%$b%"))
+
+            /*
+             * One filter per column in the table.
+             *
+             * The search box above stays as it is — it spans several columns at
+             * once and is what most people reach for. These narrow a single
+             * column, for the times the office knows exactly what it is after:
+             * every Agri-Youth in one barangay, say, or the 4Ps households.
+             *
+             * All applied in SQL, like the search, because the registry is
+             * expected to hold thousands and a browser-side filter would only
+             * ever see the current page.
+             */
+            ->when($request->rsbsa_no, fn ($q, $v) => $q->where('rsbsa_no', 'like', "%$v%"))
+            ->when($request->contact, fn ($q, $v) => $q->where('mobile_no', 'like', "%$v%"))
+
+            // Name across all three parts, so "dela cruz" finds a middle name
+            // and a surname alike without the user having to know which it is.
+            ->when($request->name, fn ($q, $v) => $q->where(function ($query) use ($v) {
+                $query->where('first_name', 'like', "%$v%")
+                    ->orWhere('middle_name', 'like', "%$v%")
+                    ->orWhere('last_name', 'like', "%$v%");
+            }))
+
+            ->when($request->category, fn ($q, $v) => $q->where('livelihood_type', $v))
+            ->when($request->sex, fn ($q, $v) => $q->where('sex', $v))
+
+            /*
+             * A date RANGE, not a date.
+             *
+             * Nobody looks for farmers born on one particular day. The useful
+             * questions are "who is of retirement age" and "who qualifies as
+             * Agri-Youth", and both are ranges. Either end works on its own.
+             */
+            ->when($request->born_from, fn ($q, $v) => $q->whereDate('birthdate', '>=', $v))
+            ->when($request->born_to, fn ($q, $v) => $q->whereDate('birthdate', '<=', $v))
+
+            /*
+             * The three yes/no columns.
+             *
+             * Compared against the string '1' or '0' rather than treated as a
+             * boolean, because an unset filter arrives as null and "no" arrives
+             * as '0' — and both are falsy. Testing truthiness would silently
+             * turn "show me those who are NOT 4Ps" into "no filter at all".
+             */
+            ->when($request->filled('is_4ps'), fn ($q) => $q->where('is_4ps', $request->is_4ps === '1'))
+            ->when($request->filled('is_indigenous'), fn ($q) => $q->where('is_indigenous', $request->is_indigenous === '1'))
+            ->when($request->filled('pwd'), fn ($q) => $q->where('pwd', $request->pwd === '1'))
             ->orderBy($sort, $direction)
             // Ties on a common surname would otherwise shuffle between pages.
             ->orderBy('id')
@@ -63,7 +111,14 @@ class FarmerController extends Controller
 
         return Inertia::render('Admin/Farmers/Index', [
             'farmers'      => $farmers,
-            'filters'      => $request->only(['search', 'barangay', 'sort', 'direction', 'per_page']),
+            'filters'      => $request->only([
+                'search', 'barangay', 'sort', 'direction', 'per_page',
+                'rsbsa_no', 'name', 'contact', 'category', 'sex',
+                'born_from', 'born_to', 'is_4ps', 'is_indigenous', 'pwd',
+            ]),
+            // Offered from the column's own enum rather than from the rows, so
+            // a category nobody is registered under yet is still selectable.
+            'categories'   => ['Farmer', 'Farm Worker', 'Fisher', 'Agri-Youth'],
             'sort'         => ['column' => $sort, 'direction' => $direction],
             'perPage'      => $perPage,
             'barangays'    => Farmer::verified()->distinct()->orderBy('barangay')->pluck('barangay')->filter()->values(),
