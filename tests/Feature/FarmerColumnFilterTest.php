@@ -113,6 +113,25 @@ class FarmerColumnFilterTest extends TestCase
         $this->assertSame(['Matched'], $this->surnames(['name' => 'Matche']));
     }
 
+    public function test_the_search_box_finds_a_category_and_a_barangay(): void
+    {
+        $this->farmer(['last_name' => 'Youngster', 'livelihood_type' => 'Agri-Youth', 'barangay' => 'Caligayan']);
+        $this->farmer(['last_name' => 'Grower', 'livelihood_type' => 'Farmer', 'barangay' => 'Antagan I']);
+
+        /*
+         * The reported fault: typing "Agri" into the search box returned "No
+         * farmers found" from a registry that plainly held Agri-Youth, because
+         * the search covered only names, RSBSA number and mobile.
+         */
+        $this->assertSame(['Youngster'], $this->surnames(['search' => 'Agri']));
+
+        // A barangay name typed straight into the same box, for the same reason.
+        $this->assertSame(['Grower'], $this->surnames(['search' => 'Antagan']));
+
+        // And the original columns still work.
+        $this->assertSame(['Grower'], $this->surnames(['search' => 'Grower']));
+    }
+
     public function test_filters_combine_rather_than_replace_each_other(): void
     {
         $this->farmer(['last_name' => 'Both', 'sex' => 'Female', 'is_4ps' => true]);

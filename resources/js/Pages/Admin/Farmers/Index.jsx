@@ -168,7 +168,7 @@ export default function FarmersIndex({
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && go({ page: 1 })}
-                            placeholder="Search name, RSBSA number, or mobile…"
+                            placeholder="Search name, RSBSA no., mobile, barangay or category…"
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
                         />
                     </div>
@@ -265,7 +265,14 @@ export default function FarmersIndex({
                     <Users className="mx-auto h-12 w-12 text-green-200 mb-4" />
                     <h3 className="text-lg font-semibold text-gray-900 mb-1">No farmers found</h3>
                     <p className="text-sm text-gray-500">
-                        {hasFilters ? 'Try a different search or barangay.' : 'Add the first farmer to get started.'}
+                        {/* Names the column filters, because a filter left on in
+                            a collapsed panel is the likeliest reason an office
+                            that knows it has farmers is shown none. */}
+                        {hasFilters
+                            ? (activeColumns > 0
+                                ? `Try a different search, or clear the ${activeColumns} column filter${activeColumns === 1 ? '' : 's'} above.`
+                                : 'Try a different search, or narrow it with “Filter by column” above.')
+                            : 'Add the first farmer to get started.'}
                     </p>
                 </div>
             ) : (

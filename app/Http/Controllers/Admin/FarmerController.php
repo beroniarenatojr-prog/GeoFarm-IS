@@ -44,12 +44,24 @@ class FarmerController extends Controller
                 // registration belongs to.
                 'livelihood_type',
             ])
+            /*
+             * The one box, across every column somebody might type into it.
+             *
+             * barangay and livelihood_type were missing, so typing "Agri"
+             * expecting the Agri-Youth, or a barangay name straight into the
+             * search, returned "No farmers found" — a registry that plainly
+             * contains them saying it does not. The dedicated filters below
+             * narrow one column each; this is the box people actually reach
+             * for first, and it should find what they mean.
+             */
             ->when($request->search, fn ($q, $s) => $q->where(function ($query) use ($s) {
                 $query->where('first_name', 'like', "%$s%")
                     ->orWhere('last_name', 'like', "%$s%")
                     ->orWhere('middle_name', 'like', "%$s%")
                     ->orWhere('rsbsa_no', 'like', "%$s%")
-                    ->orWhere('mobile_no', 'like', "%$s%");
+                    ->orWhere('mobile_no', 'like', "%$s%")
+                    ->orWhere('barangay', 'like', "%$s%")
+                    ->orWhere('livelihood_type', 'like', "%$s%");
             }))
             // Partial rather than exact: the filter is a type-ahead now, so
             // "Cali" has to find Caligayan. Picking a suggestion still sends

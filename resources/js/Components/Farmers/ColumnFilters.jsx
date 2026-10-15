@@ -1,4 +1,4 @@
-import { FilterX, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, FilterX, SlidersHorizontal } from 'lucide-react';
 
 /**
  * One filter per column of the registry table.
@@ -65,11 +65,22 @@ export default function ColumnFilters({
     return (
         <div className="mt-3 border-t border-green-100 pt-3">
             <div className="flex items-center justify-between gap-2">
+                {/*
+                    Looks like a button, because it is one.
+
+                    Styled as plain green text it read as a label, and the
+                    office typed "Agri" into the search box instead and was told
+                    there were no farmers. A border and a chevron say it opens.
+                */}
                 <button
                     type="button"
                     onClick={onToggle}
                     aria-expanded={open}
-                    className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-green-800 hover:bg-green-50"
+                    className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        open || activeCount > 0
+                            ? 'border-green-300 bg-green-50 text-green-800'
+                            : 'border-gray-300 text-gray-700 hover:border-green-300 hover:bg-green-50 hover:text-green-800'
+                    }`}
                 >
                     <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
                     Filter by column
@@ -78,6 +89,10 @@ export default function ColumnFilters({
                             {activeCount}
                         </span>
                     )}
+                    <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${open ? '' : '-rotate-90'}`}
+                        aria-hidden="true"
+                    />
                 </button>
 
                 {activeCount > 0 && (
