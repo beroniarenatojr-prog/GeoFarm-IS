@@ -149,6 +149,47 @@ class AssistanceProgramReportTest extends TestCase
         $this->assertStringNotContainsString('2.00 sack', $html);
     }
 
+    public function test_a_whole_number_of_sacks_is_not_mangled_by_the_trimming(): void
+    {
+        $program = $this->program();
+        $farmer = $this->farmer();
+
+        $item = InventoryItem::create([
+            'item_name' => 'Urea Fertilizer', 'unit' => 'sack',
+            'quantity'  => 500, 'category' => 'fertilizer',
+        ]);
+
+        $distribution = AssistanceDistribution::create([
+            'assistance_id'     => $program->id,
+            'farmer_id'         => $farmer->id,
+            'status'            => 'claimed',
+            'distribution_date' => '2026-09-21',
+        ]);
+
+        InventoryDistribution::create([
+            'inventory_item_id'          => $item->id,
+            'assistance_distribution_id' => $distribution->id,
+            'farmer_id'                  => $farmer->id,
+            'quantity'                   => 100,
+            'distribution_date'          => '2026-09-21',
+        ]);
+
+        $html = $this->actingAs($this->user('Admin'))
+            ->get(route('admin.reports.assistance', ['format' => 'html']))
+            ->getContent();
+
+        /*
+         * 100 sacks, not 1.
+         *
+         * rtrim('100.00', '0.') strips every trailing '0' AND '.' — the second
+         * argument is a set of characters, not a suffix — so a hundred sacks
+         * was reported as one, and a thousand as "1,". The zeros have to be
+         * trimmed before the point, each in its own pass.
+         */
+        $this->assertMatchesRegularExpression('/>\s*100\s+sack/', $html);
+        $this->assertDoesNotMatchRegularExpression('/>\s*1\s+sack/', $html);
+    }
+
     public function test_the_report_carries_no_peso_sign(): void
     {
         $program = $this->program();

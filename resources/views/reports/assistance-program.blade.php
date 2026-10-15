@@ -17,17 +17,31 @@
         h2 { font-size: 13px; margin: 20px 0 6px; color: #166534; }
         .sub { color: #6b7280; font-size: 10px; margin: 0 0 14px; }
 
-        .meta { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        /*
+         * Both tables are fixed-layout with declared column widths.
+         *
+         * On auto layout the columns size themselves from their contents, so a
+         * long label pushes its own value sideways and no two rows line up —
+         * which is exactly what "Awaiting collection" did to the 0 beside it.
+         * Fixed layout also keeps the HTML preview and the PDF identical,
+         * because DomPDF's auto-layout measurements are not the browser's.
+         */
+        .meta { width: 100%; border-collapse: collapse; margin-bottom: 16px; table-layout: fixed; }
         .meta td { padding: 3px 0; vertical-align: top; }
-        .meta .k { color: #6b7280; width: 110px; }
+        .meta .k { color: #6b7280; }
         .meta .v { font-weight: bold; }
 
-        table.rows { width: 100%; border-collapse: collapse; }
+        table.rows { width: 100%; border-collapse: collapse; table-layout: fixed; }
         table.rows th { background: #166534; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; }
-        table.rows td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+        table.rows td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         table.rows tr.total td { border-top: 2px solid #166534; border-bottom: 0; font-weight: bold; }
 
+        /* Applied to the heading AND the cells under it, so a column is never
+           aligned one way in the header and another in the body. */
         .num { text-align: right; }
+        /* Long farmer names and item lists wrap instead of forcing the column
+           wider than its declared share. */
+        .wrap { word-wrap: break-word; }
         .muted { color: #9ca3af; }
         .empty { padding: 24px; text-align: center; color: #6b7280; }
     </style>
@@ -39,12 +53,15 @@
         Generated {{ now()->format('F d, Y \a\t g:i A') }}
     </p>
 
+    {{-- Widths on the first row only; the rest inherit them under fixed
+         layout. The third column is the widest label column because
+         "Awaiting collection" lives in it. --}}
     <table class="meta">
         <tr>
-            <td class="k">Type</td>
-            <td class="v">{{ $program->assistanceType?->type_name ?? 'Untyped' }}</td>
-            <td class="k">Status</td>
-            <td class="v">{{ ucfirst($program->status) }}</td>
+            <td class="k" style="width:13%">Type</td>
+            <td class="v" style="width:30%">{{ $program->assistanceType?->type_name ?? 'Untyped' }}</td>
+            <td class="k" style="width:22%">Status</td>
+            <td class="v" style="width:35%">{{ ucfirst($program->status) }}</td>
         </tr>
         <tr>
             <td class="k">Period</td>
@@ -52,8 +69,8 @@
                 {{ $program->start_date?->format('M d, Y') ?? '—' }}
                 to {{ $program->end_date?->format('M d, Y') ?? '—' }}
             </td>
-            <td class="k">Beneficiaries</td>
             {{-- Forfeited rows excluded: those goods went back on the shelf. --}}
+            <td class="k">Beneficiaries</td>
             <td class="v">{{ $summary['beneficiaries'] }}</td>
         </tr>
         <tr>
@@ -69,19 +86,19 @@
     <table class="rows">
         <thead>
             <tr>
-                <th>Farmer</th>
-                <th>Barangay</th>
-                <th>Date</th>
-                <th class="num">Amount (PHP)</th>
-                <th>Item given</th>
-                <th>Status</th>
+                <th style="width:23%">Farmer</th>
+                <th style="width:14%">Barangay</th>
+                <th style="width:12%">Date</th>
+                <th style="width:14%" class="num">Amount (PHP)</th>
+                <th style="width:23%">Item given</th>
+                <th style="width:14%">Status</th>
             </tr>
         </thead>
         <tbody>
             @forelse($data as $row)
                 <tr>
-                    <td>{{ $row['farmer'] }}</td>
-                    <td>{{ $row['barangay'] ?: '—' }}</td>
+                    <td class="wrap">{{ $row['farmer'] }}</td>
+                    <td class="wrap">{{ $row['barangay'] ?: '—' }}</td>
                     <td>{{ $row['date'] ?? '—' }}</td>
                     <td class="num">
                         {{-- A blank cell, not 0.00, where no cash was given: a
@@ -93,7 +110,7 @@
                             <span class="muted">&mdash;</span>
                         @endif
                     </td>
-                    <td>
+                    <td class="wrap">
                         @if(count($row['items']))
                             @foreach($row['items'] as $item)
                                 {{ $item }}@if(!$loop->last)<br>@endif
@@ -110,7 +127,11 @@
 
             @if(count($data))
                 <tr class="total">
-                    <td colspan="3">Total released</td>
+                    {{-- Right-aligned so the label sits immediately left of its
+                         own figure. Left-aligned across three columns it read as
+                         an unrelated caption with a number floating away from
+                         it, which is what made the row look misaligned. --}}
+                    <td colspan="3" class="num">Total released</td>
                     <td class="num">
                         {{--
                             A dash, not 0.00, on a programme that released no

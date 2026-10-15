@@ -101,7 +101,18 @@ class ReportController extends Controller
                 'farmer:id,first_name,last_name,barangay',
                 'program:id,program_name',
                 'parcel:id,barangay',
-                'itemIssues.item:id,item_name,unit',
+                /*
+                 * item is loaded whole, not as id,item_name,unit.
+                 *
+                 * InventoryItem appends status, total_value and category_label,
+                 * and those accessors read quantity, min_level, unit_cost and
+                 * category. Serialised with a narrow column list every item
+                 * came back "out_of_stock" with a null value — wrong, and
+                 * silently so, because a missing attribute reads as null and
+                 * (float) null is 0. It is a small lookup table; the few extra
+                 * columns cost nothing next to being wrong.
+                 */
+                'itemIssues.item',
             ])
             ->when($request->date_from, fn($q, $v) => $q->whereDate('distribution_date', '>=', $v))
             ->when($request->date_to, fn($q, $v) => $q->whereDate('distribution_date', '<=', $v))
@@ -124,7 +135,7 @@ class ReportController extends Controller
         $distributions = AssistanceDistribution::with([
                 'farmer:id,first_name,middle_name,last_name,suffix,rsbsa_no,barangay',
                 'parcel:id,barangay',
-                'itemIssues.item:id,item_name,unit',
+                'itemIssues.item',   // whole, for the same reason as above
             ])
             ->where('assistance_id', $assistance->id)
             ->orderBy('distribution_date')
