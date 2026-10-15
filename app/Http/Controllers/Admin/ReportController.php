@@ -18,6 +18,37 @@ class ReportController extends Controller
         return Inertia::render('Admin/Reports/Index');
     }
 
+    /**
+     * Return a report in the shape that was asked for.
+     *
+     * One place, for one reason: the preview and the PDF must be the same
+     * document. The point of previewing a report is to see what you are about
+     * to hand to the DA, and a preview built from a second rendering path would
+     * eventually drift from the file — showing a column the PDF omits, or the
+     * other way round, which is worse than having no preview at all.
+     *
+     *   format=pdf   the file, as a download
+     *   format=html  the same Blade view, rendered for the preview iframe
+     *   otherwise    the raw figures as JSON
+     *
+     * The report templates are complete HTML documents with their own
+     * print-oriented CSS, which is why the preview is framed rather than
+     * injected into the page: their `table`/`th`/`td` rules would otherwise
+     * restyle the whole dashboard.
+     */
+    private function respond(Request $request, string $view, $data, string $filename)
+    {
+        if ($request->format === 'pdf') {
+            return Pdf::loadView($view, ['data' => $data])->download("$filename.pdf");
+        }
+
+        if ($request->format === 'html') {
+            return response()->view($view, ['data' => $data]);
+        }
+
+        return response()->json($data);
+    }
+
     public function farmerDemographics(Request $request)
     {
         // Reports go to the DA, so they must count verified farmers only.
@@ -28,12 +59,7 @@ class ReportController extends Controller
             ->groupBy('barangay', 'sex')
             ->get();
 
-        if ($request->format === 'pdf') {
-            $pdf = Pdf::loadView('reports.farmer-demographics', compact('data'));
-            return $pdf->download('farmer-demographics.pdf');
-        }
-
-        return response()->json($data);
+        return $this->respond($request, 'reports.farmer-demographics', $data, 'farmer-demographics');
     }
 
     public function cropProduction(Request $request)
@@ -45,12 +71,7 @@ class ReportController extends Controller
             ->groupBy('crop_id', 'season', 'cropping_year')
             ->get();
 
-        if ($request->format === 'pdf') {
-            $pdf = Pdf::loadView('reports.crop-production', compact('data'));
-            return $pdf->download('crop-production.pdf');
-        }
-
-        return response()->json($data);
+        return $this->respond($request, 'reports.crop-production', $data, 'crop-production');
     }
 
     public function livestockInventory(Request $request)
@@ -60,12 +81,7 @@ class ReportController extends Controller
             ->groupBy('livestock_type_id')
             ->get();
 
-        if ($request->format === 'pdf') {
-            $pdf = Pdf::loadView('reports.livestock', compact('data'));
-            return $pdf->download('livestock-inventory.pdf');
-        }
-
-        return response()->json($data);
+        return $this->respond($request, 'reports.livestock', $data, 'livestock-inventory');
     }
 
     public function assistanceSummary(Request $request)
@@ -75,12 +91,7 @@ class ReportController extends Controller
             ->when($request->date_to, fn($q, $v) => $q->whereDate('distribution_date', '<=', $v))
             ->get();
 
-        if ($request->format === 'pdf') {
-            $pdf = Pdf::loadView('reports.assistance', compact('data'));
-            return $pdf->download('assistance-summary.pdf');
-        }
-
-        return response()->json($data);
+        return $this->respond($request, 'reports.assistance', $data, 'assistance-summary');
     }
 
     public function agriculturalAssets(Request $request)
@@ -151,11 +162,6 @@ class ReportController extends Controller
                 ->get(),
         ];
 
-        if ($request->format === 'pdf') {
-            $pdf = Pdf::loadView('reports.agricultural-assets', compact('data'));
-            return $pdf->download('agricultural-assets.pdf');
-        }
-
-        return response()->json($data);
+        return $this->respond($request, 'reports.agricultural-assets', $data, 'agricultural-assets');
     }
 }

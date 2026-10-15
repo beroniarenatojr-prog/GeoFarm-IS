@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-const SIZES = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+// '2xl' exists for the report preview: these are wide tables meant for paper,
+// and at max-w-4xl the columns wrap into an unreadable mess.
+const SIZES = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl', '2xl': 'max-w-6xl' };
 
 const FOCUSABLE =
     'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), ' +
