@@ -253,7 +253,15 @@ export default function FarmersIndex({
                     onToggle={() => setFiltersOpen(o => !o)}
                     values={columns}
                     onChange={setColumns}
-                    onApply={() => go({ page: 1 })}
+                    /*
+                        The overrides matter. A quick chip calls this in the
+                        same tick as its own setColumns, and React has not
+                        applied that yet — without passing the new values
+                        through, the request would carry the state as it was
+                        BEFORE the click and the chip would appear to do
+                        nothing until clicked twice.
+                    */
+                    onApply={(override) => go({ ...(override ?? {}), page: 1 })}
                     onClear={clearColumns}
                     categories={categories}
                     activeCount={activeColumns}
