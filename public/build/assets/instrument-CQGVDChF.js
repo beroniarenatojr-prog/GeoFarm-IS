@@ -1,0 +1,1 @@
+const e=n=>typeof n!="string"||n===""?null:n.replace(/_/g," ").replace(/^./,a=>a.toUpperCase()),t=n=>Array.isArray(n)&&n.length?n.map(e).join(", "):null,r=n=>n==null||n===""?null:`₱${Number(n).toLocaleString("en-PH",{maximumFractionDigits:2})}`,o=n=>n?new Date(n).toLocaleDateString("en-PH",{year:"numeric",month:"long",day:"numeric"}):null;export{t as a,o,r as p,e as r};

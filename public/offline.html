@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#006400">
+    <title>Offline - GeoFarm-IS</title>
+    <!--
+        Everything here is inline on purpose.
+
+        This page is shown precisely when the network is gone, so it cannot
+        depend on the stylesheet, the JavaScript bundle or a web font — any of
+        which may not be in the cache. The only outside file it asks for is the
+        icon, which the service worker precaches alongside this page.
+    -->
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: #f9fafb;
+            color: #111827;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.55;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 420px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        img { width: 72px; height: 72px; margin: 0 auto 20px; display: block; }
+
+        h1 { margin: 0 0 8px; font-size: 20px; font-weight: 700; }
+
+        p { margin: 0 0 20px; font-size: 15px; color: #4b5563; }
+
+        .note {
+            margin: 0;
+            padding: 12px 14px;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #166534;
+            text-align: left;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            background: #006400;
+            color: #fff;
+            border: 0;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        button:hover { background: #004d00; }
+        button:focus-visible { outline: 3px solid #86efac; outline-offset: 2px; }
+
+        .status {
+            margin: 0 0 20px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #b91c1c;
+        }
+
+        .status[data-online="true"] { color: #166534; }
+
+        @media (prefers-color-scheme: dark) {
+            body { background: #111827; color: #f9fafb; }
+            .card { background: #1f2937; border-color: #374151; }
+            p { color: #d1d5db; }
+            .note { background: #064e3b; border-color: #065f46; color: #d1fae5; }
+        }
+    </style>
+</head>
+<body>
+    <main class="card">
+        <img src="/icons/icon-192.png" alt="">
+
+        <h1>You are offline</h1>
+
+        <p>
+            GeoFarm-IS needs a connection to show your farm records, because they
+            are kept at the Agriculture Office and not on this device.
+        </p>
+
+        <p class="status" id="status" data-online="false">No connection</p>
+
+        <button type="button" id="retry">Try again</button>
+
+        <p class="note">
+            Nothing you have entered is lost. Your records are stored at the
+            office &mdash; reopen the app once you have a signal and everything
+            will be there.
+        </p>
+    </main>
+
+    <script>
+        var status = document.getElementById('status');
+        var retry = document.getElementById('retry');
+
+        /*
+         * Reflect the real connection state rather than assuming it is still
+         * down. Someone reaching this page in a dead spot often has a signal
+         * again seconds later, and a button that says "try again" under a label
+         * that still says "no connection" reads as broken.
+         */
+        function render() {
+            var online = navigator.onLine;
+
+            status.textContent = online
+                ? 'Back online - reload to continue'
+                : 'No connection';
+            status.setAttribute('data-online', String(online));
+        }
+
+        window.addEventListener('online', render);
+        window.addEventListener('offline', render);
+        render();
+
+        retry.addEventListener('click', function () {
+            // Back to where they were trying to go, not to this page again.
+            if (document.referrer && document.referrer.indexOf(location.origin) === 0) {
+                location.replace(document.referrer);
+            } else {
+                location.replace('/app');
+            }
+        });
+    </script>
+</body>
+</html>
