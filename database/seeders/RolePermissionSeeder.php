@@ -83,7 +83,14 @@ class RolePermissionSeeder extends Seeder
         });
         $admin->syncPermissions($adminPermissions);
 
-        // Staff/Employee Role - Can view, create, edit but NOT delete critical records
+        /*
+         * Staff/Employee Role — view, create and edit, but not delete.
+         *
+         * Assistance is the exception: Staff may view and edit a programme but
+         * not create one, and not open or close it. Both of those commit the
+         * office to a budget and a set of barangays rather than recording work
+         * already done.
+         */
         $staff = Role::firstOrCreate(['name' => 'Staff']);
         $staff->syncPermissions([
             'view farmers', 'create farmers', 'edit farmers',
@@ -91,7 +98,19 @@ class RolePermissionSeeder extends Seeder
             'view inventory', 'create inventory', 'edit inventory',
             'view supplies', 'create supplies', 'edit supplies', 'distribute supplies',
             'view seasonal', 'create seasonal', 'edit seasonal',
-            'view assistance', 'create assistance', 'edit assistance',
+            /*
+             * Assistance: view and edit, but NOT create.
+             *
+             * Opening a new programme commits the office to a budget and to a
+             * set of barangays, which is the same kind of decision as declaring
+             * one active — and that is already Admin-only via
+             * 'set assistance status'. Letting Staff raise a programme they
+             * could not then open left them half a workflow.
+             *
+             * They keep 'edit assistance', so everything about an existing
+             * programme is still theirs to record.
+             */
+            'view assistance', 'edit assistance',
             'view reports', 'export reports',
             'view maps',
             'view predictive',

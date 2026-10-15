@@ -139,18 +139,52 @@ class AssistanceStatusPermissionTest extends TestCase
         $this->assertSame('active', $programme->fresh()->status);
     }
 
-    public function test_a_programme_staff_create_starts_as_a_draft(): void
+
+    // ── Creating a programme ──────────────────────────────────────────────
+
+    public function test_staff_cannot_create_an_assistance_programme(): void
     {
-        $this->actingAs($this->user('Staff', 'staff3@example.test'))
-            ->post('/admin/assistance', $this->payload([
-                'program_name' => 'Fertiliser Support',
-                'status'       => 'active',
-            ]));
+        $this->actingAs($this->user('Staff', 'staff4@example.test'))
+            ->post('/admin/assistance', $this->payload(['program_name' => 'Should Not Exist']))
+            ->assertForbidden();
 
-        $created = FinancialAssistance::where('program_name', 'Fertiliser Support')->first();
+        $this->assertDatabaseMissing('financial_assistance', ['program_name' => 'Should Not Exist']);
+    }
 
-        $this->assertNotNull($created, 'Staff may still raise a programme');
-        $this->assertSame('draft', $created->status, 'an Admin decides when it opens');
+    public function test_staff_cannot_reach_the_create_form(): void
+    {
+        $this->actingAs($this->user('Staff', 'staff5@example.test'))
+            ->get('/admin/assistance/create')
+            ->assertForbidden();
+    }
+
+    public function test_an_admin_can_still_create_one(): void
+    {
+        $this->actingAs($this->user('Admin', 'admin3@example.test'))
+            ->post('/admin/assistance', $this->payload(['program_name' => 'Rice Input Support']));
+
+        $this->assertDatabaseHas('financial_assistance', ['program_name' => 'Rice Input Support']);
+    }
+
+    public function test_staff_can_still_view_and_edit_an_existing_programme(): void
+    {
+        $programme = $this->programme('active');
+        $staff = $this->user('Staff', 'staff6@example.test');
+
+        $this->actingAs($staff)->get('/admin/assistance')->assertOk();
+
+        /*
+         * Editing is still theirs. Removing creation must not also take away
+         * recording what happened to a programme already running — that is the
+         * bulk of the work and the reason Staff hold 'edit assistance'.
+         */
+        $this->actingAs($staff)
+            ->put("/admin/assistance/{$programme->id}", $this->payload([
+                'program_name' => 'Corn Seed Support (revised)',
+            ]))
+            ->assertRedirect();
+
+        $this->assertSame('Corn Seed Support (revised)', $programme->fresh()->program_name);
     }
 
     // ── The permission itself ─────────────────────────────────────────────
@@ -163,5 +197,9 @@ class AssistanceStatusPermissionTest extends TestCase
 
         // Staff keep everything else about a programme.
         $this->assertTrue($this->user('Staff', 's2@example.test')->can('edit assistance'));
+
+        // Creating one is Admin-only, for the same reason opening one is.
+        $this->assertFalse($this->user('Staff', 's3@example.test')->can('create assistance'));
+        $this->assertTrue($this->user('Admin', 'a2@example.test')->can('create assistance'));
     }
 }
