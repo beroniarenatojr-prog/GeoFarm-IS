@@ -57,6 +57,7 @@ setWorkerUrl(maplibreWorkerUrl);
 
 import toast from 'react-hot-toast';
 import { Toaster } from './Components/Toaster.jsx'
+import GlobalLoading from './Components/ui/GlobalLoading.jsx'
 
 /*
  * CSRF
@@ -137,6 +138,15 @@ createInertiaApp({
             <>
                 <App {...props} />
                 <Toaster />
+                {/*
+                    One loading indicator for the whole application.
+
+                    Every button, link, row click and form submit goes through
+                    the same Inertia visit, so a single listener here covers
+                    them all — and there is nothing for the next screen to
+                    forget to add.
+                */}
+                <GlobalLoading />
             </>
         );
 
@@ -145,4 +155,23 @@ createInertiaApp({
         announce(props.initialPage);
     },
     title: title => `${title} - GeoFarm IS`,
+
+    /*
+     * The thin bar across the top of every page change.
+     *
+     * Inertia shows one by default, but in Tumauini green-on-white at its
+     * stock #4B5563 grey and 2 px it was effectively invisible — which is why
+     * clicking a button felt like nothing had happened.
+     *
+     * This handles the FAST case: a 150 ms delay means an instant navigation
+     * never flickers a bar, while anything slower gets a visible green line.
+     * GlobalLoading handles the slow case from 400 ms. The two do not
+     * overlap in purpose — one says "it is working", the other says "it is
+     * still working, do not click again".
+     */
+    progress: {
+        delay: 150,
+        color: '#16a34a',
+        showSpinner: true,
+    },
 });

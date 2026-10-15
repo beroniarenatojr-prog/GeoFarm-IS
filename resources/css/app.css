@@ -196,3 +196,36 @@
         animation: none !important;
     }
 }
+
+/*
+ * The page-change progress bar.
+ *
+ * Inertia injects its own stylesheet for this at 2px, which on a busy screen
+ * — and against the imagery on the GIS and login pages — was easy to miss
+ * entirely. Three pixels and a soft glow make it read as motion without
+ * becoming decoration.
+ *
+ * Specificity matches Inertia's own selectors so these win on cascade order
+ * rather than needing !important.
+ */
+#nprogress .bar {
+    height: 3px;
+    background: #16a34a;
+}
+
+#nprogress .peg {
+    box-shadow: 0 0 10px #16a34a, 0 0 5px #16a34a;
+}
+
+/* The corner spinner, sized to sit clear of the header search box. */
+#nprogress .spinner {
+    top: 14px;
+    right: 18px;
+}
+
+#nprogress .spinner-icon {
+    width: 16px;
+    height: 16px;
+    border-top-color: #16a34a;
+    border-left-color: #16a34a;
+}
