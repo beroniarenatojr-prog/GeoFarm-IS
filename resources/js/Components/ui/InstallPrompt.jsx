@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Download, X, Share, SquarePlus } from 'lucide-react';
-import { isIos, isStandalone } from '@/utils/pwa';
+import { isIos, isStandalone, promptInstall, useInstallPrompt } from '@/utils/pwa';
 
 /*
  * Remembering a dismissal is a per-viewer convenience, so localStorage is the
@@ -41,42 +41,28 @@ function remember() {
  *   instead of offering a button it cannot honour.
  *
  * Never shown to someone already running the installed app.
+ *
+ * The event itself is held by the shared store in utils/pwa, not by this
+ * component: the sidebar's "Install app" entry needs the same one-shot event,
+ * and two components each listening for it would race over which got to prompt.
+ * This banner is the nudge; the sidebar entry is the permanent way in after it
+ * has been dismissed.
  */
 export default function InstallPrompt() {
-    const [deferredPrompt, setDeferredPrompt] = useState(null);
+    const { canInstall } = useInstallPrompt();
     const [showIosHelp, setShowIosHelp] = useState(false);
     const [dismissed, setDismissed] = useState(true);
 
     useEffect(() => {
         // Already installed, or they have said no before.
-        if (isStandalone() || wasDismissed()) return undefined;
+        if (isStandalone() || wasDismissed()) return;
 
         setDismissed(false);
 
+        // iOS cannot be prompted, so the banner carries the instructions.
         if (isIos()) {
             setShowIosHelp(true);
-            return undefined;
         }
-
-        const capture = (event) => {
-            // Stop Chrome's own mini-infobar so there is one prompt, at a
-            // moment this app chooses, rather than two competing ones.
-            event.preventDefault();
-            setDeferredPrompt(event);
-        };
-
-        const installed = () => {
-            setDeferredPrompt(null);
-            setDismissed(true);
-        };
-
-        window.addEventListener('beforeinstallprompt', capture);
-        window.addEventListener('appinstalled', installed);
-
-        return () => {
-            window.removeEventListener('beforeinstallprompt', capture);
-            window.removeEventListener('appinstalled', installed);
-        };
     }, []);
 
     const close = () => {
@@ -85,18 +71,10 @@ export default function InstallPrompt() {
     };
 
     const install = async () => {
-        if (!deferredPrompt) return;
+        const outcome = await promptInstall();
 
-        deferredPrompt.prompt();
-
-        /*
-         * The event can only be used once. Whether they accepted or not, it is
-         * spent — so it is cleared either way, and a refusal is remembered so
-         * the banner does not nag on the next page.
-         */
-        const { outcome } = await deferredPrompt.userChoice;
-
-        setDeferredPrompt(null);
+        // Either way the banner has had its turn. A refusal is remembered so it
+        // does not nag on the next page — the sidebar entry remains.
         setDismissed(true);
 
         if (outcome === 'dismissed') {
@@ -105,7 +83,7 @@ export default function InstallPrompt() {
     };
 
     if (dismissed) return null;
-    if (!deferredPrompt && !showIosHelp) return null;
+    if (!canInstall && !showIosHelp) return null;
 
     return (
         <div className="fixed inset-x-3 bottom-3 z-[55] md:left-auto md:right-4 md:w-96">
@@ -132,7 +110,7 @@ export default function InstallPrompt() {
                             </p>
                         )}
 
-                        {deferredPrompt && (
+                        {canInstall && (
                             <button
                                 type="button"
                                 onClick={install}

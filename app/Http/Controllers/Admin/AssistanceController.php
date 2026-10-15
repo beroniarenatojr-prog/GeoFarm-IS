@@ -33,8 +33,15 @@ class AssistanceController extends Controller
     /** How long that lockout lasts. */
     private const LOCK_DECAY_SECONDS = 900;
 
-    public function index()
+    public function index(Request $request)
     {
+        $filters = $request->validate([
+            'search' => 'nullable|string|max:100',
+            'status' => 'nullable|in:' . implode(',', FinancialAssistance::STATUSES),
+            'type'   => 'nullable|integer|exists:assistance_types,id',
+            'locked' => 'nullable|in:yes,no',
+        ]);
+
         return Inertia::render('Admin/Assistance/Index', [
             // programItems is eager-loaded because the edit modal opens straight
             // from this list: without it the form would post an empty item list
@@ -59,8 +66,36 @@ class AssistanceController extends Controller
                     'distributions as received_count' => fn ($q) => $q->where('status', 'claimed'),
                 ])
                 ->withSum('distributions', 'amount_given')
+                /*
+                 * Filtered in SQL so the paging and the result count agree with
+                 * the rows. The office runs dozens of programmes a year and was
+                 * scrolling to find last season's.
+                 */
+                ->when(
+                    $filters['search'] ?? null,
+                    fn ($q, $s) => $q->where(function ($query) use ($s) {
+                        $query->where('program_name', 'like', "%$s%")
+                            ->orWhere('description', 'like', "%$s%")
+                            // The type is a column on the list, so it is a
+                            // reasonable thing to type into the box.
+                            ->orWhereHas(
+                                'assistanceType',
+                                fn ($t) => $t->where('type_name', 'like', "%$s%"),
+                            );
+                    }),
+                )
+                ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
+                ->when($filters['type'] ?? null, fn ($q, $v) => $q->where('assistance_type_id', $v))
+                // is_locked is a boolean column, so 'no' has to be matched
+                // explicitly — a falsy check would drop the filter entirely.
+                ->when(
+                    $filters['locked'] ?? null,
+                    fn ($q, $v) => $q->where('is_locked', $v === 'yes'),
+                )
                 ->latest()
-                ->paginate(15),
+                ->paginate(15)
+                ->withQueryString(),
+            'filters' => $filters,
             // Drives whether the padlock is a button or just an indicator.
             'canLock' => auth()->user()?->can('lock assistance') ?? false,
             /*

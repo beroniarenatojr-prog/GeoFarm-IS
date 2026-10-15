@@ -1,4 +1,5 @@
 import FarmerLayout from '@/Layouts/FarmerLayout';
+import InstallAppButton from '@/Components/ui/InstallAppButton';
 import {
     ShieldCheck, ShieldAlert, ShieldX, User, Phone, Mail, MapPin, Users, Lock,
 } from 'lucide-react';
@@ -161,6 +162,17 @@ export default function Profile({ farmer, account, household = [] }) {
 
                 <p className="text-xs text-gray-700">{account.email}</p>
                 <p className="mt-0.5 text-[11px] text-gray-500">Signed in as {account.name}</p>
+
+                {/*
+                    The farmer portal's permanent way to install, matching the
+                    one in the office sidebar. The banner can be dismissed and
+                    the dismissal is remembered, so without this there was no
+                    second chance — and a farmer on a phone is who installing is
+                    really for. Renders nothing once the app is installed.
+                */}
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                    <InstallAppButton tone="light" />
+                </div>
             </section>
 
             <p className="flex items-start gap-2 rounded-xl bg-gray-100 px-4 py-3 text-xs leading-relaxed text-gray-600">

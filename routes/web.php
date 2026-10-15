@@ -209,6 +209,19 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff', 'otp.verified'])->pre
         ->middleware('permission:edit assistance')
         ->name('assistance.beneficiaries.destroy');
 
+    /*
+     * One programme's distribution report, previewed before it is downloaded.
+     *
+     * In ReportController because that is where the PDF rendering and the
+     * preview/download format switch already live, rather than giving
+     * AssistanceController a second copy of both. Gated on "export reports"
+     * like every other report — a preview is the whole report on screen, so
+     * guarding only the file would protect the file and not the figures.
+     */
+    Route::get('assistance/{assistance}/report', [ReportController::class, 'assistanceProgram'])
+        ->middleware('permission:export reports')
+        ->name('assistance.report');
+
     // Farm Parcels
     Route::get('parcels', [ParcelController::class, 'index'])->middleware('permission:view parcels')->name('parcels.index');
     Route::get('parcels/create', [ParcelController::class, 'create'])->middleware('permission:create parcels')->name('parcels.create');

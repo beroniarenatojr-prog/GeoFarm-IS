@@ -5,6 +5,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import GlobalSearch from '@/Components/ui/GlobalSearch';
 import FarmerScanButton from '@/Components/ui/FarmerScanButton';
 import UserMenu from '@/Components/ui/UserMenu';
+import InstallAppButton from '@/Components/ui/InstallAppButton';
 import {
     LayoutDashboard,
     Users,
@@ -512,6 +513,18 @@ export default function AdminLayout({
 
                 {/* User footer */}
                 <div className="border-t border-white/10 py-3 px-4 relative z-10">
+                    {/*
+                        Installing lives here rather than in a nav section
+                        because it is not a destination and carries no
+                        permission — every role may install the app, and there
+                        is no page to land on.
+
+                        It renders nothing once the app is installed.
+                    */}
+                    <div className="mb-2">
+                        <InstallAppButton expanded={expanded} />
+                    </div>
+
                     {/* Profile opens a panel beside the sidebar; logout lives in it. */}
                     <UserMenu expanded={expanded} onOpenChange={setMenuOpen} />
                 </div>

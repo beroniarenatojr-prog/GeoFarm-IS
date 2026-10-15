@@ -1,7 +1,9 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Lock, Unlock, Plus, Users, UserPlus } from 'lucide-react';
+import {
+    Lock, Unlock, Plus, Users, UserPlus, FileText, Download, Printer, Loader2, Search,
+} from 'lucide-react';
 import { StandardActionMenu } from '@/Components/ui/ActionMenu';
 import ModalShell from '@/Components/ui/ModalShell';
 import LockConfirmModal from '@/Components/ui/LockConfirmModal';
@@ -24,6 +26,7 @@ const STATUS_STYLE = {
 
 export default function AssistanceIndex({
     programs, canLock, canSetStatus, hasLockPassword, assistanceTypes = [], barangays = [], stockItems = [],
+    filters = {},
 }) {
     const { can } = usePermissions();
 
@@ -31,10 +34,18 @@ export default function AssistanceIndex({
     const [editing, setEditing] = useState(null);
     // The programme whose lock is being confirmed.
     const [confirmingLock, setConfirmingLock] = useState(null);
+    // The programme whose report is being previewed.
+    const [reporting, setReporting] = useState(null);
 
     return (
         <AdminLayout title="Agricultural Assistance Programs">
-            <div className="flex justify-end mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <ProgramFilters
+                    filters={filters}
+                    assistanceTypes={assistanceTypes}
+                    total={programs.total}
+                />
+
                 {can('create assistance') && (
                     <button type="button" onClick={() => setEditing('new')}
                         className="inline-flex items-center gap-2 bg-gradient-to-r from-green-600 to-green-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:from-green-700 hover:to-green-800 shadow-md hover:shadow-lg transition-all">
@@ -68,12 +79,19 @@ export default function AssistanceIndex({
                                 can={can}
                                 onEdit={() => setEditing(p)}
                                 onToggleLock={() => setConfirmingLock(p)}
+                                onReport={() => setReporting(p)}
                             />
                         ))}
                         {programs.data.length === 0 && (
                             <tr>
                                 <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
-                                    No assistance programs yet.
+                                    {/* A filtered empty list is a different
+                                        thing from an empty registry, and saying
+                                        "no programs yet" to someone who has just
+                                        filtered reads as data loss. */}
+                                    {Object.values(filters).some(Boolean)
+                                        ? 'No programs match these filters.'
+                                        : 'No assistance programs yet.'}
                                 </td>
                             </tr>
                         )}
@@ -102,7 +120,194 @@ export default function AssistanceIndex({
                     onClose={() => setConfirmingLock(null)}
                 />
             )}
+
+            {reporting && (
+                <ReportPreviewModal
+                    key={reporting.id}
+                    program={reporting}
+                    onClose={() => setReporting(null)}
+                />
+            )}
         </AdminLayout>
+    );
+}
+
+/**
+ * The programme's distribution report, previewed before it is downloaded.
+ *
+ * An iframe over the same route the download uses, with format=html. The
+ * report template is a complete HTML document with its own print CSS targeting
+ * bare `table`, `th` and `td` — injected into this page it would restyle the
+ * programme list behind it.
+ */
+function ReportPreviewModal({ program, onClose }) {
+    const [loading, setLoading] = useState(true);
+
+    const base = `/admin/assistance/${program.id}/report`;
+    const frameId = `assistance-report-${program.id}`;
+
+    return (
+        <ModalShell
+            open
+            onClose={onClose}
+            title={`${program.program_name} — Distribution Report`}
+            size="2xl"
+            bodyClass="p-0 overflow-hidden"
+            footer={(
+                <>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                        Close
+                    </button>
+
+                    {/* Prints the frame, not the page: window.print() here would
+                        print the programme list behind the modal. */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const frame = document.getElementById(frameId);
+                            frame?.contentWindow?.focus();
+                            frame?.contentWindow?.print();
+                        }}
+                        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                        <Printer className="h-4 w-4" aria-hidden="true" />
+                        Print
+                    </button>
+
+                    <a
+                        href={`${base}?format=pdf`}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[#006400] px-4 py-2 text-sm font-medium text-white hover:bg-[#004d00]"
+                    >
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        Download PDF
+                    </a>
+                </>
+            )}
+        >
+            <div className="relative h-[70vh] bg-gray-100">
+                {loading && (
+                    <div
+                        className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white"
+                        role="status"
+                    >
+                        <Loader2 className="h-6 w-6 animate-spin text-[#006400]" aria-hidden="true" />
+                        <p className="text-sm text-gray-500">Building the report…</p>
+                    </div>
+                )}
+
+                <iframe
+                    id={frameId}
+                    src={`${base}?format=html`}
+                    title={`${program.program_name} distribution report`}
+                    onLoad={() => setLoading(false)}
+                    className="h-full w-full border-0 bg-white"
+                />
+            </div>
+        </ModalShell>
+    );
+}
+
+/**
+ * Filters for the programme list.
+ *
+ * Everything goes back to the server — the list is paged, so filtering the
+ * fifteen rows on screen would search only the page in front of you and leave
+ * the count disagreeing with the rows.
+ */
+function ProgramFilters({ filters, assistanceTypes, total }) {
+    const [form, setForm] = useState({
+        search: filters.search ?? '',
+        status: filters.status ?? '',
+        type:   filters.type ?? '',
+        locked: filters.locked ?? '',
+    });
+
+    const go = (next = {}) => {
+        const query = { ...form, ...next };
+        Object.keys(query).forEach(k => !query[k] && delete query[k]);
+
+        router.get('/admin/assistance', query, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const clear = () => {
+        setForm({ search: '', status: '', type: '', locked: '' });
+        router.get('/admin/assistance', {}, { preserveState: true, preserveScroll: true });
+    };
+
+    const active = Object.values(form).filter(Boolean).length;
+
+    return (
+        <form
+            onSubmit={(e) => { e.preventDefault(); go(); }}
+            className="flex flex-wrap items-center gap-2"
+        >
+            <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                    value={form.search}
+                    onChange={e => setForm(f => ({ ...f, search: e.target.value }))}
+                    placeholder="Search programs"
+                    aria-label="Search programs"
+                    className="w-52 rounded-lg border border-gray-200 py-2 pl-8 pr-3 text-sm focus:border-[#006400] focus:ring-1 focus:ring-[#006400]"
+                />
+            </div>
+
+            <select
+                value={form.status}
+                onChange={e => { const v = e.target.value; setForm(f => ({ ...f, status: v })); go({ status: v }); }}
+                aria-label="Filter by status"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#006400] focus:ring-1 focus:ring-[#006400]"
+            >
+                <option value="">All statuses</option>
+                {['draft', 'active', 'inactive', 'completed', 'cancelled'].map(s => (
+                    <option key={s} value={s} className="capitalize">{s}</option>
+                ))}
+            </select>
+
+            <select
+                value={form.type}
+                onChange={e => { const v = e.target.value; setForm(f => ({ ...f, type: v })); go({ type: v }); }}
+                aria-label="Filter by type"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#006400] focus:ring-1 focus:ring-[#006400]"
+            >
+                <option value="">All types</option>
+                {assistanceTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.type_name}</option>
+                ))}
+            </select>
+
+            <select
+                value={form.locked}
+                onChange={e => { const v = e.target.value; setForm(f => ({ ...f, locked: v })); go({ locked: v }); }}
+                aria-label="Filter by lock state"
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-[#006400] focus:ring-1 focus:ring-[#006400]"
+            >
+                <option value="">Locked and unlocked</option>
+                <option value="yes">Locked only</option>
+                <option value="no">Unlocked only</option>
+            </select>
+
+            {active > 0 && (
+                <button
+                    type="button"
+                    onClick={clear}
+                    className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                    Clear
+                </button>
+            )}
+
+            <span className="text-xs text-gray-500">
+                {total} program{total === 1 ? '' : 's'}
+            </span>
+        </form>
     );
 }
 
@@ -149,7 +354,7 @@ function ProgramFormModal({ program, assistanceTypes, barangays, stockItems, onC
     );
 }
 
-function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLock }) {
+function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLock, onReport }) {
     // Local pending flag, so toggling one row does not grey out the whole table.
     const [busy, setBusy] = useState(null);
 
@@ -292,12 +497,30 @@ function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLo
                             locking a programme should not hide its
                             beneficiaries.
                         */
-                        extraActions={[{
-                            label: 'Manage beneficiaries',
-                            icon: UserPlus,
-                            href: `/admin/assistance/${p.id}/beneficiaries`,
-                            permission: 'view assistance',
-                        }]}
+                        extraActions={[
+                            {
+                                label: 'Manage beneficiaries',
+                                icon: UserPlus,
+                                href: `/admin/assistance/${p.id}/beneficiaries`,
+                                permission: 'view assistance',
+                            },
+                            {
+                                /*
+                                    Opens the preview, not the download. The
+                                    point is to read the report before it goes
+                                    anywhere, so this is a button rather than a
+                                    link to the PDF.
+
+                                    Available while locked: a locked programme is
+                                    frozen against edits, and reporting on it is
+                                    exactly what a frozen programme is for.
+                                */
+                                label: 'Report',
+                                icon: FileText,
+                                onClick: onReport,
+                                permission: 'export reports',
+                            },
+                        ]}
                         deletePermission="delete assistance"
                         deleteDisabled={locked}
                         deleteDisabledTitle="Locked — unlock this program before deleting"
