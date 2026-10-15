@@ -762,12 +762,21 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
                               {farmer.children.map((child) => (
                                 <li key={child.id}>
                                   {child.name}
-                                  {(child.sex || child.birthdate) && (
+                                  {/* Occupation reads as what was typed when the
+                                      office chose "Other" — showing the word
+                                      "Other" on its own tells a reader nothing.
+                                      Anything not recorded is simply left out
+                                      rather than padded with "Not provided". */}
+                                  {(child.sex || child.birthdate || child.occupation || child.current_location) && (
                                     <span className="text-gray-500 dark:text-gray-400">
                                       {' — '}
                                       {[
                                         child.sex,
                                         child.birthdate ? formatDate(child.birthdate, 'date-only') : null,
+                                        child.occupation === 'Other'
+                                          ? (child.occupation_other || 'Other')
+                                          : child.occupation,
+                                        child.current_location,
                                       ].filter(Boolean).join(', ')}
                                     </span>
                                   )}

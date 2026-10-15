@@ -26,6 +26,24 @@ const MACHINERY_TYPES = [
 
 const MACHINERY_ACQUISITION = ['purchased', 'donated', 'loaned', 'inherited'];
 
+/*
+ * What a child may be recorded as doing.
+ *
+ * Must stay in step with FarmerChild::OCCUPATIONS, which is what the server
+ * validates against — a value only here is discarded on save, silently, and
+ * the office would see the selection vanish with no explanation.
+ */
+const CHILD_OCCUPATIONS = [
+    'Student',
+    'Farmer / Agricultural Worker',
+    'Government Employee',
+    'Private Employee',
+    'Self-Employed / Business Owner',
+    'Overseas Filipino Worker (OFW)',
+    'Unemployed',
+    'Other',
+];
+
 const MACHINERY_STATUSES = [
     { value: 'active', label: 'Working' },
     { value: 'for_repair', label: 'Needs repair' },
@@ -112,6 +130,11 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
             name: c.name || '',
             sex: c.sex || '',
             birthdate: c.birthdate ? String(c.birthdate).slice(0, 10) : '',
+            // Empty for every child recorded before these existed, which is
+            // the honest answer: nobody was asked.
+            occupation: c.occupation || '',
+            occupation_other: c.occupation_other || '',
+            current_location: c.current_location || '',
         })) || [],
         religion: farmer?.religion || '',
         highest_education: farmer?.highest_education || '',
@@ -247,7 +270,10 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
     };
 
     const addChild = () => {
-        setData('children', [...data.children, { name: '', sex: '', birthdate: '' }]);
+        setData('children', [...data.children, {
+            name: '', sex: '', birthdate: '',
+            occupation: '', occupation_other: '', current_location: '',
+        }]);
     };
 
     const removeChild = (index) => {
@@ -1015,7 +1041,18 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                         {data.children.length > 0 && (
                                             <div className="space-y-3 mb-4">
                                                 {data.children.map((child, index) => (
-                                                    <div key={index} className="flex items-end gap-3">
+                                                    /*
+                                                        A bordered card per child, not one flex row.
+
+                                                        Three fields fitted on a line; five do not, and
+                                                        squeezing them would leave each too narrow to
+                                                        read on the office laptops. The card also makes
+                                                        it obvious which fields belong to which child
+                                                        once a household has four of them — the thing
+                                                        that goes wrong first on a repeater.
+                                                    */
+                                                    <div key={index} className="rounded-xl border border-gray-200 p-3">
+                                                        <div className="flex items-end gap-3">
                                                         <div className="flex-1">
                                                             <label className="block text-xs font-medium text-gray-600 mb-1">
                                                                 Full Name <span className="text-gray-400">(Buong Pangalan)</span>
@@ -1061,6 +1098,61 @@ export default function FormRSBSA({ farmer, farmTypes = [], commodities = [], ba
                                                         >
                                                             <X className="h-5 w-5" />
                                                         </button>
+                                                        </div>
+
+                                                        {/* Both optional. A household may know where a
+                                                            child is without knowing what they do, or
+                                                            neither — and the registration should not
+                                                            stall over either. */}
+                                                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                    Occupation <span className="text-gray-400">(Trabaho)</span>
+                                                                </label>
+                                                                <select
+                                                                    value={child.occupation}
+                                                                    onChange={e => updateChild(index, 'occupation', e.target.value)}
+                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                >
+                                                                    <option value="">—</option>
+                                                                    {CHILD_OCCUPATIONS.map(o => (
+                                                                        <option key={o} value={o}>{o}</option>
+                                                                    ))}
+                                                                </select>
+
+                                                                {/* Only when "Other" is chosen. The server
+                                                                    discards this text unless the dropdown
+                                                                    still says Other, so the two can never
+                                                                    end up contradicting each other. */}
+                                                                {child.occupation === 'Other' && (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={child.occupation_other}
+                                                                        onChange={e => updateChild(index, 'occupation_other', e.target.value)}
+                                                                        placeholder="Please specify (Pakisaad)"
+                                                                        className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                    />
+                                                                )}
+                                                            </div>
+
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                                    Current Location <span className="text-gray-400">(Kasalukuyang Kinaroroonan)</span>
+                                                                </label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={child.current_location}
+                                                                    onChange={e => updateChild(index, 'current_location', e.target.value)}
+                                                                    placeholder="e.g., San Vicente, Tumauini, Isabela"
+                                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                                                                />
+                                                                {/* Named so staff know a child abroad belongs
+                                                                    here too, rather than being left blank. */}
+                                                                <p className="mt-1 text-xs text-gray-400">
+                                                                    Barangay, municipality, province — or another country.
+                                                                </p>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>

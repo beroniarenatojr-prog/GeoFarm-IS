@@ -139,8 +139,21 @@ class Farmer extends Model
                 continue;
             }
 
-            $birthdate = trim((string) ($row['birthdate'] ?? ''));
-            $sex       = trim((string) ($row['sex'] ?? ''));
+            $birthdate  = trim((string) ($row['birthdate'] ?? ''));
+            $sex        = trim((string) ($row['sex'] ?? ''));
+            $occupation = trim((string) ($row['occupation'] ?? ''));
+            $otherWork  = trim((string) ($row['occupation_other'] ?? ''));
+            $location   = trim((string) ($row['current_location'] ?? ''));
+
+            /*
+             * Occupation is checked against the list, the same way sex is
+             * checked against the enum: anything unrecognised becomes null
+             * rather than being stored as typed. The dropdown can only offer
+             * the permitted values, so a stray one means a crafted request.
+             */
+            $occupation = in_array($occupation, FarmerChild::OCCUPATIONS, true)
+                ? $occupation
+                : null;
 
             $children[] = [
                 'name' => $name,
@@ -149,6 +162,24 @@ class Farmer extends Model
                 // truncation error that takes the whole save down with it.
                 'sex'       => in_array($sex, ['Male', 'Female'], true) ? $sex : null,
                 'birthdate' => $birthdate !== '' ? $birthdate : null,
+
+                'occupation' => $occupation,
+
+                /*
+                 * Only kept alongside "Other". Typing a trade, then changing
+                 * the dropdown to Student, would otherwise leave the old text
+                 * behind on the record contradicting the selection.
+                 *
+                 * "Other" with nothing typed is still saved as Other rather
+                 * than rejected: it says the child's livelihood is not in the
+                 * list, which is real information, and refusing it would fail
+                 * a whole farmer registration over one optional detail.
+                 */
+                'occupation_other' => ($occupation === 'Other' && $otherWork !== '')
+                    ? $otherWork
+                    : null,
+
+                'current_location' => $location !== '' ? $location : null,
             ];
         }
 
