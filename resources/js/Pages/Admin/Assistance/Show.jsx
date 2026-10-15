@@ -2,7 +2,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { useForm, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Lock, Unlock, Send, Wallet, Package as PackageIcon } from 'lucide-react';
+import { Lock, Unlock, Send, Wallet, Package as PackageIcon, Users, ChevronRight } from 'lucide-react';
 import ModalShell from '@/Components/ui/ModalShell';
 import FarmerPicker from '@/Components/ui/FarmerPicker';
 import InterventionPicker from '@/Components/Assistance/InterventionPicker';
@@ -350,6 +350,25 @@ export default function AssistanceShow({
                     </p>
                 </div>
             </div>
+
+            {/* Who the programme is for, as opposed to what has been handed
+                over. Reachable while locked: the list is read-only in that
+                state, and freezing the figures should not hide the people. */}
+            <Link
+                href={`/admin/assistance/${program.id}/beneficiaries`}
+                className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 transition-colors hover:border-[#006400]/40 hover:bg-green-50/50"
+            >
+                <span className="flex items-center gap-3">
+                    <Users className="h-5 w-5 text-[#006400]" />
+                    <span>
+                        <span className="block text-sm font-semibold text-gray-900">Manage beneficiaries</span>
+                        <span className="block text-xs text-gray-500">
+                            Choose which farmers this programme is for, before anything is handed out
+                        </span>
+                    </span>
+                </span>
+                <ChevronRight className="h-5 w-5 shrink-0 text-gray-400" />
+            </Link>
 
             {/* Add distribution — hidden entirely while the program is locked,
                 so nobody fills in a form the server will refuse. */}

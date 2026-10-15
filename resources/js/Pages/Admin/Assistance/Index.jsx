@@ -1,7 +1,7 @@
 import AdminLayout from '@/Layouts/AdminLayout';
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Lock, Unlock, Plus } from 'lucide-react';
+import { Lock, Unlock, Plus, Users, UserPlus } from 'lucide-react';
 import { StandardActionMenu } from '@/Components/ui/ActionMenu';
 import ModalShell from '@/Components/ui/ModalShell';
 import LockConfirmModal from '@/Components/ui/LockConfirmModal';
@@ -50,7 +50,10 @@ export default function AssistanceIndex({
                             <th className="px-4 py-3.5 font-semibold">Type</th>
                             <th className="px-4 py-3.5 font-semibold">Status</th>
                             <th className="px-4 py-3.5 font-semibold">Period</th>
-                            <th className="px-4 py-3.5 font-semibold">Barangays</th>
+                            {/* Beneficiaries, not barangays. "3 selected" told
+                                nobody who the programme is actually for, and the
+                                target barangays are on the programme page. */}
+                            <th className="px-4 py-3.5 font-semibold">Beneficiaries</th>
                             <th className="px-4 py-3.5 font-semibold">Distributions</th>
                             <th className="px-4 py-3.5 font-semibold text-right">Actions</th>
                         </tr>
@@ -211,11 +214,31 @@ function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLo
             </td>
 
             <td className="px-4 py-3.5">
-                {p.barangays && p.barangays.length > 0
-                    ? <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-medium px-2 py-1 rounded-full ring-1 ring-blue-200">
-                        {p.barangays.length} selected
-                    </span>
-                    : <span className="text-xs text-gray-400 italic">All barangays</span>}
+                {p.on_programme_count > 0
+                    ? (
+                        <Link
+                            href={`/admin/assistance/${p.id}/beneficiaries`}
+                            className="group inline-flex flex-col gap-0.5"
+                        >
+                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs font-bold px-2 py-1 rounded-full ring-1 ring-blue-200 group-hover:bg-blue-100">
+                                <Users className="h-3 w-3" />
+                                {p.on_programme_count} farmer{p.on_programme_count === 1 ? '' : 's'}
+                            </span>
+                            {/* Selected and served are different things, so the
+                                split is shown rather than one blended number. */}
+                            <span className="text-[11px] text-gray-500">
+                                {p.received_count} received · {p.awaiting_count} awaiting
+                            </span>
+                        </Link>
+                    )
+                    : (
+                        <Link
+                            href={`/admin/assistance/${p.id}/beneficiaries`}
+                            className="text-xs text-gray-400 italic hover:text-[#006400] hover:underline"
+                        >
+                            None yet — add farmers
+                        </Link>
+                    )}
             </td>
 
             <td className="px-4 py-3.5">
@@ -262,6 +285,19 @@ function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLo
                         editPermission="edit assistance"
                         editDisabled={locked}
                         editDisabledTitle="Locked — unlock this program before editing"
+                        /*
+                            Reachable while locked, on view permission.
+                            The screen is read-only in that state — it is the
+                            only place that lists who a programme is for, and
+                            locking a programme should not hide its
+                            beneficiaries.
+                        */
+                        extraActions={[{
+                            label: 'Manage beneficiaries',
+                            icon: UserPlus,
+                            href: `/admin/assistance/${p.id}/beneficiaries`,
+                            permission: 'view assistance',
+                        }]}
                         deletePermission="delete assistance"
                         deleteDisabled={locked}
                         deleteDisabledTitle="Locked — unlock this program before deleting"

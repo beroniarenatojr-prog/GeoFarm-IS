@@ -41,6 +41,23 @@ class AssistanceController extends Controller
             // and silently wipe the programme's entitlements.
             'programs' => FinancialAssistance::with(['assistanceType', 'barangays', 'locker:id,name', 'programItems'])
                 ->withCount('distributions')
+                /*
+                 * Who the programme is for, split from what has actually been
+                 * handed over. The list used to show how many barangays were
+                 * ticked, which said nothing about the beneficiaries.
+                 *
+                 * The aliases deliberately avoid pending_count / claimed_count /
+                 * beneficiaries_count: the model defines accessors by those
+                 * names, and an accessor overrides the counted attribute during
+                 * serialisation — turning one query into one per row for the
+                 * same figure.
+                 */
+                ->withCount([
+                    // Forfeited excluded: the goods went back on the shelf.
+                    'distributions as on_programme_count' => fn ($q) => $q->where('status', '!=', 'forfeited'),
+                    'distributions as awaiting_count' => fn ($q) => $q->where('status', 'pending'),
+                    'distributions as received_count' => fn ($q) => $q->where('status', 'claimed'),
+                ])
                 ->withSum('distributions', 'amount_given')
                 ->latest()
                 ->paginate(15),
@@ -900,5 +917,456 @@ class AssistanceController extends Controller
         return back()->with('success', $locking
             ? "\"{$assistance->program_name}\" is locked. Its details and distributions are now read-only."
             : "\"{$assistance->program_name}\" is unlocked and can be edited again.");
+    }
+
+    /**
+     * Choose which farmers a programme is for.
+     *
+     * A distribution row IS the beneficiary record — 'pending' means assigned
+     * and not yet served, 'claimed' means served. So this screen writes the
+     * same table the hand-out does, rather than introducing a second idea of
+     * who a programme is for that could disagree with it.
+     *
+     * Paginated and filtered in SQL. The registry holds thousands of farmers
+     * and the office picks a few dozen; loading them all to filter in the
+     * browser would be slow and would only ever search the page on screen.
+     */
+    public function beneficiaries(Request $request, FinancialAssistance $assistance)
+    {
+        $filters = $request->validate([
+            'search'    => 'nullable|string|max:100',
+            'barangay'  => 'nullable|string|max:50',
+            'commodity' => 'nullable|string|max:100',
+            'assigned'  => 'nullable|in:yes,no',
+        ]);
+
+        /*
+         * Which barangays the programme targets, if any.
+         *
+         * Names rather than ids, because farmers carry a barangay NAME while
+         * the pivot carries ids. An empty list means the programme is open to
+         * the whole municipality, which is the common case and must not be
+         * read as "nobody qualifies".
+         */
+        $targetBarangays = $assistance->barangays()->pluck('name')->all();
+
+        /*
+         * Everyone already on this programme, and in what state, in one query
+         * rather than one per row.
+         *
+         * A farmer can hold more than one row — forfeited once, then served
+         * again — so the live row has to win. keyBy() on its own keeps whichever
+         * came last, which would show a farmer as forfeited while they are in
+         * fact pending collection, or offer them for selection twice.
+         */
+        $existing = AssistanceDistribution::where('assistance_id', $assistance->id)
+            ->get(['id', 'farmer_id', 'status', 'amount_given', 'quantity_given'])
+            ->groupBy('farmer_id')
+            ->map(fn ($rows) => $rows->firstWhere('status', '!=', 'forfeited') ?? $rows->last());
+
+        $farmers = $this->farmerPickerQuery($filters, $assistance)
+            ->select([
+                'id', 'rsbsa_no', 'first_name', 'middle_name', 'last_name', 'suffix',
+                'barangay', 'sex', 'mobile_no',
+            ])
+            // The parcels drive the commodity column and its filter. withCount
+            // rather than loading every parcel for every row.
+            ->with(['parcels:id,farmer_id,parcel_number,barangay,commodity,total_area_ha'])
+            ->withCount('parcels')
+            ->orderBy('last_name')->orderBy('first_name')->orderBy('id')
+            ->paginate(20)
+            ->withQueryString()
+            ->through(function (Farmer $farmer) use ($existing, $targetBarangays) {
+                $row = $existing->get($farmer->id);
+
+                return [
+                    'id'         => $farmer->id,
+                    'name'       => $farmer->full_name,
+                    'rsbsa_no'   => $farmer->rsbsa_no,
+                    'barangay'   => $farmer->barangay,
+                    'parcels'    => $farmer->parcels_count,
+                    // The crops on their land, deduplicated — a farmer with
+                    // three rice parcels grows rice, not rice three times.
+                    'commodities' => $farmer->parcels->pluck('commodity')
+                        ->filter()->unique()->values()->all(),
+                    'area_ha'    => round((float) $farmer->parcels->sum('total_area_ha'), 2),
+
+                    /*
+                     * Assigned means a row that still stands. A farmer whose
+                     * only record was forfeited is selectable again — the same
+                     * rule the hand-out check applies — so they must not come
+                     * back ticked and uncheckable.
+                     */
+                    'assigned'       => $row !== null && $row->status !== 'forfeited',
+                    'status'         => $row?->status,
+                    'distribution_id' => $row?->id,
+                    'amount_given'   => $row?->amount_given,
+                    'quantity_given' => $row?->quantity_given,
+
+                    /*
+                     * Outside the programme's target barangays — shown, not
+                     * hidden. A programme may legitimately cover a farmer from
+                     * elsewhere, and the brief is explicit that differing
+                     * barangays must not disqualify anyone. The flag lets the
+                     * screen say so rather than the server deciding silently.
+                     */
+                    'outside_target' => $targetBarangays !== []
+                        && ! in_array($farmer->barangay, $targetBarangays, true),
+                ];
+            });
+
+        return Inertia::render('Admin/Assistance/Beneficiaries', [
+            'program' => [
+                'id'            => $assistance->id,
+                'program_name'  => $assistance->program_name,
+                'status'        => $assistance->status,
+                'is_locked'     => (bool) $assistance->is_locked,
+                'total_budget'  => $assistance->total_budget,
+                'standard_cash_amount' => $assistance->standard_cash_amount,
+                'type'          => $assistance->assistanceType?->type_name,
+                'distribution_type' => $assistance->assistanceType?->distribution_type,
+                'start_date'    => $assistance->start_date?->toDateString(),
+                'end_date'      => $assistance->end_date?->toDateString(),
+            ],
+            'farmers'         => $farmers,
+            'filters'         => $filters,
+            'barangays'       => Farmer::verified()->distinct()->orderBy('barangay')
+                ->pluck('barangay')->filter()->values(),
+            'commodities'     => FarmParcel::query()->distinct()->orderBy('commodity')
+                ->pluck('commodity')->filter()->values(),
+            'targetBarangays' => $targetBarangays,
+            'summary'         => $this->beneficiarySummary($assistance),
+            'selectAll'       => $this->selectableIds($filters, $assistance, $targetBarangays),
+            'can'             => [
+                'assign' => $request->user()?->can('edit assistance') ?? false,
+            ],
+        ]);
+    }
+
+    /**
+     * The farmer list the picker shows, as a query both callers share.
+     *
+     * Extracted so "Select all matching" cannot drift from what the table
+     * lists. Two copies of these conditions would eventually disagree by one
+     * clause, and the difference would show up as Select All quietly adding
+     * farmers the office never saw on screen.
+     */
+    private function farmerPickerQuery(array $filters, FinancialAssistance $assistance)
+    {
+        return Farmer::query()
+            // Unverified farmers are not offered at all: their details have not
+            // been checked, so they cannot be committed to a programme.
+            ->verified()
+            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(function ($query) use ($s) {
+                $query->where('first_name', 'like', "%$s%")
+                    ->orWhere('middle_name', 'like', "%$s%")
+                    ->orWhere('last_name', 'like', "%$s%")
+                    ->orWhere('rsbsa_no', 'like', "%$s%");
+            }))
+            ->when($filters['barangay'] ?? null, fn ($q, $b) => $q->where('barangay', $b))
+            ->when(
+                $filters['commodity'] ?? null,
+                fn ($q, $c) => $q->whereHas('parcels', fn ($p) => $p->where('commodity', 'like', "%$c%")),
+            )
+            /*
+             * Assigned / not assigned, resolved in SQL so it pages correctly.
+             * Filtering the page in PHP would give pages of wildly different
+             * sizes and a "Showing 1–20 of N" line that did not match the rows
+             * underneath it.
+             *
+             * Forfeited does not count as assigned, the same rule the hand-out
+             * check uses: those goods went back on the shelf.
+             */
+            ->when(
+                ($filters['assigned'] ?? null) === 'yes',
+                fn ($q) => $q->whereHas(
+                    'distributions',
+                    fn ($d) => $d->where('assistance_id', $assistance->id)->where('status', '!=', 'forfeited'),
+                ),
+            )
+            ->when(
+                ($filters['assigned'] ?? null) === 'no',
+                fn ($q) => $q->whereDoesntHave(
+                    'distributions',
+                    fn ($d) => $d->where('assistance_id', $assistance->id)->where('status', '!=', 'forfeited'),
+                ),
+            );
+    }
+
+    /** How many ids "Select all matching" will carry in one page load. */
+    private const SELECT_ALL_CAP = 500;
+
+    /**
+     * The ids "Select all matching" would tick, for the current filter.
+     *
+     * Needed because the list is paged on the server: a checkbox in the header
+     * can only reach the twenty rows on screen, and the office selecting "all
+     * rice farmers in Antagan I" means all of them, not the first page.
+     *
+     * Already-assigned farmers are left out — ticking someone the server will
+     * skip anyway only produces a "40 added, 12 skipped" message for work the
+     * screen could have got right.
+     *
+     * Capped, and the cap is reported rather than applied in silence. An
+     * unfiltered registry of thousands would otherwise put thousands of ids in
+     * every page load, and a truncated selection that claims to be everything
+     * is how a programme comes to miss half its beneficiaries.
+     */
+    private function selectableIds(array $filters, FinancialAssistance $assistance, array $targetBarangays): array
+    {
+        $rows = $this->farmerPickerQuery($filters, $assistance)
+            ->whereDoesntHave(
+                'distributions',
+                fn ($d) => $d->where('assistance_id', $assistance->id)->where('status', '!=', 'forfeited'),
+            )
+            ->orderBy('last_name')->orderBy('first_name')->orderBy('id')
+            ->limit(self::SELECT_ALL_CAP + 1)
+            ->get(['id', 'barangay']);
+
+        $kept = $rows->take(self::SELECT_ALL_CAP);
+
+        return [
+            'ids'       => $kept->pluck('id')->values()->all(),
+            /*
+             * Which of those sit outside the target barangays, so the screen can
+             * raise the override prompt for a Select All it never displayed.
+             * Without it the prompt would depend on which page happened to be
+             * on screen when the button was pressed.
+             */
+            'outside'   => $targetBarangays === [] ? [] : $kept
+                ->reject(fn ($f) => in_array($f->barangay, $targetBarangays, true))
+                ->pluck('id')->values()->all(),
+            'truncated' => $rows->count() > self::SELECT_ALL_CAP,
+            'cap'       => self::SELECT_ALL_CAP,
+        ];
+    }
+
+    /**
+     * The programme's beneficiary figures, counted from the real records.
+     *
+     * Assigned and served are reported separately on purpose. Selecting a
+     * farmer is a plan; a claimed row is goods that left the store. A single
+     * "beneficiaries" number that blurs the two is how a report comes to claim
+     * deliveries that have not happened.
+     */
+    private function beneficiarySummary(FinancialAssistance $assistance): array
+    {
+        $rows = AssistanceDistribution::where('assistance_id', $assistance->id)
+            ->get(['status', 'amount_given']);
+
+        $live = $rows->where('status', '!=', 'forfeited');
+
+        $planned = round((float) $live->sum('amount_given'), 2);
+        $budget = $assistance->total_budget === null ? null : (float) $assistance->total_budget;
+
+        return [
+            // Forfeited rows are excluded: those goods went back on the shelf.
+            'assigned'  => $live->count(),
+            'pending'   => $rows->where('status', 'pending')->count(),
+            'claimed'   => $rows->where('status', 'claimed')->count(),
+            'forfeited' => $rows->where('status', 'forfeited')->count(),
+
+            'planned_allocation' => $planned,
+            'total_budget'       => $budget,
+            // Null rather than the budget itself when no budget is set: an
+            // unbudgeted programme has no remainder, and showing one invites
+            // the figure to be read as money available.
+            'remaining_budget'   => $budget === null ? null : round($budget - $planned, 2),
+            'over_budget'        => $budget !== null && $planned > $budget,
+        ];
+    }
+
+    /**
+     * Put a batch of farmers on the programme.
+     *
+     * Creates 'pending' rows — assigned, awaiting distribution. It deliberately
+     * does NOT mark anything as received: that is distribute()'s job, it
+     * deducts live inventory, and conflating the two would record hand-outs
+     * that never happened.
+     *
+     * Every rule is re-checked here regardless of what the screen allowed:
+     * the lock, the programme status, that each farmer exists and is verified,
+     * and that they are not already on the list. A request can be made without
+     * the screen.
+     */
+    public function assignBeneficiaries(Request $request, FinancialAssistance $assistance)
+    {
+        if ($blocked = $this->blockIfLocked($assistance)) {
+            return $blocked;
+        }
+
+        /*
+         * A finished or cancelled programme takes no new beneficiaries.
+         * Reopening it is an explicit act through the edit form, which is
+         * where that decision belongs.
+         */
+        if (in_array($assistance->status, ['completed', 'cancelled'], true)) {
+            return back()->with('error', sprintf(
+                '"%s" is %s. Reopen it before adding beneficiaries.',
+                $assistance->program_name,
+                $assistance->status,
+            ));
+        }
+
+        $data = $request->validate([
+            'farmer_ids'   => 'required|array|min:1',
+            'farmer_ids.*' => 'integer|exists:farmers,id',
+            'amount'       => 'nullable|numeric|min:0',
+            /*
+             * The deliberate override for farmers outside the programme's
+             * target barangays.
+             *
+             * Checked here and not only in the browser. The screen can only
+             * flag the rows it has on display, so a selection built across
+             * several pages could carry farmers whose flag was never shown —
+             * and a guard that pages can walk around is not a guard.
+             */
+            'allow_outside_target' => 'nullable|boolean',
+        ]);
+
+        /*
+         * Verified only, re-checked server side.
+         *
+         * The picker lists verified farmers, but exists:farmers,id above would
+         * accept any id at all — including a self-registered farmer whose
+         * documents the office has not seen. Their data has not been checked,
+         * so they cannot be committed to a programme.
+         */
+        $eligible = Farmer::verified()
+            ->whereIn('id', $data['farmer_ids'])
+            ->pluck('id');
+
+        $refused = count($data['farmer_ids']) - $eligible->count();
+
+        // Already on the list, in any state that still counts. A forfeited row
+        // does not block a fresh assignment, for the same reason it does not
+        // block a fresh hand-out.
+        $alreadyOn = AssistanceDistribution::where('assistance_id', $assistance->id)
+            ->whereIn('farmer_id', $eligible)
+            ->where('status', '!=', 'forfeited')
+            ->pluck('farmer_id')
+            ->all();
+
+        $toAdd = $eligible->reject(fn ($id) => in_array($id, $alreadyOn, true))->values();
+
+        /*
+         * Farmers outside the programme's declared barangays.
+         *
+         * Refused only until someone says so explicitly — a farmer may live in
+         * one barangay and farm in another, and the brief is clear that a
+         * differing barangay must not disqualify anyone. What it must not do is
+         * happen by accident on a programme declared for three barangays.
+         *
+         * Nothing is added when this trips: a partial batch would leave staff
+         * unsure which farmers made it on, and re-ticking is cheap compared with
+         * reconciling that.
+         */
+        $targets = $assistance->barangays()->pluck('name')
+            ->filter()->map(fn ($n) => mb_strtolower(trim($n)));
+
+        if ($targets->isNotEmpty() && ! $request->boolean('allow_outside_target')) {
+            $outside = Farmer::whereIn('id', $toAdd)
+                ->get(['id', 'first_name', 'last_name', 'barangay'])
+                ->reject(fn (Farmer $f) => $targets->contains(mb_strtolower(trim((string) $f->barangay))));
+
+            if ($outside->isNotEmpty()) {
+                return back()->with('error', sprintf(
+                    '%d of those farmers %s outside the barangays "%s" covers (%s). Confirm the override to add them anyway.',
+                    $outside->count(),
+                    $outside->count() === 1 ? 'is' : 'are',
+                    $assistance->program_name,
+                    $assistance->barangays->pluck('name')->implode(', '),
+                ));
+            }
+        }
+
+        if ($toAdd->isEmpty()) {
+            return back()->with('error', $refused > 0
+                ? 'None of those farmers could be added — they are already on this programme or are not verified.'
+                : 'Those farmers are already on this programme.');
+        }
+
+        $amount = $data['amount'] ?? $assistance->standard_cash_amount;
+
+        /*
+         * One transaction. A half-written batch would leave the office unable
+         * to tell which of forty farmers made it onto the list.
+         */
+        DB::transaction(function () use ($assistance, $toAdd, $amount, $request) {
+            foreach ($toAdd as $farmerId) {
+                AssistanceDistribution::create([
+                    'assistance_id' => $assistance->id,
+                    'farmer_id'     => $farmerId,
+                    // Assigned, not served. distribute() sets the real date.
+                    'status'        => 'pending',
+                    'distribution_date' => now()->toDateString(),
+                    'amount_given'  => $amount,
+                    'assigned_by'   => $request->user()?->id,
+                    'assigned_at'   => now(),
+                ]);
+            }
+        });
+
+        AuditService::log('assistance_beneficiaries_added', 'financial_assistance', $assistance->id, null, [
+            'added'    => $toAdd->count(),
+            'skipped'  => count($alreadyOn),
+            'refused'  => $refused,
+            'amount_each' => $amount,
+            // Worth recording: it is the one rule on this screen a person can
+            // decide to set aside, so the trail should show when they did.
+            'outside_target_override' => $targets->isNotEmpty() && $request->boolean('allow_outside_target'),
+        ]);
+
+        $message = sprintf(
+            '%d farmer%s added to "%s".',
+            $toAdd->count(),
+            $toAdd->count() === 1 ? '' : 's',
+            $assistance->program_name,
+        );
+
+        // Says what it left out rather than quietly adding fewer than asked.
+        if ($alreadyOn !== [] || $refused > 0) {
+            $message .= sprintf(
+                ' %d skipped (already on the programme%s).',
+                count($alreadyOn) + $refused,
+                $refused > 0 ? ' or not verified' : '',
+            );
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Take a farmer off the programme.
+     *
+     * Only while still pending. Once something has actually been handed over,
+     * the record is history and removing it would erase goods that left the
+     * store — forfeiting is how a claimed release is undone, and that is a
+     * different act with its own reason.
+     */
+    public function removeBeneficiary(Request $request, FinancialAssistance $assistance, AssistanceDistribution $distribution)
+    {
+        if ($blocked = $this->blockIfLocked($assistance)) {
+            return $blocked;
+        }
+
+        if ((int) $distribution->assistance_id !== (int) $assistance->id) {
+            return back()->with('error', 'That record does not belong to this programme.');
+        }
+
+        if ($distribution->status !== 'pending') {
+            return back()->with('error', sprintf(
+                'That farmer has already been marked %s. Forfeit the release instead of removing the record.',
+                $distribution->status,
+            ));
+        }
+
+        AuditService::log('assistance_beneficiary_removed', 'assistance_distributions', $distribution->id, [
+            'farmer_id' => $distribution->farmer_id,
+        ], null);
+
+        $distribution->delete();
+
+        return back()->with('success', 'Farmer removed from the programme.');
     }
 }

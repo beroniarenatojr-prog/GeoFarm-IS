@@ -32,6 +32,15 @@ class AssistanceDistribution extends Model
         'is_customized',
         'customization_reason',
         'notes',
+        /*
+         * Two different acts by two different people: who put this farmer on
+         * the list, and who later confirmed they received the goods. Both
+         * fillable, or they would be dropped in silence exactly as
+         * intervention_id and farm_parcel_id were.
+         */
+        'assigned_by',
+        'assigned_at',
+        'recorded_by',
     ];
 
     protected $casts = [
@@ -39,7 +48,33 @@ class AssistanceDistribution extends Model
         'quantity_given' => 'decimal:2',
         'amount_given' => 'decimal:2',
         'is_customized' => 'boolean',
+        'assigned_at' => 'datetime',
     ];
+
+    /** Who added this farmer to the programme. */
+    public function assignedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    /** Who confirmed the farmer actually received it. */
+    public function recordedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
+    }
+
+    /**
+     * On the list but not yet served.
+     *
+     * 'pending' is the assigned state. A farmer is a beneficiary from the
+     * moment they are selected; whether they have actually received anything
+     * is a different question, and conflating the two is what makes a report
+     * claim goods were handed out that are still in the store.
+     */
+    public function isAwaitingDistribution(): bool
+    {
+        return $this->status === 'pending';
+    }
 
     public $timestamps = false;
 

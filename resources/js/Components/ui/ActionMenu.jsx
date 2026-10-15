@@ -203,6 +203,15 @@ export function StandardActionMenu({
     editDisabledTitle = "Not available",
     deleteDisabledTitle = "Not available",
     customActions = [],
+    /*
+     * Ordinary actions, placed above Delete.
+     *
+     * customActions appends after it, which leaves a destructive item sitting
+     * in the middle of the menu with routine ones below — easy to hit by
+     * mistake, and it reads as though Delete were just another entry. Anything
+     * that is not destructive belongs here.
+     */
+    extraActions = [],
 }) {
     const actions = [];
 
@@ -226,6 +235,8 @@ export function StandardActionMenu({
             disabledTitle: editDisabledTitle,
         });
     }
+
+    actions.push(...extraActions.filter(Boolean));
 
     if (showDelete) {
         actions.push({

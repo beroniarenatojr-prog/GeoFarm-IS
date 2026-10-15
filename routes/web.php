@@ -190,6 +190,24 @@ Route::middleware(['auth', 'role:Admin|Super Admin|Staff', 'otp.verified'])->pre
         ->middleware('permission:lock assistance')
         ->name('assistance.lock');
 
+    /*
+     * Choosing who a programme is for.
+     *
+     * A distribution row IS the beneficiary record, so this writes the same
+     * table the hand-out does — 'pending' means assigned and awaiting
+     * collection. Viewing the list only needs "view assistance"; changing it
+     * needs "edit assistance", the same permission that records a release.
+     */
+    Route::get('assistance/{assistance}/beneficiaries', [AssistanceController::class, 'beneficiaries'])
+        ->middleware('permission:view assistance')
+        ->name('assistance.beneficiaries');
+    Route::post('assistance/{assistance}/beneficiaries', [AssistanceController::class, 'assignBeneficiaries'])
+        ->middleware('permission:edit assistance')
+        ->name('assistance.beneficiaries.store');
+    Route::delete('assistance/{assistance}/beneficiaries/{distribution}', [AssistanceController::class, 'removeBeneficiary'])
+        ->middleware('permission:edit assistance')
+        ->name('assistance.beneficiaries.destroy');
+
     // Farm Parcels
     Route::get('parcels', [ParcelController::class, 'index'])->middleware('permission:view parcels')->name('parcels.index');
     Route::get('parcels/create', [ParcelController::class, 'create'])->middleware('permission:create parcels')->name('parcels.create');
