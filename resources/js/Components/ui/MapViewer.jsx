@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+// Sets MapLibre's worker URL before any map is constructed. Required in
+// every module that creates one — see the file for why.
+import '@/utils/maplibreWorker';
 import * as maplibregl from 'maplibre-gl';
 import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -18,7 +21,23 @@ function supportsWebGL() {
   }
 }
 
-export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12, height = '400px' }) {
+/**
+ * @param showLocation  Add a "find me" control. Off by default, and deliberately
+ *   opt-in: a map that asks for location the moment it mounts trains people to
+ *   dismiss the permission dialog, and most screens here have no use for it.
+ *   With it on, nothing is requested until the control is pressed — that press
+ *   IS the consent, and the browser's own dialog follows it.
+ */
+export default function MapViewer({
+  geojson,
+  center = TUMAUINI_CENTER,
+  zoom = 12,
+  height = '400px',
+  showLocation = false,
+}) {
+  // Why locating failed, in words a farmer can act on. MapLibre's own control
+  // fails silently apart from a greyed-out button.
+  const [locationError, setLocationError] = useState(null);
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const popupRef = useRef(null);
@@ -56,6 +75,37 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+
+    if (showLocation) {
+      const locate = new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: true,
+        showUserLocation: true,
+      });
+
+      map.addControl(locate, 'top-right');
+
+      /*
+       * Say what went wrong instead of leaving a dead button.
+       *
+       * All three cases are ordinary in the field: permission refused (code 1),
+       * no GPS fix under tree cover or indoors (2), and a slow fix that times
+       * out (3). The map itself keeps working in every one of them — the
+       * parcels are drawn from the office's survey, not from where the phone
+       * thinks it is.
+       */
+      locate.on('error', (event) => {
+        const message = event?.code === 1
+          ? 'Location permission was declined. Your parcels are still shown — only the "you are here" dot needs it.'
+          : event?.code === 3
+            ? 'Finding your location is taking too long. Try again under open sky.'
+            : 'Your location is not available on this device right now.';
+
+        setLocationError(message);
+      });
+
+      locate.on('geolocate', () => setLocationError(null));
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       map.resize();
@@ -224,6 +274,17 @@ export default function MapViewer({ geojson, center = TUMAUINI_CENTER, zoom = 12
         <TumauiniMapFallback className="absolute inset-0" />
       ) : (
         <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+      )}
+
+      {/* Over the map rather than below it, so it cannot change the height the
+          caller asked for and push the page around. */}
+      {locationError && (
+        <div
+          role="status"
+          className="absolute inset-x-2 bottom-2 rounded-lg bg-gray-900/90 px-3 py-2 text-xs text-white backdrop-blur-sm"
+        >
+          {locationError}
+        </div>
       )}
     </div>
   );

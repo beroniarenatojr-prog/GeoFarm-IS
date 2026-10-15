@@ -73,12 +73,9 @@ class LoginController extends Controller
         // Any old sessions will be invalidated by the middleware
         $user->update(['active_session_id' => $request->session()->getId()]);
         
-        // Redirect based on user role
-        if ($user->hasRole('Farmer')) {
-            return redirect()->route('farmer.dashboard');
-        }
-        
-        return redirect()->route('admin.dashboard');
+        // Redirect based on user role. The decision lives on the model because
+        // the installed app's start URL has to make the same one.
+        return redirect()->route($user->homeRoute());
     }
 
     /**

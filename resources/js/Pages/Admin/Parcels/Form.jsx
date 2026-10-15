@@ -6,6 +6,9 @@ import FarmerPicker from '@/Components/ui/FarmerPicker';
 import SuggestInput from '@/Components/ui/SuggestInput';
 import SuggestSelect from '@/Components/ui/SuggestSelect';
 import BoundaryImport from '@/Components/Parcels/BoundaryImport';
+// Sets MapLibre's worker URL before any map is constructed. Required in
+// every module that creates one — see the file for why.
+import '@/utils/maplibreWorker';
 import * as maplibregl from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import bbox from '@turf/bbox';

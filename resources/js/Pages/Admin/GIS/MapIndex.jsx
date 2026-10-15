@@ -6,6 +6,9 @@ import TumauiniMapFallback from '@/Components/ui/TumauiniMapFallback';
 import BoundaryImport from '@/Components/Parcels/BoundaryImport';
 import QrScanner from '@/Components/ui/QrScanner';
 import toast from 'react-hot-toast';
+// Sets MapLibre's worker URL before any map is constructed. Required in
+// every module that creates one — see the file for why.
+import '@/utils/maplibreWorker';
 import * as maplibregl from 'maplibre-gl';
 import { buildDraftFeatures } from '@/utils/draftGeometry';
 import area from '@turf/area';

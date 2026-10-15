@@ -1,4 +1,5 @@
 import { router } from '@inertiajs/react';
+import FarmerTabBar from '@/Components/ui/FarmerTabBar';
 import {
     MapPin, LogOut, FileText, Sprout, ShieldCheck, ShieldAlert, ShieldX,
     Beef, Bird, Fish, TreePine, PiggyBank, Mail, Phone, User, Calendar,
@@ -418,7 +419,7 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
     const seasons = farmer.crop_seasons ?? [];
 
     return (
-        <div className="relative min-h-screen bg-[#FAF8F3]">
+        <div className="relative min-h-screen bg-[#FAF8F3] pb-20 md:pb-0">
             {/*
                 The municipal seal, as a watermark behind the page.
 
@@ -950,6 +951,11 @@ export default function FarmerDashboard({ auth, farmer, stats, parcelGeoJson, ma
                     <p className="mt-1 text-xs">&copy; 2026 GeoFarm-IS. All rights reserved.</p>
                 </div>
             </div>
+
+            {/* The same navigation as the rest of the portal. Mounted here
+                rather than wrapping this page in FarmerLayout so its existing
+                design and header are left exactly as they are. */}
+            <FarmerTabBar />
         </div>
     );
 }

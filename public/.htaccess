@@ -9,6 +9,26 @@
 # zero tiles and the map appears to have no data on it.
 <IfModule mod_mime.c>
     AddType text/javascript .mjs
+
+    # The web app manifest. Apache does not map .webmanifest by default, and a
+    # manifest served as octet-stream is ignored — with no console error and no
+    # symptom beyond an install option that never appears.
+    AddType application/manifest+json .webmanifest
+</IfModule>
+
+# Never let the service worker go stale.
+#
+# A cached sw.js is a cached set of caching rules: if this file is held by the
+# browser or an intermediary, a fix to what may be stored — the thing standing
+# between one farmer's records and the next person to pick up the phone — would
+# not reach devices until the copy expired. Browsers already bypass the HTTP
+# cache for worker updates, but that behaviour is recent enough to be worth
+# stating rather than relying on.
+<IfModule mod_headers.c>
+    <Files "sw.js">
+        Header set Cache-Control "no-cache, max-age=0, must-revalidate"
+        Header set Service-Worker-Allowed "/"
+    </Files>
 </IfModule>
 
 <IfModule mod_rewrite.c>

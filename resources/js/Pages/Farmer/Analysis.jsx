@@ -1,4 +1,5 @@
 import FarmAnalysisReport from '@/Components/Analytics/FarmAnalysisReport';
+import FarmerTabBar from '@/Components/ui/FarmerTabBar';
 
 /**
  * The farmer's own copy of their farm analysis.
@@ -13,13 +14,18 @@ import FarmAnalysisReport from '@/Components/Analytics/FarmAnalysisReport';
  */
 export default function FarmerAnalysis(props) {
     return (
-        <div className="min-h-screen bg-[#FAF8F3]">
+        <div className="min-h-screen bg-[#FAF8F3] pb-20 md:pb-0">
             <FarmAnalysisReport
                 {...props}
                 audience="farmer"
                 backHref="/farmer/dashboard"
                 backLabel="Back to my dashboard"
             />
+
+            {/* The same navigation as the rest of the portal. Mounted here
+                rather than wrapping this page in FarmerLayout so its existing
+                design and header are left exactly as they are. */}
+            <FarmerTabBar />
         </div>
     );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import FarmerTabBar from '@/Components/ui/FarmerTabBar';
 import { useForm, Link } from '@inertiajs/react';
 import { CloudRain, TrendingDown, Sprout, HandHeart, AlertTriangle, ChevronLeft, ChevronRight, Check, Layers } from 'lucide-react';
 
@@ -462,7 +463,7 @@ export default function RiskAssessment({ farmer, seasons = [], latest, activitie
     }
 
     return (
-        <div className="relative min-h-screen bg-[#FAF8F3] px-4 py-8">
+        <div className="relative min-h-screen bg-[#FAF8F3] px-4 py-8 pb-24 md:pb-8">
             <div className="mx-auto max-w-4xl space-y-6 pb-16">
                 <div>
                     <Link href={'/farmer/dashboard'} className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#006400]">
@@ -876,6 +877,11 @@ export default function RiskAssessment({ farmer, seasons = [], latest, activitie
                     </div>
                 </form>
             </div>
+
+            {/* The same navigation as the rest of the portal. Mounted here
+                rather than wrapping this page in FarmerLayout so its existing
+                design and header are left exactly as they are. */}
+            <FarmerTabBar />
         </div>
     );
 }

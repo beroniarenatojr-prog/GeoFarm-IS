@@ -54,6 +54,21 @@ class User extends Authenticatable
         return $this->hasOne(Farmer::class);
     }
 
+    /**
+     * Where this account belongs when it arrives with nowhere particular to go.
+     *
+     * Used by the login redirect and by the installed app's start URL, which is
+     * the reason it is a method rather than two copies of the same `if`. The
+     * launcher icon opens the app cold with no intended URL, and sending every
+     * installer to the public landing page — or sending an office account to
+     * the farmer portal, which refuses them — is how an installed app comes to
+     * feel broken on launch.
+     */
+    public function homeRoute(): string
+    {
+        return $this->hasRole('Farmer') ? 'farmer.dashboard' : 'admin.dashboard';
+    }
+
     public function hasLockPassword(): bool
     {
         return filled($this->lock_password);

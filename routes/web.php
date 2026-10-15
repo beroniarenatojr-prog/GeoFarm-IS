@@ -33,6 +33,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\FarmerRegistrationController;
 use App\Http\Controllers\Farmer\ClimateRiskAssessmentController;
 use App\Http\Controllers\Farmer\FarmAnalysisController as FarmerFarmAnalysisController;
+use App\Http\Controllers\Farmer\PortalController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\VerifyOtpController;
 use App\Http\Controllers\Auth\RegisterController;
@@ -408,7 +409,40 @@ Route::middleware(['auth', 'role:Farmer'])->prefix('farmer')->name('farmer.')->g
     // reason as above: with one, the ownership check becomes something that
     // can be forgotten.
     Route::get('/analysis', [FarmerFarmAnalysisController::class, 'show'])->name('analysis');
+
+    /*
+     * The three destinations the mobile bottom navigation needs.
+     *
+     * Inside this group, so they inherit ['auth', 'role:Farmer'] — and no
+     * farmer id in any path, for the reason the controller explains.
+     */
+    Route::get('/farms', [PortalController::class, 'farms'])->name('farms');
+    Route::get('/assistance', [PortalController::class, 'assistance'])->name('assistance');
+    Route::get('/advisory', [PortalController::class, 'advisory'])->name('advisory');
+    Route::get('/profile', [PortalController::class, 'profile'])->name('profile');
 });
 
 // Landing Page
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+
+/*
+ * Where the installed app opens.
+ *
+ * This is the manifest's start_url, and it exists because a launcher icon opens
+ * the app cold with no intended URL. Pointing start_url at the landing page
+ * would greet every farmer with the public marketing page on every launch;
+ * pointing it at the farmer portal would greet an office account with a refusal
+ * screen. So it asks who is signed in and forwards them, exactly as the login
+ * redirect does — both call User::homeRoute() so the two cannot drift.
+ *
+ * Deliberately outside any auth middleware: a signed-out launch must reach the
+ * login page rather than a 403, and Laravel's redirect to login would otherwise
+ * stash /app as the intended URL and bounce them straight back here.
+ */
+Route::get('/app', function () {
+    $user = auth()->user();
+
+    return $user
+        ? redirect()->route($user->homeRoute())
+        : redirect()->route('login');
+})->name('pwa.start');
