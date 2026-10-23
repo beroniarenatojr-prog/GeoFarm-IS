@@ -1,9 +1,9 @@
 import { Link } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import {
-    MapPin, Leaf, Users, TrendingUp, FileText, Shield, Database, BarChart3,
+    MapPin, Leaf, Users, TrendingUp, Shield, Database,
     Map, Sprout, ChevronRight, ChevronDown, UserPlus, Building2, LayoutDashboard,
-    Ruler, HandHeart,
+    Ruler, HandHeart, Smartphone, BadgeCheck,
 } from 'lucide-react';
 import Photo from '@/Components/Landing/Photo';
 import { ABOUT_TUMAUINI, LANDING_PHOTOS } from '@/config/landingPhotos';
@@ -162,17 +162,6 @@ function Reveal({ children, delay = 0, className = '', variant = 'text' }) {
 /* -------------------------------------------------------------------- page */
 
 export default function Landing({ canLogin, stats, barangays = [] }) {
-    const features = [
-        { icon: Users, title: 'Farmer Registry', description: 'Complete RSBSA-aligned profiles with demographics, household details, and document records.' },
-        { icon: Map, title: 'GIS Mapping', description: 'Draw and store exact parcel boundaries with GeoJSON for precise land visualization.' },
-        { icon: Database, title: 'Farm Inventory', description: 'Track crops, livestock, poultry, tree crops, and fishponds in one place.' },
-        { icon: Sprout, title: 'Seasonal Tracking', description: 'Monitor planting schedules, harvests, yields, and inputs across every cropping year.' },
-        { icon: TrendingUp, title: 'Yield Forecasting', description: 'Statistical estimates from real harvest history, always shown with a confidence level.' },
-        { icon: HandHeart, title: 'Assistance Programs', description: 'Record aid distribution by barangay and track exactly who received what.' },
-        { icon: BarChart3, title: 'Reports & Analytics', description: 'Generate PDF reports on demographics, production, livestock, and assistance.' },
-        { icon: Shield, title: 'Secure & Role-Based', description: 'Granular permissions and a full audit trail on every record that changes.' },
-    ];
-
     const steps = [
         { icon: UserPlus, title: 'Register online', description: 'Fill in the RSBSA form from any phone or computer. It takes a few minutes and saves your place in the queue.' },
         { icon: Building2, title: 'Verify at the office', description: 'Bring your valid ID and documents to the Municipal Agriculture Office so staff can confirm your details.' },
@@ -430,7 +419,7 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
             </section>
 
             {/* ==================================================== how it works */}
-            <section id="how-it-works" className="py-24 bg-white relative overflow-hidden">
+            <section id="how-it-works" className="py-24 bg-[#FAF8F3] relative overflow-hidden">
                 {/* soft background bloom */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[42rem] h-[42rem] bg-[#90EE90]/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -485,46 +474,133 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                 </div>
             </section>
 
-            {/* ======================================================== features */}
-            <section id="features" className="py-24 bg-[#FAF8F3]">
+            {/* =================================================== your account */}
+            {/*
+                This replaced an eight-card grid headed "For the Agriculture
+                Office". The office already has the system — they sign in every
+                morning — so the largest block on the public page was selling a
+                system to people who were not reading it, while the farmer who
+                WAS reading learned nothing about what they get. Its office-side
+                points also duplicated "Why GeoFarm-IS?" immediately below.
+
+                Everything claimed here is a screen that exists in the farmer
+                portal. Nothing on a public municipal page should be a promise.
+            */}
+            <section id="your-account" className="py-24 bg-white overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <Reveal className="text-center mb-16">
-                        <span className="inline-block px-4 py-1.5 rounded-full bg-[#006400]/10 text-[#006400] text-sm font-bold uppercase tracking-wider mb-4">
-                            For the Agriculture Office
+                    <Reveal className="text-center">
+                        <span className="inline-block rounded-full bg-[#006400]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#006400]">
+                            Once you are registered
                         </span>
-                        <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4 tracking-tight">
-                            Everything in one system
+                        <h2 className="mx-auto mt-5 max-w-3xl text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+                            Your farm records, on your phone
                         </h2>
-                        <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-                            From the first farmer record to the season's harvest forecast.
+                        <p className="mx-auto mt-4 max-w-2xl text-xl text-gray-600">
+                            No queue, no request letter. Sign in and see what the office holds for you.
                         </p>
                     </Reveal>
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {features.map((feature, i) => {
-                            const Icon = feature.icon;
-                            return (
-                                <Reveal key={feature.title} delay={(i % 4) * 100}>
-                                    <div className="group relative h-full p-6 bg-white rounded-2xl border border-gray-200 hover:border-[#006400]/40 hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden">
-                                        <div className="absolute -top-12 -right-12 h-32 w-32 bg-[#90EE90]/0 group-hover:bg-[#90EE90]/25 rounded-full blur-2xl transition-colors duration-500" />
+                    <div className="mt-16 grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
+                        {/* the phone */}
+                        <Reveal variant="photo" className="gf-scrollfx">
+                            <div className="relative mx-auto w-[clamp(220px,70vw,280px)]">
+                                {/* A device frame rather than a plain rectangle:
+                                    it says "this is the app on your phone" before
+                                    a word is read. */}
+                                <div className="rounded-[2.75rem] border-[12px] border-gray-900 bg-gray-900 shadow-2xl">
+                                    <Photo
+                                        photo={LANDING_PHOTOS.farmerApp}
+                                        className="aspect-[9/19] rounded-[1.9rem] bg-white"
+                                        imageClass="gf-scroll-parallax"
+                                        zoomOnHover={false}
+                                    />
+                                </div>
 
-                                        <div className="relative">
-                                            <div className="bg-gradient-to-br from-[#006400] to-[#228B22] w-12 h-12 rounded-xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
-                                                <Icon className="h-6 w-6 text-white" />
-                                            </div>
-                                            <h3 className="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
-                                            <p className="text-gray-600 text-sm leading-relaxed">{feature.description}</p>
+                                {/* The notch. aria-hidden — it is drawing, not
+                                    information. */}
+                                <div
+                                    aria-hidden="true"
+                                    className="absolute left-1/2 top-[12px] h-6 w-28 -translate-x-1/2 rounded-b-2xl bg-gray-900"
+                                />
+
+                                {/* Installable, and worth saying here: this is
+                                    the one place a farmer learns the site can
+                                    become an app. */}
+                                <div className="absolute -right-4 bottom-12 hidden rounded-2xl border border-gray-100 bg-white p-3 shadow-xl sm:block">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="rounded-lg bg-[#006400]/10 p-2">
+                                            <Smartphone className="h-4 w-4 text-[#006400]" aria-hidden="true" />
+                                        </span>
+                                        <div>
+                                            <p className="text-xs font-bold leading-none text-gray-900">
+                                                Works offline
+                                            </p>
+                                            <p className="mt-1 text-[11px] text-gray-500">
+                                                Install it like an app
+                                            </p>
                                         </div>
                                     </div>
-                                </Reveal>
-                            );
-                        })}
+                                </div>
+                            </div>
+                        </Reveal>
+
+                        {/* what they get */}
+                        <div className="space-y-8">
+                            {[
+                                {
+                                    icon: Map,
+                                    title: 'Your land, measured and mapped',
+                                    text: 'Every parcel the office has surveyed, drawn on a map with its real area in hectares — not an estimate you have to argue about.',
+                                },
+                                {
+                                    icon: HandHeart,
+                                    title: 'Every assistance you have received',
+                                    text: 'What was given, on what date, and what is still waiting for you to collect. The same record the office reads.',
+                                },
+                                {
+                                    icon: Sprout,
+                                    title: 'Advice for your own farm',
+                                    text: 'What your land is exposed to and what to do about it, based on the risk assessment you answer at the office.',
+                                },
+                                {
+                                    icon: BadgeCheck,
+                                    title: 'Your RSBSA number, always with you',
+                                    text: 'Your registration and verification status on screen, so you are never turned away for not having the paper with you.',
+                                },
+                            ].map((item, i) => {
+                                const Icon = item.icon;
+
+                                return (
+                                    <Reveal key={item.title} delay={i * 110}>
+                                        <div className="group flex items-start gap-4">
+                                            <div className="flex-shrink-0 rounded-xl bg-gradient-to-br from-[#006400] to-[#228B22] p-2.5 shadow-md transition-transform group-hover:scale-110">
+                                                <Icon className="h-5 w-5 text-white" aria-hidden="true" />
+                                            </div>
+                                            <div>
+                                                <h3 className="mb-1 text-lg font-bold text-gray-900">{item.title}</h3>
+                                                <p className="leading-relaxed text-gray-600">{item.text}</p>
+                                            </div>
+                                        </div>
+                                    </Reveal>
+                                );
+                            })}
+
+                            <Reveal delay={480}>
+                                <Link
+                                    href="/farmer-registration"
+                                    className="inline-flex items-center gap-2 rounded-xl bg-[#006400] px-6 py-3.5 font-semibold text-white shadow-lg transition-all hover:bg-[#004d00] hover:shadow-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#006400]"
+                                >
+                                    Register to get an account
+                                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                </Link>
+                            </Reveal>
+                        </div>
                     </div>
                 </div>
             </section>
 
             {/* ========================================================= benefits */}
-            <section className="py-24 bg-white overflow-hidden">
+            <section className="py-24 bg-[#FAF8F3] overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="grid lg:grid-cols-2 gap-16 items-center">
                         <Reveal>
@@ -635,7 +711,7 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
             </section>
 
             {/* ======================================================== gallery */}
-            <section id="activities" className="py-24 bg-[#FAF8F3] overflow-hidden">
+            <section id="activities" className="py-24 bg-white overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <Reveal className="text-center">
                         <span className="inline-block rounded-full bg-[#006400]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#006400]">
@@ -744,7 +820,7 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                         <div className="flex items-center gap-6 text-sm">
                             <a href="#about" className="text-white/70 hover:text-[#90EE90] transition-colors">The Municipality</a>
                             <a href="#how-it-works" className="text-white/70 hover:text-[#90EE90] transition-colors">How It Works</a>
-                            <a href="#features" className="text-white/70 hover:text-[#90EE90] transition-colors">Features</a>
+                            <a href="#your-account" className="text-white/70 hover:text-[#90EE90] transition-colors">Your Account</a>
                             <a href="#activities" className="text-white/70 hover:text-[#90EE90] transition-colors">In the Field</a>
                             <Link href="/login" className="text-white/70 hover:text-[#90EE90] transition-colors">Login</Link>
                         </div>

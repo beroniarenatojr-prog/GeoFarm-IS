@@ -29,6 +29,21 @@ export const LANDING_PHOTOS = {
         hint: 'Square photo · at least 1000 × 1000',
     },
 
+    /*
+     * A screenshot of the farmer portal, shown inside a phone frame.
+     *
+     * Not a photograph — take this one from the app itself: open
+     * /farmer/dashboard or /farmer/farms on a phone, or in a browser at a phone
+     * width, and screenshot it. A real screen is the point; a stock photo of
+     * somebody holding a phone would say nothing.
+     */
+    farmerApp: {
+        src: null,
+        alt: 'The GeoFarm-IS farmer portal on a phone, showing registered parcels',
+        label: 'Screenshot of the farmer portal',
+        hint: 'Portrait · phone screen · at least 720 × 1520',
+    },
+
     /* The wide photograph in the "About Tumauini" band. */
     municipality: {
         src: null,
