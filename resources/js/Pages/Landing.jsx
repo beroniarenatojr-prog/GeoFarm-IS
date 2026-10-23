@@ -14,6 +14,16 @@ const prefersReducedMotion = () =>
     typeof window !== 'undefined'
     && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
+/**
+ * Whether the browser can tie an animation to scroll position.
+ *
+ * Chromium and Brave today; the rest as they ship it. Where it exists the CSS
+ * hands those elements' motion to the scrollbar and the observer below has
+ * nothing to do for them.
+ */
+const supportsScrollTimeline = () =>
+    typeof CSS !== 'undefined' && CSS.supports?.('animation-timeline', 'view()');
+
 /** Adds .gf-in-view once the element scrolls into view, with an optional stagger. */
 function useReveal(delayMs = 0) {
     const ref = useRef(null);
@@ -24,6 +34,19 @@ function useReveal(delayMs = 0) {
 
         if (prefersReducedMotion() || !('IntersectionObserver' in window)) {
             node.classList.add('gf-in-view');
+            return;
+        }
+
+        /*
+         * Elements whose motion comes from a scroll timeline are left alone.
+         *
+         * Not just an optimisation. The stagger below is applied as an inline
+         * animation-delay, and an inline style beats every stylesheet rule — so
+         * the CSS could not clear it. The scroll-driven spec ignores
+         * animation-delay for progress-based timelines, but depending on that
+         * is the kind of thing that breaks quietly a browser version later.
+         */
+        if (supportsScrollTimeline() && node.classList.contains('gf-scrollfx')) {
             return;
         }
 
@@ -322,11 +345,20 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                         {/* The photograph leads on desktop, because this band is
                             about the place rather than the software. Ordered
                             second on a phone so the heading arrives first. */}
-                        <Reveal variant="photo" className="order-2 lg:order-1">
+                        {/* gf-scrollfx hands this card's motion to the scroll
+                            position itself where the browser supports it; the
+                            observer reveal stays as the fallback. */}
+                        <Reveal variant="photo" className="order-2 gf-scrollfx lg:order-1">
                             <div className="group relative">
                                 <Photo
                                     photo={LANDING_PHOTOS.municipality}
                                     className="aspect-[4/3] rounded-3xl shadow-xl ring-1 ring-black/5"
+                                    imageClass="gf-scroll-parallax"
+                                    /* The parallax animates transform, which a
+                                       hover scale cannot override — so the hover
+                                       is switched off rather than left to look
+                                       broken. */
+                                    zoomOnHover={false}
                                 />
 
                                 {/* The municipal seal, overlapping the corner, so
@@ -524,7 +556,7 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                             </div>
                         </Reveal>
 
-                        <Reveal delay={200} variant="photo">
+                        <Reveal delay={200} variant="photo" className="gf-scrollfx">
                             <div className="group">
                                 {/* Its own positioning context, so the figure card
                                     below anchors to the PHOTO and not to the
@@ -540,6 +572,8 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                                     <Photo
                                         photo={LANDING_PHOTOS.office}
                                         className="aspect-square rounded-3xl shadow-2xl"
+                                        imageClass="gf-scroll-parallax"
+                                        zoomOnHover={false}
                                     >
                                         {/* Over a real photo only — over the blank
                                             it would fight the placeholder's own
@@ -622,11 +656,13 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                     */}
                     <div className="mt-14 grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
                         {LANDING_PHOTOS.activities.map((photo, i) => (
-                            <Reveal key={i} variant="photo" delay={i * 120}>
+                            <Reveal key={i} variant="photo" delay={i * 120} className="gf-scrollfx">
                                 <figure className="group relative">
                                     <Photo
                                         photo={photo}
                                         className="aspect-[4/3] rounded-2xl shadow-md ring-1 ring-black/5"
+                                        imageClass="gf-scroll-parallax"
+                                        zoomOnHover={false}
                                     >
                                         {/* The caption belongs to the real photo
                                             only; the blank already names itself. */}
