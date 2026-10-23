@@ -5,6 +5,8 @@ import {
     Map, Sprout, ChevronRight, ChevronDown, UserPlus, Building2, LayoutDashboard,
     Ruler, HandHeart,
 } from 'lucide-react';
+import Photo from '@/Components/Landing/Photo';
+import { ABOUT_TUMAUINI, LANDING_PHOTOS } from '@/config/landingPhotos';
 
 /* ------------------------------------------------------------------- hooks */
 
@@ -112,10 +114,23 @@ function StatCounter({ icon: Icon, value, label, decimals = 0, suffix = '' }) {
     );
 }
 
-function Reveal({ children, delay = 0, className = '' }) {
+/**
+ * @param variant  'text' rises further and faster; 'photo' is a shorter, slower
+ *   move with a slight scale, because a photograph travelling as far as a
+ *   paragraph reads as a layout glitch rather than as motion. 'line' draws a
+ *   rule out from its left edge.
+ */
+function Reveal({ children, delay = 0, className = '', variant = 'text' }) {
     const ref = useReveal(delay);
+
+    const motion = {
+        text:  'gf-reveal',
+        photo: 'gf-reveal-photo',
+        line:  'gf-draw-line',
+    }[variant] ?? 'gf-reveal';
+
     return (
-        <div ref={ref} className={`gf-reveal ${className}`}>
+        <div ref={ref} className={`${motion} ${className}`}>
             {children}
         </div>
     );
@@ -300,6 +315,88 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                 </section>
             )}
 
+            {/* ================================================ about the LGU */}
+            <section id="about" className="py-24 bg-white overflow-hidden">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+                        {/* The photograph leads on desktop, because this band is
+                            about the place rather than the software. Ordered
+                            second on a phone so the heading arrives first. */}
+                        <Reveal variant="photo" className="order-2 lg:order-1">
+                            <div className="group relative">
+                                <Photo
+                                    photo={LANDING_PHOTOS.municipality}
+                                    className="aspect-[4/3] rounded-3xl shadow-xl ring-1 ring-black/5"
+                                />
+
+                                {/* The municipal seal, overlapping the corner, so
+                                    the band reads as the LGU's own page. */}
+                                <img
+                                    src="/images/Logo.jpeg"
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="absolute -right-4 -top-4 hidden h-20 w-20 rounded-full bg-white object-contain p-1 shadow-xl ring-1 ring-black/5 sm:block"
+                                />
+                            </div>
+                        </Reveal>
+
+                        <div className="order-1 lg:order-2">
+                            <Reveal>
+                                <span className="inline-block rounded-full bg-[#006400]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#006400]">
+                                    {ABOUT_TUMAUINI.eyebrow}
+                                </span>
+
+                                <h2 className="mt-5 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+                                    {ABOUT_TUMAUINI.heading}
+                                </h2>
+
+                                <p className="mt-4 text-lg leading-relaxed text-gray-600">
+                                    {ABOUT_TUMAUINI.lead}
+                                </p>
+                            </Reveal>
+
+                            {/* A rule that draws itself in, rather than a static
+                                divider sitting there before the text arrives. */}
+                            <Reveal variant="line" delay={150}>
+                                <div className="my-7 h-1 w-24 rounded-full bg-gradient-to-r from-[#006400] to-[#90EE90]" />
+                            </Reveal>
+
+                            {ABOUT_TUMAUINI.body.map((paragraph, i) => (
+                                <Reveal key={i} delay={220 + i * 110}>
+                                    <p className="mb-4 leading-relaxed text-gray-600">{paragraph}</p>
+                                </Reveal>
+                            ))}
+
+                            {/*
+                                Counted from the registry, so these are true by
+                                construction rather than claimed. The figures the
+                                office cannot verify — population, land area,
+                                production rank — are deliberately absent.
+                            */}
+                            <Reveal delay={450}>
+                                <dl className="mt-8 grid grid-cols-3 gap-4 border-t border-gray-100 pt-8">
+                                    {[
+                                        { value: stats?.barangays ?? 0, label: 'Barangays served' },
+                                        { value: stats?.farmers ?? 0, label: 'Farmers registered' },
+                                        { value: stats?.programs ?? 0, label: 'Assistance programmes' },
+                                    ].map((figure) => (
+                                        <div key={figure.label}>
+                                            <dt className="sr-only">{figure.label}</dt>
+                                            <dd className="text-3xl font-bold tabular-nums text-[#006400]">
+                                                {Number(figure.value).toLocaleString('en-PH')}
+                                            </dd>
+                                            <p className="mt-1 text-xs leading-snug text-gray-500">
+                                                {figure.label}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </Reveal>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* ==================================================== how it works */}
             <section id="how-it-works" className="py-24 bg-white relative overflow-hidden">
                 {/* soft background bloom */}
@@ -427,53 +524,124 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                             </div>
                         </Reveal>
 
-                        <Reveal delay={200}>
-                            <div className="relative">
-                                <div
-                                    className="relative aspect-square rounded-3xl shadow-2xl overflow-hidden flex items-center justify-center"
-                                    style={{
-                                        backgroundImage: [
-                                            'radial-gradient(circle at 22% 18%, rgba(144,238,144,0.28) 0%, transparent 48%)',
-                                            'radial-gradient(circle at 80% 82%, rgba(255,255,255,0.16) 0%, transparent 52%)',
-                                            'linear-gradient(135deg, #004d00 0%, #006400 50%, #8B9D83 100%)',
-                                        ].join(', '),
-                                    }}
-                                >
-                                    {/* contour rings */}
-                                    <svg className="absolute inset-0 h-full w-full text-white/[0.08]" viewBox="0 0 200 200" fill="none" aria-hidden="true">
-                                        {[88, 70, 52, 34, 16].map((r) => (
-                                            <circle key={r} cx="100" cy="100" r={r} stroke="currentColor" strokeWidth="1.2" />
-                                        ))}
-                                    </svg>
+                        <Reveal delay={200} variant="photo">
+                            <div className="group">
+                                {/* Its own positioning context, so the figure card
+                                    below anchors to the PHOTO and not to the
+                                    caption that follows it. */}
+                                <div className="relative">
+                                    {/*
+                                        A photograph of the office, where a plain
+                                        green square with a map pin used to be.
+                                        The caption sits over the image rather
+                                        than replacing it, so the claim is still
+                                        made once the picture arrives.
+                                    */}
+                                    <Photo
+                                        photo={LANDING_PHOTOS.office}
+                                        className="aspect-square rounded-3xl shadow-2xl"
+                                    >
+                                        {/* Over a real photo only — over the blank
+                                            it would fight the placeholder's own
+                                            caption. */}
+                                        {LANDING_PHOTOS.office.src && (
+                                            <>
+                                                <div className="absolute inset-0 bg-gradient-to-t from-[#04240a] via-[#04240a]/45 to-transparent" />
+                                                <div className="absolute inset-x-0 bottom-0 p-8 text-white">
+                                                    <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                                                        Built for Tumauini
+                                                    </h3>
+                                                    <p className="mt-2 max-w-sm leading-relaxed text-white/85">
+                                                        Designed around how the Municipal Agriculture Office
+                                                        actually works — not adapted from somewhere else.
+                                                    </p>
+                                                </div>
+                                            </>
+                                        )}
+                                    </Photo>
 
-                                    <div className="relative text-center text-white p-10">
-                                        <div className="inline-flex items-center justify-center h-24 w-24 rounded-3xl bg-white/15 backdrop-blur-sm border border-white/25 mb-6">
-                                            <MapPin className="h-12 w-12" />
+                                    {/* floating figure card */}
+                                    <div className="absolute -bottom-6 -left-6 bg-white rounded-2xl shadow-2xl p-5 border border-gray-100 hidden sm:block">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-[#006400]/10 p-2.5 rounded-xl">
+                                                <Sprout className="h-6 w-6 text-[#006400]" />
+                                            </div>
+                                            <div>
+                                                <p className="text-2xl font-bold text-gray-900 leading-none tabular-nums">
+                                                    {Number(stats?.hectares ?? 0).toFixed(2)}
+                                                </p>
+                                                <p className="text-xs text-gray-500 mt-1">hectares mapped</p>
+                                            </div>
                                         </div>
-                                        <h3 className="text-3xl font-bold mb-3 tracking-tight">Built for Tumauini</h3>
-                                        <p className="text-white/85 leading-relaxed max-w-xs mx-auto">
-                                            Designed around how the Municipal Agriculture Office actually works —
-                                            not adapted from somewhere else.
+                                    </div>
+                                </div>
+
+                                {/*
+                                    With no photo yet the claim still needs
+                                    making, so it sits underneath rather than
+                                    over the top of the placeholder's own label.
+                                    The margin clears the figure card, which
+                                    hangs 24px below the image on sm and up.
+                                */}
+                                {!LANDING_PHOTOS.office.src && (
+                                    <div className="mt-10 text-center sm:mt-14">
+                                        <h3 className="text-2xl font-bold tracking-tight text-gray-900">
+                                            Built for Tumauini
+                                        </h3>
+                                        <p className="mx-auto mt-2 max-w-sm leading-relaxed text-gray-600">
+                                            Designed around how the Municipal Agriculture Office actually
+                                            works — not adapted from somewhere else.
                                         </p>
                                     </div>
-                                </div>
-
-                                {/* floating figure card */}
-                                <div className="absolute -bottom-6 -left-6 bg-white rounded-2xl shadow-2xl p-5 border border-gray-100 hidden sm:block">
-                                    <div className="flex items-center gap-3">
-                                        <div className="bg-[#006400]/10 p-2.5 rounded-xl">
-                                            <Sprout className="h-6 w-6 text-[#006400]" />
-                                        </div>
-                                        <div>
-                                            <p className="text-2xl font-bold text-gray-900 leading-none tabular-nums">
-                                                {Number(stats?.hectares ?? 0).toFixed(2)}
-                                            </p>
-                                            <p className="text-xs text-gray-500 mt-1">hectares mapped</p>
-                                        </div>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </Reveal>
+                    </div>
+                </div>
+            </section>
+
+            {/* ======================================================== gallery */}
+            <section id="activities" className="py-24 bg-[#FAF8F3] overflow-hidden">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <Reveal className="text-center">
+                        <span className="inline-block rounded-full bg-[#006400]/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-[#006400]">
+                            In the field
+                        </span>
+                        <h2 className="mx-auto mt-5 max-w-2xl text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+                            The office at work
+                        </h2>
+                        <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+                            Distributions, surveys, training and harvest across the barangays of Tumauini.
+                        </p>
+                    </Reveal>
+
+                    {/*
+                        Two columns on a phone rather than one: four stacked
+                        landscape photographs turn this band into a long scroll
+                        past nothing in particular.
+                    */}
+                    <div className="mt-14 grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
+                        {LANDING_PHOTOS.activities.map((photo, i) => (
+                            <Reveal key={i} variant="photo" delay={i * 120}>
+                                <figure className="group relative">
+                                    <Photo
+                                        photo={photo}
+                                        className="aspect-[4/3] rounded-2xl shadow-md ring-1 ring-black/5"
+                                    >
+                                        {/* The caption belongs to the real photo
+                                            only; the blank already names itself. */}
+                                        {photo.src && (
+                                            <>
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                                                <figcaption className="absolute inset-x-0 bottom-0 translate-y-2 p-4 text-sm font-medium text-white opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100">
+                                                    {photo.label}
+                                                </figcaption>
+                                            </>
+                                        )}
+                                    </Photo>
+                                </figure>
+                            </Reveal>
+                        ))}
                     </div>
                 </div>
             </section>
@@ -538,8 +706,10 @@ export default function Landing({ canLogin, stats, barangays = [] }) {
                         </div>
 
                         <div className="flex items-center gap-6 text-sm">
+                            <a href="#about" className="text-white/70 hover:text-[#90EE90] transition-colors">The Municipality</a>
                             <a href="#how-it-works" className="text-white/70 hover:text-[#90EE90] transition-colors">How It Works</a>
                             <a href="#features" className="text-white/70 hover:text-[#90EE90] transition-colors">Features</a>
+                            <a href="#activities" className="text-white/70 hover:text-[#90EE90] transition-colors">In the Field</a>
                             <Link href="/login" className="text-white/70 hover:text-[#90EE90] transition-colors">Login</Link>
                         </div>
 

@@ -161,10 +161,61 @@
     animation-play-state: paused;
 }
 
+/* A slow sheen across an empty photo slot, so it reads as a picture that is
+   coming rather than one that failed to load. */
+@keyframes gf-shimmer {
+    from { transform: translate3d(-100%, 0, 0); }
+    to   { transform: translate3d(100%, 0, 0); }
+}
+
+/* Photographs rise and settle rather than simply appearing. Separate from
+   gf-fade-up because a photo travelling as far as a paragraph of text looks
+   like a layout glitch — this is a shorter, slower move. */
+@keyframes gf-reveal-photo {
+    from { opacity: 0; transform: scale(1.04) translate3d(0, 14px, 0); }
+    to   { opacity: 1; transform: scale(1) translate3d(0, 0, 0); }
+}
+
+/* Draws the connector between the three registration steps once it is seen. */
+@keyframes gf-draw-line {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+}
+
 .gf-ken-burns { animation: gf-ken-burns 28s ease-out alternate infinite; }
 .gf-marquee   { animation: gf-marquee 45s linear infinite; }
 .gf-float     { animation: gf-float 7s ease-in-out infinite; }
 .gf-bob       { animation: gf-bob 2.2s ease-in-out infinite; }
+
+.gf-placeholder::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        100deg,
+        transparent 20%,
+        rgba(255, 255, 255, 0.55) 50%,
+        transparent 80%
+    );
+    animation: gf-shimmer 2.6s ease-in-out infinite;
+}
+
+.gf-reveal-photo {
+    opacity: 0;
+}
+
+.gf-reveal-photo.gf-in-view {
+    animation: gf-reveal-photo 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.gf-draw-line {
+    transform: scaleX(0);
+    transform-origin: left center;
+}
+
+.gf-draw-line.gf-in-view {
+    animation: gf-draw-line 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+}
 
 /* Scroll reveal: hidden until the observer adds .gf-in-view. */
 .gf-reveal {
@@ -186,13 +237,29 @@
     .gf-float,
     .gf-bob,
     .gf-ring,
-    .gf-ring-badge {
+    .gf-ring-badge,
+    .gf-placeholder::after {
         animation: none !important;
     }
 
+    /* The sheen is hidden outright, not merely stopped: parked mid-sweep it
+       leaves a bright diagonal band across the slot. */
+    .gf-placeholder::after {
+        display: none;
+    }
+
     .gf-reveal,
-    .gf-reveal.gf-in-view {
+    .gf-reveal.gf-in-view,
+    .gf-reveal-photo,
+    .gf-reveal-photo.gf-in-view {
         opacity: 1;
+        animation: none !important;
+        transform: none !important;
+    }
+
+    .gf-draw-line,
+    .gf-draw-line.gf-in-view {
+        transform: scaleX(1) !important;
         animation: none !important;
     }
 }
