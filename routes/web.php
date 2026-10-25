@@ -35,6 +35,7 @@ use App\Http\Controllers\Farmer\ClimateRiskAssessmentController;
 use App\Http\Controllers\Farmer\FarmAnalysisController as FarmerFarmAnalysisController;
 use App\Http\Controllers\Farmer\PortalController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\VerifyOtpController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\LandingController;
@@ -44,6 +45,27 @@ use Illuminate\Support\Facades\Route;
 Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'store']);
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
+
+/*
+ * Forgotten passwords.
+ *
+ * Throttled on every write. The request form emails whoever owns an address,
+ * so without a limit it is both a way to enumerate accounts and a way to have
+ * the server send mail on demand; the reset form takes a token, so without one
+ * it is somewhere to guess tokens. Laravel's broker adds its own one-link-per-
+ * minute limit per account on top of the request route's.
+ *
+ * Open to guests by necessity — someone who cannot sign in is the only person
+ * who needs these.
+ */
+Route::get('/forgot-password', [PasswordResetController::class, 'request'])
+    ->middleware('guest')->name('password.request');
+Route::post('/forgot-password', [PasswordResetController::class, 'email'])
+    ->middleware(['guest', 'throttle:5,1'])->name('password.email');
+Route::get('/reset-password/{token}', [PasswordResetController::class, 'reset'])
+    ->middleware('guest')->name('password.reset');
+Route::post('/reset-password', [PasswordResetController::class, 'store'])
+    ->middleware(['guest', 'throttle:5,1'])->name('password.store');
 
 /*
  * Administrative login verification.

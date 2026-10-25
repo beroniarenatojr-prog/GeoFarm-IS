@@ -55,6 +55,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Send the password reset link, synchronously.
+     *
+     * Overridden purely to swap notify() for notifyNow(). Laravel's default
+     * implementation queues, QUEUE_CONNECTION is `database`, and no worker runs
+     * on the server — so the stock behaviour writes a job nobody executes and
+     * the user waits for an email that will never arrive.
+     *
+     * The notification itself is ours too, so it is not silently queued by a
+     * future framework change. See ResetPasswordLink.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notifyNow(new \App\Notifications\ResetPasswordLink($token));
+    }
+
+    /**
      * Where this account belongs when it arrives with nowhere particular to go.
      *
      * Used by the login redirect and by the installed app's start URL, which is
