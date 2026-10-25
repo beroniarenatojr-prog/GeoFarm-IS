@@ -39,8 +39,8 @@ const joined = (parts, separator = ', ') => {
 
 function Section({ icon: Icon, title, children }) {
   return (
-    <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-      <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-900 dark:text-gray-100">
+    <div className="border border-gray-200 rounded-xl p-5">
+      <h4 className="font-semibold mb-4 flex items-center gap-2 text-gray-900">
         <Icon className="h-5 w-5 text-green-600" />
         {title}
       </h4>
@@ -56,8 +56,8 @@ function Field({ label, value }) {
 
   return (
     <div className="grid grid-cols-5 gap-3 text-sm">
-      <dt className="col-span-2 text-gray-500 dark:text-gray-400">{label}</dt>
-      <dd className={`col-span-3 ${empty ? 'text-gray-400 italic' : 'font-medium text-gray-900 dark:text-gray-100'}`}>
+      <dt className="col-span-2 text-gray-500">{label}</dt>
+      <dd className={`col-span-3 ${empty ? 'text-gray-400 italic' : 'font-medium text-gray-900'}`}>
         {empty ? 'Not provided' : value}
       </dd>
     </div>
@@ -233,7 +233,7 @@ function DocumentPreview({ label, path, href }) {
     return (
       <div>
         <p className="text-sm text-gray-500 mb-2">{label}</p>
-        <div className="h-32 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs text-gray-400 italic">
+        <div className="h-32 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-xs text-gray-400 italic">
           Not uploaded
         </div>
       </div>
@@ -250,13 +250,13 @@ function DocumentPreview({ label, path, href }) {
         href={src}
         target="_blank"
         rel="noopener noreferrer"
-        className="block h-32 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:ring-2 hover:ring-green-500 transition"
+        className="block h-32 rounded-lg border border-gray-200 overflow-hidden hover:ring-2 hover:ring-green-500 transition"
         title={`Open ${label.toLowerCase()} in a new tab`}
       >
         {isImage ? (
           <img src={src} alt={label} className="h-full w-full object-cover" />
         ) : (
-          <div className="h-full w-full flex flex-col items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-500">
+          <div className="h-full w-full flex flex-col items-center justify-center gap-2 bg-gray-50 text-gray-500">
             <Download className="h-6 w-6" />
             <span className="text-xs font-medium">Open file</span>
           </div>
@@ -590,18 +590,18 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
                 {farmer.is_indigenous && <Badge variant="orange">Indigenous People</Badge>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                <div className="flex items-center gap-2 p-3 bg-gray-50/50 rounded-xl">
                   <MapPin className="h-4 w-4 text-green-600" />
                   <span className="font-medium">{farmer.barangay}, {farmer.city_municipality}</span>
                 </div>
                 {farmer.mobile_no && (
-                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                  <div className="flex items-center gap-2 p-3 bg-gray-50/50 rounded-xl">
                     <Phone className="h-4 w-4 text-green-600" />
                     <span>{farmer.mobile_no}</span>
                   </div>
                 )}
                 {farmer.email && (
-                  <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                  <div className="flex items-center gap-2 p-3 bg-gray-50/50 rounded-xl">
                     <Mail className="h-4 w-4 text-emerald-600" />
                     <span>{farmer.email}</span>
                   </div>
@@ -711,7 +711,7 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
                       { label: 'Fishponds', value: summary.fishponds, tone: 'text-emerald-600' },
                       { label: 'Assistance', value: summary.assistance, tone: 'text-emerald-600' },
                     ].map(stat => (
-                      <div key={stat.label} className="text-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                      <div key={stat.label} className="text-center p-4 bg-gray-50/50 rounded-xl">
                         <div className={`text-2xl font-bold ${stat.tone}`}>{stat.value}</div>
                         <div className="text-xs text-gray-500 mt-0.5">{stat.label}</div>
                       </div>
@@ -768,7 +768,7 @@ export default function FarmerShow({ farmer, cropOptions = [] }) {
                                       Anything not recorded is simply left out
                                       rather than padded with "Not provided". */}
                                   {(child.sex || child.birthdate || child.occupation || child.current_location) && (
-                                    <span className="text-gray-500 dark:text-gray-400">
+                                    <span className="text-gray-500">
                                       {' — '}
                                       {[
                                         child.sex,

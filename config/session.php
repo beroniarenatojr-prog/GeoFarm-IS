@@ -32,8 +32,30 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    /*
+     * A year, so a signed-in user stays signed in until they sign out.
+     *
+     * Laravel has no "never expires" setting — the lifetime is the only
+     * mechanism — so a long one is how "do not log me out" is expressed. It is
+     * a sliding window: every request pushes it out again, so the only way to
+     * reach the end of it is to not use the system for a year.
+     *
+     * The default is set here as well as in .env because .env is not in version
+     * control: with the stock 120 left here, a deployment that lost its
+     * SESSION_LIFETIME line would quietly go back to logging people out after
+     * two hours, and the cause would be invisible.
+     *
+     * The trade this makes: a session cookie on an unattended machine stays
+     * valid rather than ageing out. It is HttpOnly, Secure and SameSite=Lax,
+     * and signing in elsewhere evicts it — but on a shared office computer,
+     * signing out is now the only thing that ends a session.
+     */
+    'lifetime' => (int) env('SESSION_LIFETIME', 525600),
 
+    /*
+     * False, so closing the browser does not sign anyone out — a farmer who
+     * closes the tab on their phone comes back to the app still signed in.
+     */
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 
     /*
