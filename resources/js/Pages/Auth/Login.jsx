@@ -1,5 +1,5 @@
 import { useForm, Link, usePage } from '@inertiajs/react';
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
 import AuthCardShell from '@/Layouts/AuthCardShell';
 import { useState } from 'react';
 
