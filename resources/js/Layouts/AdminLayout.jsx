@@ -29,7 +29,9 @@ import {
     FolderOpen,
     Settings,
     Boxes,
-    ClipboardList
+    ClipboardList,
+    PanelLeftClose,
+    PanelLeftOpen,
 } from 'lucide-react';
 
 /*
@@ -41,6 +43,16 @@ import {
  */
 const SECTIONS_KEY = 'geofarm.sidebar.sections.v2';
 
+/*
+ * Whether the sidebar is pinned open.
+ *
+ * Only ever set on a touch device — see the toggle in the header for why — but
+ * stored unconditionally, because a tablet and a desktop may be the same
+ * account on the same browser profile and each should find the sidebar as it
+ * left it.
+ */
+const PINNED_KEY = 'geofarm.sidebar.pinned.v1';
+
 const readOpenSections = () => {
     try {
         const raw = localStorage.getItem(SECTIONS_KEY);
@@ -48,6 +60,14 @@ const readOpenSections = () => {
     } catch {
         // Private windows and blocked site data both throw here.
         return null;
+    }
+};
+
+const readPinned = () => {
+    try {
+        return localStorage.getItem(PINNED_KEY) === '1';
+    } catch {
+        return false;
     }
 };
 
@@ -187,7 +207,53 @@ export default function AdminLayout({
     // onto it would otherwise count as leaving and collapse the sidebar behind
     // it. Keep the sidebar open for as long as that panel is.
     const [menuOpen, setMenuOpen] = useState(false);
-    const expanded = hovering || menuOpen;
+
+    /*
+     * Pinned open by the header toggle.
+     *
+     * The sidebar opens on hover, which is the whole mechanism — and touch
+     * devices have no hover. On a phone or tablet the rail could therefore
+     * never be opened at all: tapping a collapsed item navigates rather than
+     * expanding, so the labels were unreachable. This is the way in.
+     *
+     * Read lazily from localStorage so the first render already has the right
+     * width and the sidebar does not visibly snap open after mount.
+     */
+    const [pinned, setPinned] = useState(readPinned);
+
+    /*
+     * Whether this device can hover at all, asked once.
+     *
+     * Touch browsers fire mouseenter on a tap and often never fire the matching
+     * mouseleave, so tapping the rail would latch `hovering` true for the rest
+     * of the visit. The collapse button would then appear broken: it clears
+     * `pinned`, but `hovering` is still holding the sidebar open and nothing
+     * can clear it.
+     *
+     * So on a touch device hover is not tracked, and `pinned` is the only thing
+     * that opens the sidebar. On a mouse it is unchanged.
+     */
+    const [canHover] = useState(
+        () => typeof window === 'undefined'
+            || (window.matchMedia?.('(hover: hover)').matches ?? true),
+    );
+
+    const togglePinned = () => {
+        setPinned((was) => {
+            const next = !was;
+
+            try {
+                localStorage.setItem(PINNED_KEY, next ? '1' : '0');
+            } catch {
+                // Private window or blocked site data. The toggle still works
+                // for this visit; it just will not be remembered.
+            }
+
+            return next;
+        });
+    };
+
+    const expanded = hovering || menuOpen || pinned;
 
     // Closed to begin with: the menu opens as three headings, and a group is
     // expanded when it is wanted. Whatever the user opens is remembered.
@@ -308,8 +374,9 @@ export default function AdminLayout({
                 invites clicks that are only answered with a refusal. A door
                 that will not open is better not shown. */}
             {!backLocked && <aside
-                onMouseEnter={() => setHovering(true)}
-                onMouseLeave={() => setHovering(false)}
+                id="admin-sidebar"
+                onMouseEnter={() => canHover && setHovering(true)}
+                onMouseLeave={() => canHover && setHovering(false)}
                 className={`fixed left-0 top-0 bottom-0 flex flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${expanded ? 'w-64' : 'w-16'} overflow-y-auto z-50 sidebar-scroll`}
                 style={{ 
                     background: '#006400',
@@ -570,6 +637,40 @@ export default function AdminLayout({
                     dropdown is not painted over by page content. */}
                 <header className="bg-white/90 backdrop-blur-sm shadow-sm px-4 sm:px-6 py-3 relative z-30 border-b-2 border-[#006400]/70">
                     <div className="flex items-center gap-3">
+                        {/*
+                            Open and close the sidebar, on touch only.
+
+                            pointer-coarse, not a width breakpoint. The question
+                            is whether the device can hover, not how wide it is:
+                            an iPad in landscape or a touchscreen laptop sits
+                            above any sensible breakpoint and still cannot hover,
+                            so a width rule would leave exactly those users
+                            unable to open the menu.
+
+                            Hidden entirely where hovering works, because there
+                            the sidebar already opens by itself and a second
+                            control would only contradict it.
+
+                            Not rendered at all while the page is locked — the
+                            sidebar is removed in that state, so a toggle would
+                            point at nothing.
+                        */}
+                        {!backLocked && (
+                            <button
+                                type="button"
+                                onClick={togglePinned}
+                                aria-expanded={pinned}
+                                aria-controls="admin-sidebar"
+                                aria-label={pinned ? 'Collapse the menu' : 'Open the menu'}
+                                title={pinned ? 'Collapse the menu' : 'Open the menu'}
+                                className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-[#006400] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#006400] pointer-coarse:inline-flex"
+                            >
+                                {pinned
+                                    ? <PanelLeftClose className="h-5 w-5" aria-hidden="true" />
+                                    : <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />}
+                            </button>
+                        )}
+
                         {showBack && (backHref ? (
                             <Link href={backHref} className={backClass} title={backTitle} aria-label={backTitle}>
                                 {backIcon}
