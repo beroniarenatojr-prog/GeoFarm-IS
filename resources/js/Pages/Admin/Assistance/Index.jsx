@@ -53,7 +53,41 @@ export default function AssistanceIndex({
                     </button>
                 )}
             </div>
-            <div className="bg-white rounded-xl shadow-md border border-green-100 overflow-hidden">
+            {/*
+                Two shapes for one list: cards below md, the table from md up.
+
+                Rendered as siblings rather than reflowed, because a table and a
+                stack are genuinely different markup — a <tr> cannot wrap. Both
+                read the same `programs.data` and use the same controls, so
+                there is no second source of truth, only a second layout.
+            */}
+            <div className="divide-y divide-green-50 overflow-hidden rounded-xl border border-green-100 bg-white shadow-md md:hidden">
+                {programs.data.map(p => (
+                    <ProgramCard
+                        key={p.id}
+                        program={p}
+                        canLock={canLock}
+                        canSetStatus={canSetStatus}
+                        can={can}
+                        onEdit={() => setEditing(p)}
+                        onToggleLock={() => setConfirmingLock(p)}
+                        onReport={() => setReporting(p)}
+                    />
+                ))}
+
+                {programs.data.length === 0 && (
+                    <p className="px-4 py-12 text-center text-gray-400">
+                        {Object.values(filters).some(Boolean)
+                            ? 'No programs match these filters.'
+                            : 'No assistance programs yet.'}
+                    </p>
+                )}
+            </div>
+
+            {/* overflow-x-auto, not overflow-hidden: on a narrow laptop the last
+                columns still need somewhere to go, and clipping them is how the
+                Actions menu became unreachable in the first place. */}
+            <div className="hidden overflow-x-auto rounded-xl border border-green-100 bg-white shadow-md md:block">
                 <table className="w-full text-sm">
                     <thead className="bg-gradient-to-r from-green-50 via-emerald-50 to-teal-50 border-b-2 border-green-200 text-gray-700 text-left">
                         <tr>
@@ -354,11 +388,138 @@ function ProgramFormModal({ program, assistanceTypes, barangays, stockItems, onC
     );
 }
 
-function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLock, onReport }) {
+/**
+ * One programme, stacked, for a phone.
+ *
+ * The table has seven columns. At 400px only Program and Type fitted, and its
+ * wrapper was overflow-hidden rather than overflow-x-auto — so Status, Period,
+ * Beneficiaries, Distributions and the whole Actions menu were not merely
+ * awkward to reach, they were unreachable. Scrolling sideways through seven
+ * columns would not have been much better.
+ *
+ * Same data, same controls, read top to bottom instead of left to right.
+ */
+function ProgramCard({ program: p, canLock, canSetStatus, can, onEdit, onToggleLock, onReport }) {
+    const { busy, patch, locked, lockedNote } = useProgramControls(p);
+
+    return (
+        <article className={`p-4 ${locked ? 'bg-amber-50/40' : ''}`}>
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-gray-900">
+                        {p.program_name}
+                        {locked && (
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-medium text-amber-700">
+                                <Lock className="h-3 w-3 shrink-0" aria-label="Locked" />
+                                Locked
+                            </span>
+                        )}
+                    </h3>
+
+                    <p className="mt-1 text-xs text-gray-500">
+                        {p.assistance_type?.type_name || 'Untyped'}
+                        {' · '}
+                        {formatDate(p.start_date, 'date-only')} to {formatDate(p.end_date, 'date-only')}
+                    </p>
+                </div>
+
+                {/* The actions, which were off-screen entirely. Same menu as the
+                    table, so permissions and the lock state behave identically. */}
+                <div className="flex shrink-0 items-center gap-1.5">
+                    {canLock && (
+                        <button
+                            type="button"
+                            onClick={onToggleLock}
+                            disabled={busy === 'lock'}
+                            aria-pressed={locked}
+                            title={locked ? `Locked${lockedNote} — tap to unlock` : 'Lock this program'}
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ring-1 disabled:opacity-50 ${
+                                locked
+                                    ? 'bg-amber-100 text-amber-700 ring-amber-300'
+                                    : 'bg-gray-50 text-gray-500 ring-gray-200'
+                            }`}
+                        >
+                            {locked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        </button>
+                    )}
+
+                    <StandardActionMenu
+                        viewHref={`/admin/assistance/${p.id}`}
+                        viewPermission="view assistance"
+                        editOnClick={onEdit}
+                        editPermission="edit assistance"
+                        editDisabled={locked}
+                        editDisabledTitle="Locked — unlock this program before editing"
+                        extraActions={[
+                            {
+                                label: 'Manage beneficiaries',
+                                icon: UserPlus,
+                                href: `/admin/assistance/${p.id}/beneficiaries`,
+                                permission: 'view assistance',
+                            },
+                            {
+                                label: 'Report',
+                                icon: FileText,
+                                onClick: onReport,
+                                permission: 'export reports',
+                            },
+                        ]}
+                        deletePermission="delete assistance"
+                        deleteDisabled={locked}
+                        deleteDisabledTitle="Locked — unlock this program before deleting"
+                        onDelete={() => router.delete(`/admin/assistance/${p.id}`, {
+                            preserveState: true,
+                            preserveScroll: true,
+                        })}
+                    />
+                </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <StatusToggle
+                    status={p.status}
+                    locked={locked}
+                    busy={busy === 'status'}
+                    canEdit={canSetStatus}
+                    onToggle={() => patch('status', `/admin/assistance/${p.id}/status`)}
+                />
+
+                <Link
+                    href={`/admin/assistance/${p.id}/beneficiaries`}
+                    className="inline-flex items-center gap-1 text-xs"
+                >
+                    <Users className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
+                    {p.on_programme_count > 0 ? (
+                        <span className="text-gray-700">
+                            <b>{p.on_programme_count}</b> farmer{p.on_programme_count === 1 ? '' : 's'}
+                            <span className="text-gray-500">
+                                {' '}· {p.received_count} received · {p.awaiting_count} awaiting
+                            </span>
+                        </span>
+                    ) : (
+                        <span className="italic text-gray-400">None yet — add farmers</span>
+                    )}
+                </Link>
+
+                <span className="text-xs text-gray-500">
+                    <b className="text-purple-700">{p.distributions_count}</b> distribution{p.distributions_count === 1 ? '' : 's'}
+                </span>
+            </div>
+        </article>
+    );
+}
+
+/**
+ * The behaviour a programme row needs, shared by both of its shapes.
+ *
+ * The list renders as a table on a desktop and as cards on a phone. Both show
+ * the same programme and drive the same endpoints, so the state and the patch
+ * live here rather than being written twice and drifting — a status toggle that
+ * worked in one and not the other would be nearly invisible to spot.
+ */
+function useProgramControls(p) {
     // Local pending flag, so toggling one row does not grey out the whole table.
     const [busy, setBusy] = useState(null);
-
-    const locked = !!p.is_locked;
 
     const patch = (what, url) => {
         setBusy(what);
@@ -368,9 +529,18 @@ function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLo
         });
     };
 
-    const lockedNote = p.locker?.name
-        ? ` by ${p.locker.name}${p.locked_at ? ` on ${formatDate(p.locked_at, 'date-only')}` : ''}`
-        : '';
+    return {
+        busy,
+        patch,
+        locked: !!p.is_locked,
+        lockedNote: p.locker?.name
+            ? ` by ${p.locker.name}${p.locked_at ? ` on ${formatDate(p.locked_at, 'date-only')}` : ''}`
+            : '',
+    };
+}
+
+function ProgramRow({ program: p, canLock, canSetStatus, can, onEdit, onToggleLock, onReport }) {
+    const { busy, patch, locked, lockedNote } = useProgramControls(p);
 
     return (
         <tr className={`border-t border-green-50 ${locked ? 'bg-gradient-to-r from-amber-50/50 to-yellow-50/30' : 'hover:bg-gradient-to-r hover:from-green-50/40 hover:to-emerald-50/20 transition-all'}`}>
