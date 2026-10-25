@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -43,15 +43,6 @@ import {
  */
 const SECTIONS_KEY = 'geofarm.sidebar.sections.v2';
 
-/*
- * Whether the sidebar is pinned open.
- *
- * Only ever set on a touch device — see the toggle in the header for why — but
- * stored unconditionally, because a tablet and a desktop may be the same
- * account on the same browser profile and each should find the sidebar as it
- * left it.
- */
-const PINNED_KEY = 'geofarm.sidebar.pinned.v1';
 
 const readOpenSections = () => {
     try {
@@ -63,13 +54,6 @@ const readOpenSections = () => {
     }
 };
 
-const readPinned = () => {
-    try {
-        return localStorage.getItem(PINNED_KEY) === '1';
-    } catch {
-        return false;
-    }
-};
 
 
 const nav = [
@@ -219,7 +203,17 @@ export default function AdminLayout({
      * Read lazily from localStorage so the first render already has the right
      * width and the sidebar does not visibly snap open after mount.
      */
-    const [pinned, setPinned] = useState(readPinned);
+    /*
+     * Open only while it is being used, and never across a page load.
+     *
+     * This was persisted at first, which was wrong for the only devices that
+     * can see it: the sidebar is fixed and 256px wide, so on a phone an open
+     * panel covers the page rather than sitting beside it. Remembering "open"
+     * meant every screen arrived with the menu over the top of it.
+     *
+     * So it behaves as a drawer — opened deliberately, shut on the way out.
+     */
+    const [pinned, setPinned] = useState(false);
 
     /*
      * Whether this device can hover at all, asked once.
@@ -238,20 +232,20 @@ export default function AdminLayout({
             || (window.matchMedia?.('(hover: hover)').matches ?? true),
     );
 
-    const togglePinned = () => {
-        setPinned((was) => {
-            const next = !was;
-
-            try {
-                localStorage.setItem(PINNED_KEY, next ? '1' : '0');
-            } catch {
-                // Private window or blocked site data. The toggle still works
-                // for this visit; it just will not be remembered.
-            }
-
-            return next;
-        });
-    };
+    /*
+     * Shut the drawer on the way to another page.
+     *
+     * Without this, tapping "Farmers" navigates and leaves the panel sitting
+     * over the page you asked for, needing a second tap to get at it. An
+     * overlay closes when you pick something from it.
+     *
+     * Keyed on the URL rather than wired into each link, so nothing new has to
+     * remember to do it — including the collapsed rail's icons and every
+     * nested item.
+     */
+    useEffect(() => {
+        setPinned(false);
+    }, [page.url]);
 
     const expanded = hovering || menuOpen || pinned;
 
@@ -398,6 +392,31 @@ export default function AdminLayout({
                         <span className="text-base font-bold whitespace-nowrap transition-opacity duration-200 text-white">
                             GeoFarm-IS
                         </span>
+                    )}
+
+                    {/*
+                        Close, from inside the panel.
+
+                        This has to live here and not in the page header. The
+                        sidebar is fixed at z-50 and 256px wide when open, while
+                        the header sits at z-30 behind it and its content starts
+                        only 64px in — so an expanded sidebar covers its own
+                        close button. It could be opened and then never shut.
+
+                        ml-auto puts it at the far edge, away from the logo, and
+                        it is only drawn on a touch device: a mouse closes the
+                        sidebar by moving away from it.
+                    */}
+                    {expanded && (
+                        <button
+                            type="button"
+                            onClick={() => setPinned(false)}
+                            aria-label="Collapse the menu"
+                            title="Collapse the menu"
+                            className="ml-auto hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white pointer-coarse:inline-flex"
+                        >
+                            <PanelLeftClose className="h-5 w-5" aria-hidden="true" />
+                        </button>
                     )}
                 </div>
 
@@ -658,16 +677,16 @@ export default function AdminLayout({
                         {!backLocked && (
                             <button
                                 type="button"
-                                onClick={togglePinned}
+                                onClick={() => setPinned(true)}
                                 aria-expanded={pinned}
                                 aria-controls="admin-sidebar"
-                                aria-label={pinned ? 'Collapse the menu' : 'Open the menu'}
-                                title={pinned ? 'Collapse the menu' : 'Open the menu'}
+                                aria-label="Open the menu"
+                                title="Open the menu"
                                 className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-[#006400] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#006400] pointer-coarse:inline-flex"
                             >
-                                {pinned
-                                    ? <PanelLeftClose className="h-5 w-5" aria-hidden="true" />
-                                    : <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />}
+                                {/* Opens only. Closing is the button inside the
+                                    panel, because an open panel covers this one. */}
+                                <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />
                             </button>
                         )}
 
